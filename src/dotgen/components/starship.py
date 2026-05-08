@@ -9,7 +9,8 @@ if TYPE_CHECKING:
     from dotgen.environment import Environment
 
 _SETUP = """\
-install_script starship https://starship.rs/install.sh -y
+ensure_dir "$HOME/.local/bin"
+install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
 install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
 """
 

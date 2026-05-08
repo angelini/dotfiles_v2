@@ -24,11 +24,36 @@ export EDITOR=hx
 export VISUAL=hx
 """
 
-_SETUP_BY_OS: dict[OS, str] = {
-    OS.MACOS: 'install_package helix\n',
-    OS.FEDORA: 'add_repo copr varlad/helix\ninstall_package helix\n',
-    OS.DEBIAN: 'install_package helix\n',
-}
+_HELIX_VERSION = "25.07.1"
+
+_XZ_PKG: dict[OS, str] = {OS.DEBIAN: "xz-utils", OS.FEDORA: "xz"}
+
+
+def _linux_setup(os: OS) -> str:
+    return f"""\
+_install_helix_linux() {{
+  local tarch tmp dir
+  case "$(detect_arch)" in
+    x86_64) tarch=x86_64 ;;
+    aarch64|arm64) tarch=aarch64 ;;
+    *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
+  esac
+  install_package {_XZ_PKG[os]}
+  tmp="$(mktemp -d)"
+  dir="helix-{_HELIX_VERSION}-${{tarch}}-linux"
+  curl -fsSL "https://github.com/helix-editor/helix/releases/download/{_HELIX_VERSION}/${{dir}}.tar.xz" \\
+    | tar -xJ -C "$tmp"
+  ensure_dir "$HOME/bin"
+  install -m 0755 "$tmp/$dir/hx" "$HOME/bin/hx"
+  ensure_dir "$HOME/.config/helix"
+  rm -rf "$HOME/.config/helix/runtime"
+  cp -r "$tmp/$dir/runtime" "$HOME/.config/helix/runtime"
+  rm -rf "$tmp"
+}}
+if ! bin_exists hx; then
+  _install_helix_linux
+fi
+"""
 
 _SETUP_TAIL = 'install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"\n'
 
@@ -41,7 +66,8 @@ class Helix:
         return True
 
     def render(self, env: "Environment") -> Fragment:
-        body = _SETUP_BY_OS[env.os] + _SETUP_TAIL
+        setup = "install_package helix\n" if env.os is OS.MACOS else _linux_setup(env.os)
+        body = setup + _SETUP_TAIL
         return Fragment(
             setup=section("helix", body),
             bashrc=_BASHRC,

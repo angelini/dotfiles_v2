@@ -12,7 +12,7 @@ from dotgen.vm import VmHandle, vm_session
 
 pytestmark = pytest.mark.vm
 
-IMAGES = {"debian": "debian:trixie", "fedora": "fedora"}
+IMAGES = {"debian": "debian:trixie", "fedora": "fedora:43"}
 
 
 @pytest.fixture(scope="module", params=list(IMAGES))
@@ -63,7 +63,7 @@ def test_login_shell_sets_editor_to_hx(vm: tuple[str, VmHandle]) -> None:
 
 def test_login_shell_loads_kubectl_alias(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
-    handle.assert_cmd("type kc", login=True)
+    handle.assert_cmd("alias kc", login=True)
 
 
 def test_fedora_full_addons(vm: tuple[str, VmHandle]) -> None:

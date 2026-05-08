@@ -19,7 +19,7 @@ source "$DIR/os_shim.sh"
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 
 # ===== core_utils =====
-install_packages jq ripgrep fd-find tree vim htop gnupg2 bash-completion
+install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion
 ensure_dir "$HOME/bin"
 if bin_exists fdfind && ! bin_exists fd; then
   ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
@@ -48,11 +48,33 @@ log "Add this public key to GitHub: https://github.com/settings/keys"
 cat "$HOME/.ssh/id_ed25519.pub" >&2
 
 # ===== helix =====
-install_package helix
+_install_helix_linux() {
+  local tarch tmp dir
+  case "$(detect_arch)" in
+    x86_64) tarch=x86_64 ;;
+    aarch64|arm64) tarch=aarch64 ;;
+    *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
+  esac
+  install_package xz-utils
+  tmp="$(mktemp -d)"
+  dir="helix-25.07.1-${tarch}-linux"
+  curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" \
+    | tar -xJ -C "$tmp"
+  ensure_dir "$HOME/bin"
+  install -m 0755 "$tmp/$dir/hx" "$HOME/bin/hx"
+  ensure_dir "$HOME/.config/helix"
+  rm -rf "$HOME/.config/helix/runtime"
+  cp -r "$tmp/$dir/runtime" "$HOME/.config/helix/runtime"
+  rm -rf "$tmp"
+}
+if ! bin_exists hx; then
+  _install_helix_linux
+fi
 install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
 
 # ===== starship =====
-install_script starship https://starship.rs/install.sh -y
+ensure_dir "$HOME/.local/bin"
+install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
 install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
 
 # ===== zoxide =====

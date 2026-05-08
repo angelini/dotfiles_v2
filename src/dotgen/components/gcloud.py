@@ -8,10 +8,9 @@ from dotgen.types import OS
 if TYPE_CHECKING:
     from dotgen.environment import Environment
 
-_FEDORA_REPO = """\
-[google-cloud-cli]
+_FEDORA_REPO = r"""[google-cloud-cli]
 name=Google Cloud CLI
-baseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el9-x86_64
+baseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el9-\$basearch
 enabled=1
 gpgcheck=1
 repo_gpgcheck=0

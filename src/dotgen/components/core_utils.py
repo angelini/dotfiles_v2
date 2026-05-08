@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 _PACKAGES: dict[OS, tuple[str, ...]] = {
     OS.DEBIAN: (
+        "git",
         "jq",
         "ripgrep",
         "fd-find",
@@ -20,6 +21,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
         "bash-completion",
     ),
     OS.FEDORA: (
+        "git",
         "jq",
         "ripgrep",
         "fd-find",
@@ -30,6 +32,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
         "bash-completion",
     ),
     OS.MACOS: (
+        "git",
         "jq",
         "ripgrep",
         "fd",

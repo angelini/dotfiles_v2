@@ -19,7 +19,7 @@ source "$DIR/os_shim.sh"
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 
 # ===== core_utils =====
-install_packages jq ripgrep fd tree vim htop gnupg bash-completion
+install_packages git jq ripgrep fd tree vim htop gnupg bash-completion
 
 # ===== git_setup =====
 install_config "$DIR/config/git/gitconfig" "$HOME/.gitconfig"
@@ -52,7 +52,8 @@ install_package helix
 install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
 
 # ===== starship =====
-install_script starship https://starship.rs/install.sh -y
+ensure_dir "$HOME/.local/bin"
+install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
 install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
 
 # ===== zoxide =====

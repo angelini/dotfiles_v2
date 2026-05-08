@@ -12,7 +12,7 @@ install_package() {
     pkg_installed "$1" || printf '+ INSTALL pkg %s\n' "$1"
     return 0
   fi
-  pkg_installed "$1" || sudo apt-get install -y "$1"
+  pkg_installed "$1" || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
 }
 
 install_packages() {
@@ -54,7 +54,7 @@ add_repo() {
 
 update_pkg_index() {
   [ "$DOTGEN_MODE" = diff ] && return 0
-  sudo apt-get update -y
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
 }
 
 service_enable() {
@@ -107,7 +107,7 @@ install_config() {
 }
 
 install_script() {
-  local name="$1" url="$2"
+  local name="$1" url="$2" tmp
   shift 2
   if bin_exists "$name"; then
     return 0
@@ -116,7 +116,11 @@ install_script() {
     printf '+ INSTALL script %s (%s)\n' "$name" "$url"
     return 0
   fi
-  curl -fsSL "$url" | bash -s -- "$@"
+  tmp="$(mktemp)"
+  curl -fsSL "$url" -o "$tmp"
+  chmod +x "$tmp"
+  "$tmp" "$@"
+  rm -f "$tmp"
 }
 
 download_bin() {
