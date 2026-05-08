@@ -20,17 +20,21 @@ import sys, datetime as d
 print(d.datetime.fromtimestamp(int(sys.argv[1])).isoformat())
 PYEOF
 }
+
 # --- helix ---
 export EDITOR=hx
 export VISUAL=hx
+
 # --- starship ---
 if bin_exists starship; then
   eval "$(starship init bash)"
 fi
+
 # --- zoxide ---
 if bin_exists zoxide; then
   eval "$(zoxide init bash)"
 fi
+
 # --- kubectl ---
 [ -d "$HOME/.kube" ] && export KUBECONFIG="$HOME/.kube/config"
 if bin_exists kubectl; then
@@ -39,22 +43,28 @@ fi
 if bin_exists helm; then
   source <(helm completion bash)
 fi
+
 # --- python_tools ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+
 # --- claude_code ---
 if bin_exists claude; then
   source <(claude completion bash 2>/dev/null) 2>/dev/null || true
 fi
+
 # --- rust ---
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+
 # --- node_fnm ---
 export PATH="$HOME/.local/share/fnm:$PATH"
 if bin_exists fnm; then
   eval "$(fnm env --use-on-cd)"
 fi
+
 # --- go_lang ---
 export GOPATH="$HOME/go"
 export PATH="$GOPATH/bin:$PATH"
+
 # --- gcloud ---
 for _f in \
   "/opt/homebrew/share/google-cloud-sdk/path.bash.inc" \
@@ -64,6 +74,7 @@ for _f in \
   [ -f "$_f" ] && source "$_f"
 done
 unset _f
+
 # --- aws ---
 if bin_exists aws_completer; then
   complete -C "$(command -v aws_completer)" aws

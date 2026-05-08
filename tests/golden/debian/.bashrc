@@ -20,17 +20,21 @@ import sys, datetime as d
 print(d.datetime.fromtimestamp(int(sys.argv[1])).isoformat())
 PYEOF
 }
+
 # --- helix ---
 export EDITOR=hx
 export VISUAL=hx
+
 # --- starship ---
 if bin_exists starship; then
   eval "$(starship init bash)"
 fi
+
 # --- zoxide ---
 if bin_exists zoxide; then
   eval "$(zoxide init bash)"
 fi
+
 # --- kubectl ---
 [ -d "$HOME/.kube" ] && export KUBECONFIG="$HOME/.kube/config"
 if bin_exists kubectl; then
@@ -39,8 +43,10 @@ fi
 if bin_exists helm; then
   source <(helm completion bash)
 fi
+
 # --- python_tools ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+
 # --- claude_code ---
 if bin_exists claude; then
   source <(claude completion bash 2>/dev/null) 2>/dev/null || true

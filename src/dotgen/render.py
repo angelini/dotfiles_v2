@@ -54,9 +54,7 @@ def build_env(env: Environment, out_dir: Path) -> None:
 
     setup = SETUP_HEADER
     if fragment.setup:
-        setup += "\n" + fragment.setup
-        if not setup.endswith("\n"):
-            setup += "\n"
+        setup += "\n" + fragment.setup.rstrip("\n") + "\n\n"
     setup += SETUP_FOOTER
     (out_dir / "setup.sh").write_text(setup)
 
@@ -81,9 +79,24 @@ def build_all(out_root: Path) -> None:
         build_env(env, out_root / name)
 
 
+_HEADER_FMT = "# --- {name} ---"
+
+
+def _decorate(name: str, frag: Fragment) -> Fragment:
+    header = _HEADER_FMT.format(name=name) + "\n"
+    setup = (
+        f'{header}component_begin "{name}"\n{frag.setup}'
+        if frag.setup
+        else ""
+    )
+    alias = f"{header}{frag.alias}" if frag.alias else ""
+    bashrc = f"{header}{frag.bashrc}" if frag.bashrc else ""
+    return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs)
+
+
 def _merge_fragments(env: Environment) -> Fragment:
     result = Fragment()
     for component in env.components:
         if component.applies_to(env):
-            result = result.merge(component.render(env))
+            result = result.merge(_decorate(component.name, component.render(env)))
     return result

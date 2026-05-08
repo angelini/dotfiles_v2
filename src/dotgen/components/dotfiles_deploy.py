@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import Fragment
 
 if TYPE_CHECKING:
@@ -21,4 +20,4 @@ class DotfilesDeploy:
         return True
 
     def render(self, env: "Environment") -> Fragment:
-        return Fragment(setup=section("dotfiles_deploy", _SETUP))
+        return Fragment(setup=_SETUP)

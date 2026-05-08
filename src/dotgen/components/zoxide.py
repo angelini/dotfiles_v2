@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import Fragment
 
 if TYPE_CHECKING:
@@ -10,7 +9,6 @@ if TYPE_CHECKING:
 _SETUP = "install_package zoxide\n"
 
 _BASHRC = """\
-# --- zoxide ---
 if bin_exists zoxide; then
   eval "$(zoxide init bash)"
 fi
@@ -25,4 +23,4 @@ class Zoxide:
         return True
 
     def render(self, env: "Environment") -> Fragment:
-        return Fragment(setup=section("zoxide", _SETUP), bashrc=_BASHRC)
+        return Fragment(setup=_SETUP, bashrc=_BASHRC)

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
@@ -43,7 +42,6 @@ _SETUP_BY_OS: dict[OS, str] = {
 }
 
 _BASHRC = """\
-# --- aws ---
 if bin_exists aws_completer; then
   complete -C "$(command -v aws_completer)" aws
 fi
@@ -63,7 +61,7 @@ class Aws:
             + 'install_config "$DIR/config/aws/config" "$HOME/.aws/config"\n'
         )
         return Fragment(
-            setup=section("aws", body),
+            setup=body,
             bashrc=_BASHRC,
             configs=(ConfigFile(dest="aws/config", content=_AWS_CONFIG, mode=0o600),),
         )

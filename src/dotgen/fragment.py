@@ -29,5 +29,5 @@ def _join(a: str, b: str) -> str:
         return b
     if not b:
         return a
-    sep = "" if a.endswith("\n") else "\n"
-    return f"{a}{sep}{b}"
+    left = a.rstrip("\n")
+    return f"{left}\n\n{b}"

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 
 if TYPE_CHECKING:
@@ -50,7 +49,7 @@ class GitSetup:
 
     def render(self, env: "Environment") -> Fragment:
         return Fragment(
-            setup=section("git_setup", _SETUP),
+            setup=_SETUP,
             configs=(
                 ConfigFile(dest="git/gitconfig", content=_GITCONFIG),
                 ConfigFile(dest="git/gitignore_global", content=_GITIGNORE_GLOBAL),

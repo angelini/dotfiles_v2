@@ -85,3 +85,21 @@ def test_mode_aware_helpers_branch_on_diff(shim_text: str) -> None:
         assert not any(t in body for t in _SIDE_EFFECT_TOKENS), (
             f"{fn} has side effects without a diff-mode branch:\n{body}"
         )
+
+
+def _run_shim_fn(tmp_path, shim_text: str, mode: str, call: str) -> str:
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f'{shim_text}\nDOTGEN_MODE={mode}\n{call}\n'
+    )
+    return subprocess.check_output(["bash", str(script)]).decode()
+
+
+def test_component_begin_prints_in_diff_mode(tmp_path, shim_text: str) -> None:
+    out = _run_shim_fn(tmp_path, shim_text, "diff", 'component_begin aws')
+    assert out == "--- aws ---\n"
+
+
+def test_component_begin_silent_in_deploy_mode(tmp_path, shim_text: str) -> None:
+    out = _run_shim_fn(tmp_path, shim_text, "deploy", 'component_begin aws')
+    assert out == ""

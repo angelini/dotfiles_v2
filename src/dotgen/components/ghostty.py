@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
@@ -33,6 +32,6 @@ class Ghostty:
 
     def render(self, env: "Environment") -> Fragment:
         return Fragment(
-            setup=section("ghostty", _SETUP),
+            setup=_SETUP,
             configs=(ConfigFile(dest="ghostty/config", content=_CONFIG),),
         )

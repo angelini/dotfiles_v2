@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
@@ -14,7 +13,6 @@ _PKG_BY_OS: dict[OS, str] = {
 }
 
 _BASHRC = """\
-# --- go_lang ---
 export GOPATH="$HOME/go"
 export PATH="$GOPATH/bin:$PATH"
 """
@@ -29,4 +27,4 @@ class GoLang:
 
     def render(self, env: "Environment") -> Fragment:
         body = f"install_package {_PKG_BY_OS[env.os]}\n"
-        return Fragment(setup=section("go_lang", body), bashrc=_BASHRC)
+        return Fragment(setup=body, bashrc=_BASHRC)

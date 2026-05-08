@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import argv, section
+from dotgen.bash import argv
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
@@ -64,4 +64,4 @@ class CoreUtils:
         body = argv("install_packages", *pkgs) + "\n"
         if env.os is OS.DEBIAN:
             body += _FD_SHIM_DEBIAN
-        return Fragment(setup=section("core_utils", body))
+        return Fragment(setup=body)

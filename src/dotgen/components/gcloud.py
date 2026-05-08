@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
@@ -30,7 +29,6 @@ _SETUP_BY_OS: dict[OS, str] = {
 }
 
 _BASHRC = """\
-# --- gcloud ---
 for _f in \\
   "/opt/homebrew/share/google-cloud-sdk/path.bash.inc" \\
   "/opt/homebrew/share/google-cloud-sdk/completion.bash.inc" \\
@@ -51,6 +49,6 @@ class Gcloud:
 
     def render(self, env: "Environment") -> Fragment:
         return Fragment(
-            setup=section("gcloud", _SETUP_BY_OS[env.os]),
+            setup=_SETUP_BY_OS[env.os],
             bashrc=_BASHRC,
         )

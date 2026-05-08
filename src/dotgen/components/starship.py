@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.starship_config import render_starship_toml
 
@@ -15,7 +14,6 @@ install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml
 """
 
 _BASHRC = """\
-# --- starship ---
 if bin_exists starship; then
   eval "$(starship init bash)"
 fi
@@ -31,7 +29,7 @@ class Starship:
 
     def render(self, env: "Environment") -> Fragment:
         return Fragment(
-            setup=section("starship", _SETUP),
+            setup=_SETUP,
             bashrc=_BASHRC,
             configs=(
                 ConfigFile(dest="starship/starship.toml", content=render_starship_toml()),

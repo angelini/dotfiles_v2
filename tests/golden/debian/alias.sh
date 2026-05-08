@@ -12,6 +12,7 @@ alias gpo='git push origin'
 alias gpfo='git push --force-with-lease origin'
 alias gl='git log --color --graph --pretty=format:"%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset" --abbrev-commit'
 alias l='ls -hlA --color=auto'
+
 # --- kubectl ---
 alias kc='kubectl'
 alias kca='kubectl get all'

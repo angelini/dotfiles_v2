@@ -22,6 +22,7 @@ SHIM_FUNCTIONS: tuple[str, ...] = (
     "log",
     "error",
     "ask",
+    "component_begin",
 )
 
 _SHARED = r"""
@@ -118,6 +119,11 @@ ask() {
   printf '%s ' "$prompt" >&2
   read -r reply
   printf '%s' "$reply"
+}
+
+component_begin() {
+  [ "$DOTGEN_MODE" = diff ] && printf -- '--- %s ---\n' "$1"
+  return 0
 }
 """
 

@@ -18,14 +18,17 @@ export DOTGEN_MODE
 source "$DIR/os_shim.sh"
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 
-# ===== core_utils =====
+# --- core_utils ---
+component_begin "core_utils"
 install_packages git jq ripgrep fd tree vim htop gnupg bash-completion
 
-# ===== git_setup =====
+# --- git_setup ---
+component_begin "git_setup"
 install_config "$DIR/config/git/gitconfig" "$HOME/.gitconfig"
 install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 
-# ===== github_ssh =====
+# --- github_ssh ---
+component_begin "github_ssh"
 ensure_dir "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
@@ -47,25 +50,31 @@ ssh-add --apple-use-keychain "$HOME/.ssh/id_ed25519" 2>/dev/null || true
 log "Add this public key to GitHub: https://github.com/settings/keys"
 cat "$HOME/.ssh/id_ed25519.pub" >&2
 
-# ===== helix =====
+# --- helix ---
+component_begin "helix"
 install_package helix
 install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
 
-# ===== starship =====
+# --- starship ---
+component_begin "starship"
 ensure_dir "$HOME/.local/bin"
 install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
 install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
 
-# ===== zoxide =====
+# --- zoxide ---
+component_begin "zoxide"
 install_package zoxide
 
-# ===== kubectl =====
+# --- kubectl ---
+component_begin "kubectl"
 install_packages kubectl helm k9s
 
-# ===== python_tools =====
+# --- python_tools ---
+component_begin "python_tools"
 install_script uv https://astral.sh/uv/install.sh
 
-# ===== claude_code =====
+# --- claude_code ---
+component_begin "claude_code"
 export PATH="$HOME/.local/bin:$PATH"
 install_script claude https://claude.ai/install.sh
 _install_serena() {
@@ -98,36 +107,45 @@ if [ "$DOTGEN_MODE" = deploy ]; then
   _register_serena_mcp
 fi
 
-# ===== gh =====
+# --- gh ---
+component_begin "gh"
 install_package gh
 install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
 
-# ===== rust =====
+# --- rust ---
+component_begin "rust"
 install_script cargo https://sh.rustup.rs -y --default-toolchain stable
 
-# ===== node_fnm =====
+# --- node_fnm ---
+component_begin "node_fnm"
 install_script fnm https://fnm.vercel.app/install --skip-shell
 
-# ===== go_lang =====
+# --- go_lang ---
+component_begin "go_lang"
 install_package go
 
-# ===== gcloud =====
+# --- gcloud ---
+component_begin "gcloud"
 install_cask google-cloud-sdk
 
-# ===== aws =====
+# --- aws ---
+component_begin "aws"
 install_package awscli
 install_config "$DIR/config/aws/config" "$HOME/.aws/config"
 
-# ===== zed =====
+# --- zed ---
+component_begin "zed"
 install_cask zed
 install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"
 install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
 
-# ===== ghostty =====
+# --- ghostty ---
+component_begin "ghostty"
 install_cask ghostty
 install_config "$DIR/config/ghostty/config" "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
 
-# ===== dotfiles_deploy =====
+# --- dotfiles_deploy ---
+component_begin "dotfiles_deploy"
 install_config "$DIR/.bashrc" "$HOME/.bashrc"
 install_config "$DIR/alias.sh" "$HOME/.aliases"
 

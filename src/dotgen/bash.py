@@ -9,14 +9,6 @@ def argv(*parts: str) -> str:
     return " ".join(shlex.quote(p) for p in parts)
 
 
-def banner(title: str) -> str:
-    return f"# ===== {title} ====="
-
-
-def section(title: str, body: str) -> str:
-    return f"{banner(title)}\n{body}\n"
-
-
 def heredoc(tag: str, body: str) -> str:
     chosen = tag
     suffix = 0

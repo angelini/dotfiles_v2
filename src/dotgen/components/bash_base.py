@@ -7,8 +7,7 @@ from dotgen.types import OS
 if TYPE_CHECKING:
     from dotgen.environment import Environment
 
-_BASHRC = r"""# --- bash_base ---
-HISTSIZE=1000000
+_BASHRC = r"""HISTSIZE=1000000
 HISTFILESIZE=1000000
 HISTCONTROL=ignoredups:erasedups
 shopt -s histappend
@@ -36,8 +35,7 @@ _GL_ALIAS = (
     f"--pretty=format:{_GL_PRETTY} --abbrev-commit'\n"
 )
 
-_ALIASES_COMMON = r"""# --- bash_base ---
-alias klear='clear && printf "\033[3J"'
+_ALIASES_COMMON = r"""alias klear='clear && printf "\033[3J"'
 alias rgc='rg -C 30'
 alias ip='curl -s ifconfig.me'
 

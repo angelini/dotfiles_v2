@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
@@ -44,6 +43,6 @@ class Gh:
     def render(self, env: "Environment") -> Fragment:
         body = _SETUP_BY_OS[env.os] + _SETUP_TAIL
         return Fragment(
-            setup=section("gh", body),
+            setup=body,
             configs=(ConfigFile(dest="gh/config.yml", content=_CONFIG),),
         )

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
@@ -59,7 +58,6 @@ _SETUP_BY_OS: dict[OS, str] = {
 }
 
 _BASHRC = """\
-# --- kubectl ---
 [ -d "$HOME/.kube" ] && export KUBECONFIG="$HOME/.kube/config"
 if bin_exists kubectl; then
   source <(kubectl completion bash)
@@ -69,8 +67,7 @@ if bin_exists helm; then
 fi
 """
 
-_ALIASES = r"""# --- kubectl ---
-alias kc='kubectl'
+_ALIASES = r"""alias kc='kubectl'
 alias kca='kubectl get all'
 alias kcn='kubectl config use-context'
 alias kcr='kubectl config current-context'
@@ -108,7 +105,7 @@ class Kubectl:
 
     def render(self, env: "Environment") -> Fragment:
         return Fragment(
-            setup=section("kubectl", _SETUP_BY_OS[env.os]),
+            setup=_SETUP_BY_OS[env.os],
             bashrc=_BASHRC,
             alias=_ALIASES,
         )

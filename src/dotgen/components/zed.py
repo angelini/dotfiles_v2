@@ -2,7 +2,6 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
@@ -124,7 +123,7 @@ class Zed:
     def render(self, env: "Environment") -> Fragment:
         body = _SETUP_BY_OS[env.os] + _SETUP_TAIL
         return Fragment(
-            setup=section("zed", body),
+            setup=body,
             configs=(
                 ConfigFile(dest="zed/settings.json", content=_SETTINGS_JSON),
                 ConfigFile(dest="zed/keymap.json", content=_KEYMAP_JSON),

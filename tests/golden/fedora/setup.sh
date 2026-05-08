@@ -18,14 +18,17 @@ export DOTGEN_MODE
 source "$DIR/os_shim.sh"
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 
-# ===== core_utils =====
+# --- core_utils ---
+component_begin "core_utils"
 install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion
 
-# ===== git_setup =====
+# --- git_setup ---
+component_begin "git_setup"
 install_config "$DIR/config/git/gitconfig" "$HOME/.gitconfig"
 install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 
-# ===== github_ssh =====
+# --- github_ssh ---
+component_begin "github_ssh"
 ensure_dir "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
@@ -43,7 +46,8 @@ fi
 log "Add this public key to GitHub: https://github.com/settings/keys"
 cat "$HOME/.ssh/id_ed25519.pub" >&2
 
-# ===== helix =====
+# --- helix ---
+component_begin "helix"
 _install_helix_linux() {
   local tarch tmp dir
   case "$(detect_arch)" in
@@ -68,15 +72,18 @@ if ! bin_exists hx; then
 fi
 install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
 
-# ===== starship =====
+# --- starship ---
+component_begin "starship"
 ensure_dir "$HOME/.local/bin"
 install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
 install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
 
-# ===== zoxide =====
+# --- zoxide ---
+component_begin "zoxide"
 install_package zoxide
 
-# ===== kubectl =====
+# --- kubectl ---
+component_begin "kubectl"
 _kube_arch() {
   case "$(detect_arch)" in
     x86_64) echo amd64 ;;
@@ -103,11 +110,13 @@ _install_kubectl_linux
 _install_helm_linux
 _install_k9s_linux
 
-# ===== python_tools =====
+# --- python_tools ---
+component_begin "python_tools"
 install_packages gcc gcc-c++ openssl-devel libffi-devel
 install_script uv https://astral.sh/uv/install.sh
 
-# ===== claude_code =====
+# --- claude_code ---
+component_begin "claude_code"
 export PATH="$HOME/.local/bin:$PATH"
 install_script claude https://claude.ai/install.sh
 _install_serena() {
@@ -140,20 +149,25 @@ if [ "$DOTGEN_MODE" = deploy ]; then
   _register_serena_mcp
 fi
 
-# ===== gh =====
+# --- gh ---
+component_begin "gh"
 install_package gh
 install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
 
-# ===== rust =====
+# --- rust ---
+component_begin "rust"
 install_script cargo https://sh.rustup.rs -y --default-toolchain stable
 
-# ===== node_fnm =====
+# --- node_fnm ---
+component_begin "node_fnm"
 install_script fnm https://fnm.vercel.app/install --skip-shell
 
-# ===== go_lang =====
+# --- go_lang ---
+component_begin "go_lang"
 install_package golang
 
-# ===== gcloud =====
+# --- gcloud ---
+component_begin "gcloud"
 add_repo dnf google-cloud-cli "[google-cloud-cli]
 name=Google Cloud CLI
 baseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el9-\$basearch
@@ -164,7 +178,8 @@ gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 "
 install_package google-cloud-cli
 
-# ===== aws =====
+# --- aws ---
+component_begin "aws"
 _install_awscli_linux() {
   local arch zip_arch tmp
   arch="$(detect_arch)"
@@ -184,12 +199,14 @@ if ! bin_exists aws; then
 fi
 install_config "$DIR/config/aws/config" "$HOME/.aws/config"
 
-# ===== zed =====
+# --- zed ---
+component_begin "zed"
 install_script zed https://zed.dev/install.sh
 install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"
 install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
 
-# ===== dotfiles_deploy =====
+# --- dotfiles_deploy ---
+component_begin "dotfiles_deploy"
 install_config "$DIR/.bashrc" "$HOME/.bashrc"
 install_config "$DIR/alias.sh" "$HOME/.aliases"
 

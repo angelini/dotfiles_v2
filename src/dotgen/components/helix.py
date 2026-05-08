@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 import tomli_w
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
@@ -19,7 +18,6 @@ _HELIX_CONFIG = tomli_w.dumps({
 })
 
 _BASHRC = """\
-# --- helix ---
 export EDITOR=hx
 export VISUAL=hx
 """
@@ -69,7 +67,7 @@ class Helix:
         setup = "install_package helix\n" if env.os is OS.MACOS else _linux_setup(env.os)
         body = setup + _SETUP_TAIL
         return Fragment(
-            setup=section("helix", body),
+            setup=body,
             bashrc=_BASHRC,
             configs=(ConfigFile(dest="helix/config.toml", content=_HELIX_CONFIG),),
         )

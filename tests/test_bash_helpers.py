@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from dotgen.bash import argv, banner, guard_if_bin, heredoc, quote, section
+from dotgen.bash import argv, guard_if_bin, heredoc, quote
 
 
 @pytest.mark.parametrize("s", ["foo", "with space", "$dollar", "single'quote", "", "a;b|c&d"])
@@ -16,16 +16,6 @@ def test_argv_joins_quoted_parts() -> None:
     line = argv("git", "commit", "-m", "hello world")
     out = subprocess.check_output(["bash", "-c", f"for a in {line}; do printf '%s|' \"$a\"; done"])
     assert out.decode() == "git|commit|-m|hello world|"
-
-
-def test_banner_contains_title() -> None:
-    assert "my title" in banner("my title")
-
-
-def test_section_includes_title_and_body() -> None:
-    out = section("greeting", "echo hi")
-    assert "greeting" in out
-    assert "echo hi" in out
 
 
 def test_heredoc_basic_tag() -> None:

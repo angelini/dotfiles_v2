@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import argv, section
+from dotgen.bash import argv
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
@@ -19,7 +19,6 @@ install_script uv https://astral.sh/uv/install.sh
 """
 
 _BASHRC = """\
-# --- python_tools ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
 """
 
@@ -38,6 +37,6 @@ class PythonTools:
             body += argv("install_packages", *deps) + "\n"
         body += _UV_INSTALL
         return Fragment(
-            setup=section("python_tools", body),
+            setup=body,
             bashrc=_BASHRC,
         )

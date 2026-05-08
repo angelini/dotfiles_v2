@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
@@ -47,4 +46,4 @@ class GitHubSsh:
         if env.os is OS.MACOS:
             body += _SETUP_MACOS_AGENT
         body += _SETUP_TAIL
-        return Fragment(setup=section("github_ssh", body))
+        return Fragment(setup=body)

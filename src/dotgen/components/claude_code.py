@@ -2,7 +2,6 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dotgen.bash import section
 from dotgen.fragment import ConfigFile, Fragment
 
 if TYPE_CHECKING:
@@ -110,7 +109,6 @@ fi
 """
 
 _BASHRC = """\
-# --- claude_code ---
 if bin_exists claude; then
   source <(claude completion bash 2>/dev/null) 2>/dev/null || true
 fi
@@ -126,7 +124,7 @@ class ClaudeCode:
 
     def render(self, env: "Environment") -> Fragment:
         return Fragment(
-            setup=section("claude_code", _SETUP),
+            setup=_SETUP,
             bashrc=_BASHRC,
             configs=(
                 ConfigFile(dest="claude/settings.json", content=_SETTINGS_JSON),

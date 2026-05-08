@@ -276,7 +276,7 @@ def test_postgres_unwired_but_renders_per_os() -> None:
         names = {c.name for c in env.components}
         assert "postgres" not in names, "postgres must stay opt-in"
         frag = Postgres().render(env)
-        assert "postgres" in frag.bashrc.lower()
+        assert frag.bashrc and "PATH" in frag.bashrc
     mac = Postgres().render(ENVIRONMENTS["macos"]).setup
     deb = Postgres().render(ENVIRONMENTS["debian"]).setup
     fed = Postgres().render(ENVIRONMENTS["fedora"]).setup
