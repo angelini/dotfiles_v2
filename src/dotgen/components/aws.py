@@ -1,0 +1,69 @@
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from dotgen.bash import section
+from dotgen.fragment import ConfigFile, Fragment
+from dotgen.types import OS
+
+if TYPE_CHECKING:
+    from dotgen.environment import Environment
+
+_AWS_CONFIG = """\
+# Populate per-profile settings via `aws configure --profile <name>`.
+# Generated stub — do not commit credentials here.
+[default]
+region = us-east-1
+output = json
+"""
+
+_SETUP_MACOS = "install_package awscli\n"
+
+_SETUP_FEDORA = r"""_install_awscli_linux() {
+  local arch zip_arch tmp
+  arch="$(detect_arch)"
+  case "$arch" in
+    x86_64) zip_arch=x86_64 ;;
+    aarch64|arm64) zip_arch=aarch64 ;;
+    *) error "unsupported arch for awscli: $arch"; return 1 ;;
+  esac
+  tmp="$(mktemp -d)"
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${zip_arch}.zip" -o "$tmp/awscli.zip"
+  unzip -q "$tmp/awscli.zip" -d "$tmp"
+  sudo "$tmp/aws/install" --update
+  rm -rf "$tmp"
+}
+if ! bin_exists aws; then
+  _install_awscli_linux
+fi
+"""
+
+_SETUP_BY_OS: dict[OS, str] = {
+    OS.MACOS: _SETUP_MACOS,
+    OS.FEDORA: _SETUP_FEDORA,
+}
+
+_BASHRC = """\
+# --- aws ---
+if bin_exists aws_completer; then
+  complete -C "$(command -v aws_completer)" aws
+fi
+"""
+
+
+@dataclass(frozen=True)
+class Aws:
+    name: str = "aws"
+
+    def applies_to(self, env: "Environment") -> bool:
+        return env.os in _SETUP_BY_OS
+
+    def render(self, env: "Environment") -> Fragment:
+        body = (
+            _SETUP_BY_OS[env.os]
+            + 'install_config "$DIR/config/aws/config" "$HOME/.aws/config"\n'
+        )
+        return Fragment(
+            setup=section("aws", body),
+            bashrc=_BASHRC,
+            configs=(ConfigFile(dest="aws/config", content=_AWS_CONFIG, mode=0o600),),
+        )

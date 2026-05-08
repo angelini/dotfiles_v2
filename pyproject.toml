@@ -1,0 +1,38 @@
+[project]
+name = "dotgen"
+version = "0.1.0"
+description = "Per-environment bash bundle generator for fresh-machine bootstrap"
+requires-python = ">=3.12"
+dependencies = [
+    "tomli-w>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "ty>=0.0.1a1",
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dotgen"]
+
+[tool.ruff]
+line-length = 200
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ty.environment]
+root = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["vm: integration test that boots an OrbStack VM (slow, opt-in)"]
+addopts = "-m 'not vm'"
