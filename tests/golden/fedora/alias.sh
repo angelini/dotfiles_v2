@@ -18,6 +18,8 @@ alias kc='kubectl'
 alias kca='kubectl get all'
 alias kcn='kubectl config use-context'
 alias kcr='kubectl config current-context'
+alias kx='kubectx'
+alias kns='kubens'
 
 pod_names() {
   kubectl get pods -o name "$@" | sed 's|^pod/||'

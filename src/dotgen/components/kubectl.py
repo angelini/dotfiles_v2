@@ -6,11 +6,19 @@ from dotgen.types import OS
 
 _KUBE_VERSION = "v1.35.4"
 _HELM_VERSION = "v3.20.2"
+_KUBECTX_VERSION = "v0.11.0"
 
 _LINUX_HELPERS = (
     r"""_kube_arch() {
   case "$(detect_arch)" in
     x86_64) echo amd64 ;;
+    aarch64|arm64) echo arm64 ;;
+    *) error "unsupported arch: $(detect_arch)"; return 1 ;;
+  esac
+}
+_kubectx_arch() {
+  case "$(detect_arch)" in
+    x86_64) echo x86_64 ;;
     aarch64|arm64) echo arm64 ;;
     *) error "unsupported arch: $(detect_arch)"; return 1 ;;
   esac
@@ -36,12 +44,33 @@ _install_k9s_linux() {
     + r'"https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz"'
     + r""" "k9s"
 }
+_install_kubectx_linux() {
+  local arch
+  arch="$(_kubectx_arch)"
+  download_tar_bin kubectx """
+    + f'"https://github.com/ahmetb/kubectx/releases/download/{_KUBECTX_VERSION}/kubectx_{_KUBECTX_VERSION}_linux_'
+    + r"""${arch}.tar.gz" "kubectx"
+}
+_install_kubens_linux() {
+  local arch
+  arch="$(_kubectx_arch)"
+  download_tar_bin kubens """
+    + f'"https://github.com/ahmetb/kubectx/releases/download/{_KUBECTX_VERSION}/kubens_{_KUBECTX_VERSION}_linux_'
+    + r"""${arch}.tar.gz" "kubens"
+}
 """
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s\n"
+_SETUP_MACOS = "install_packages kubectl helm k9s kubectx\n"
 
-_SETUP_LINUX = _LINUX_HELPERS + "_install_kubectl_linux\n" + "_install_helm_linux\n" + "_install_k9s_linux\n"
+_SETUP_LINUX = (
+    _LINUX_HELPERS
+    + "_install_kubectl_linux\n"
+    + "_install_helm_linux\n"
+    + "_install_k9s_linux\n"
+    + "_install_kubectx_linux\n"
+    + "_install_kubens_linux\n"
+)
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: _SETUP_MACOS,
@@ -63,6 +92,8 @@ _ALIASES = r"""alias kc='kubectl'
 alias kca='kubectl get all'
 alias kcn='kubectl config use-context'
 alias kcr='kubectl config current-context'
+alias kx='kubectx'
+alias kns='kubens'
 
 pod_names() {
   kubectl get pods -o name "$@" | sed 's|^pod/||'

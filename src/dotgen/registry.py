@@ -24,7 +24,6 @@ from dotgen.types import OS, PkgMgr
 _BASE: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
-    GitSetup(),
     GitHubSsh(),
     Helix(),
 )
@@ -47,7 +46,10 @@ _FULL_ADDONS: tuple[Component, ...] = (
     Zed(),
 )
 
-_LAST: tuple[Component, ...] = (DotfilesDeploy(),)
+# GitSetup writes ~/.gitconfig with a url.insteadOf rewrite that routes
+# https://github.com/ through SSH; running it last keeps brew/git fetches earlier
+# in setup.sh on plain HTTPS, before any github SSH key is registered.
+_LAST: tuple[Component, ...] = (GitSetup(), DotfilesDeploy())
 
 ENVIRONMENTS: dict[str, Environment] = {
     "debian": Environment("debian", OS.DEBIAN, PkgMgr.APT, components=_SHARED + _LAST),

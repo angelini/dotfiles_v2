@@ -24,11 +24,12 @@ case "$DOTGEN_MODE" in
     printf 'unknown mode: %s\\nusage: %s {diff|deploy}\\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
 esac
 export DOTGEN_MODE
-# setup runs before the user's github SSH key is registered, so suppress any
-# url.<...>.insteadOf rewrites in their gitconfig that would route brew/git fetches via SSH.
-export GIT_CONFIG_GLOBAL=/dev/null
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
+  # ~/.gitconfig is dotgen-owned and gets re-installed by git_setup at the end of
+  # this run. Remove any prior copy so its url.insteadOf rewrite can't route
+  # brew/git fetches via SSH while no github SSH key is registered yet.
+  rm -f "$HOME/.gitconfig"
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"

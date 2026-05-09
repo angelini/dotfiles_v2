@@ -15,11 +15,12 @@ case "$DOTGEN_MODE" in
     printf 'unknown mode: %s\nusage: %s {diff|deploy}\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
 esac
 export DOTGEN_MODE
-# setup runs before the user's github SSH key is registered, so suppress any
-# url.<...>.insteadOf rewrites in their gitconfig that would route brew/git fetches via SSH.
-export GIT_CONFIG_GLOBAL=/dev/null
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
+  # ~/.gitconfig is dotgen-owned and gets re-installed by git_setup at the end of
+  # this run. Remove any prior copy so its url.insteadOf rewrite can't route
+  # brew/git fetches via SSH while no github SSH key is registered yet.
+  rm -f "$HOME/.gitconfig"
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
@@ -36,11 +37,6 @@ ensure_dir "$HOME/bin"
 if bin_exists fdfind && ! bin_exists fd; then
   ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
 fi
-
-# --- git_setup ---
-component_begin "git_setup"
-install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
-install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 
 # --- github_ssh ---
 component_begin "github_ssh"
@@ -106,6 +102,13 @@ _kube_arch() {
     *) error "unsupported arch: $(detect_arch)"; return 1 ;;
   esac
 }
+_kubectx_arch() {
+  case "$(detect_arch)" in
+    x86_64) echo x86_64 ;;
+    aarch64|arm64) echo arm64 ;;
+    *) error "unsupported arch: $(detect_arch)"; return 1 ;;
+  esac
+}
 _install_kubectl_linux() {
   local arch
   arch="$(_kube_arch)"
@@ -121,9 +124,21 @@ _install_k9s_linux() {
   arch="$(_kube_arch)"
   download_tar_bin k9s "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz" "k9s"
 }
+_install_kubectx_linux() {
+  local arch
+  arch="$(_kubectx_arch)"
+  download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx"
+}
+_install_kubens_linux() {
+  local arch
+  arch="$(_kubectx_arch)"
+  download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens"
+}
 _install_kubectl_linux
 _install_helm_linux
 _install_k9s_linux
+_install_kubectx_linux
+_install_kubens_linux
 
 # --- python_tools ---
 component_begin "python_tools"
@@ -171,10 +186,16 @@ update_pkg_index
 install_package gh
 install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
 
+# --- git_setup ---
+component_begin "git_setup"
+install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
+install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
+
 # --- dotfiles_deploy ---
 component_begin "dotfiles_deploy"
 install_config "$DIR/.bashrc" "$HOME/.bashrc"
 install_config "$DIR/alias.sh" "$HOME/.aliases"
+install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
 
 if [ "$DOTGEN_MODE" = diff ]; then
   log "diff complete (no changes applied)"

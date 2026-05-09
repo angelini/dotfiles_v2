@@ -125,15 +125,19 @@ def test_kubectl_per_os_branching() -> None:
     macos = Kubectl().render(ENVIRONMENTS["macos"]).setup
     debian = Kubectl().render(ENVIRONMENTS["debian"]).setup
     fedora = Kubectl().render(ENVIRONMENTS["fedora"]).setup
-    assert "install_packages kubectl helm k9s" in macos
+    assert "install_packages kubectl helm k9s kubectx" in macos
     assert "_install_helm_linux" not in macos
     assert "add_repo" not in debian and "add_repo" not in fedora
     for body in (debian, fedora):
         assert "_install_kubectl_linux" in body
         assert "_install_helm_linux" in body
         assert "_install_k9s_linux" in body
+        assert "_install_kubectx_linux" in body
+        assert "_install_kubens_linux" in body
         assert "https://dl.k8s.io/release/v1.35.4/bin/linux/" in body
         assert "helm-v3.20.2-linux-" in body
+        assert "kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_" in body
+        assert "kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_" in body
 
 
 def test_claude_code_settings() -> None:

@@ -15,11 +15,12 @@ case "$DOTGEN_MODE" in
     printf 'unknown mode: %s\nusage: %s {diff|deploy}\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
 esac
 export DOTGEN_MODE
-# setup runs before the user's github SSH key is registered, so suppress any
-# url.<...>.insteadOf rewrites in their gitconfig that would route brew/git fetches via SSH.
-export GIT_CONFIG_GLOBAL=/dev/null
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
+  # ~/.gitconfig is dotgen-owned and gets re-installed by git_setup at the end of
+  # this run. Remove any prior copy so its url.insteadOf rewrite can't route
+  # brew/git fetches via SSH while no github SSH key is registered yet.
+  rm -f "$HOME/.gitconfig"
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
@@ -32,11 +33,6 @@ fi
 # --- core_utils ---
 component_begin "core_utils"
 install_packages git jq ripgrep fd tree vim htop gnupg bash-completion
-
-# --- git_setup ---
-component_begin "git_setup"
-install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
-install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 
 # --- github_ssh ---
 component_begin "github_ssh"
@@ -78,7 +74,7 @@ install_package zoxide
 
 # --- kubectl ---
 component_begin "kubectl"
-install_packages kubectl helm k9s
+install_packages kubectl helm k9s kubectx
 
 # --- python_tools ---
 component_begin "python_tools"
@@ -155,10 +151,16 @@ component_begin "ghostty"
 install_cask ghostty
 install_config "$DIR/config/ghostty/config" "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
 
+# --- git_setup ---
+component_begin "git_setup"
+install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
+install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
+
 # --- dotfiles_deploy ---
 component_begin "dotfiles_deploy"
 install_config "$DIR/.bashrc" "$HOME/.bashrc"
 install_config "$DIR/alias.sh" "$HOME/.aliases"
+install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
 
 if [ "$DOTGEN_MODE" = diff ]; then
   log "diff complete (no changes applied)"
