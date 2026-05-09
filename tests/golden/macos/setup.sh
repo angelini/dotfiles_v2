@@ -137,6 +137,11 @@ component_begin "aws"
 install_package awscli
 install_config "$DIR/config/aws/config" "$HOME/.aws/config"
 
+# --- fonts ---
+component_begin "fonts"
+install_cask font-ubuntu
+install_cask font-ubuntu-mono-nerd-font
+
 # --- zed ---
 component_begin "zed"
 install_cask zed

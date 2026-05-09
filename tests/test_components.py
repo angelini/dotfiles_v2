@@ -5,6 +5,7 @@ from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
+from dotgen.components.fonts import Fonts
 from dotgen.components.gcloud import Gcloud
 from dotgen.components.gh import Gh
 from dotgen.components.ghostty import Ghostty
@@ -51,7 +52,7 @@ def test_component_render_returns_fragment(env: Environment, cls) -> None:
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Zed])
+@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed])
 def test_addon_component_renders_for_supported_oses(cls) -> None:
     for env_name in ("fedora", "macos"):
         env = ENVIRONMENTS[env_name]
@@ -101,6 +102,14 @@ def test_git_setup_signs_with_ssh_key() -> None:
     assert "format = ssh" in cfg
     assert "signingkey = ~/.ssh/id_signing.pub" in cfg
     assert "gpgsign = true" in cfg
+
+
+def test_fonts_per_os_packages() -> None:
+    macos = Fonts().render(ENVIRONMENTS["macos"]).setup
+    fedora = Fonts().render(ENVIRONMENTS["fedora"]).setup
+    assert "font-ubuntu" in macos and "font-ubuntu-mono-nerd-font" in macos
+    assert "ubuntu-family-fonts" in fedora
+    assert not Fonts().applies_to(ENVIRONMENTS["debian"])
 
 
 def test_git_signing_uploads_via_gh() -> None:

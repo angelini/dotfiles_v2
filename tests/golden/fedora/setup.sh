@@ -226,6 +226,10 @@ if ! bin_exists aws; then
 fi
 install_config "$DIR/config/aws/config" "$HOME/.aws/config"
 
+# --- fonts ---
+component_begin "fonts"
+install_package ubuntu-family-fonts
+
 # --- zed ---
 component_begin "zed"
 install_script zed https://zed.dev/install.sh

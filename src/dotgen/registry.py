@@ -4,6 +4,7 @@ from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
+from dotgen.components.fonts import Fonts
 from dotgen.components.gcloud import Gcloud
 from dotgen.components.gh import Gh
 from dotgen.components.ghostty import Ghostty
@@ -43,6 +44,7 @@ _FULL_ADDONS: tuple[Component, ...] = (
     GoLang(),
     Gcloud(),
     Aws(),
+    Fonts(),
     Zed(),
 )
 
