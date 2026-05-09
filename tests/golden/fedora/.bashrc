@@ -62,7 +62,8 @@ if bin_exists fnm; then
 fi
 
 # --- go_lang ---
-export GOPATH="$HOME/go"
+[ -s "$HOME/.gvm/scripts/gvm" ] && source "$HOME/.gvm/scripts/gvm"
+export GOPATH="${GOPATH:-$HOME/go}"
 export PATH="$GOPATH/bin:$PATH"
 
 # --- gcloud ---

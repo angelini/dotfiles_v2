@@ -26,10 +26,6 @@ esac
 export DOTGEN_MODE
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
-  # ~/.gitconfig is dotgen-owned and gets re-installed by git_setup at the end of
-  # this run. Remove any prior copy so its url.insteadOf rewrite can't route
-  # brew/git fetches via SSH while no github SSH key is registered yet.
-  rm -f "$HOME/.gitconfig"
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"

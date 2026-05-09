@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -291,7 +291,7 @@ _BACKENDS_BY_ENV: dict[str, type[_VmBackend]] = {
 
 
 @contextmanager
-def vm_session(env_name: str, image: str) -> Iterator[VmHandle]:
+def vm_session(env_name: str, image: str) -> Generator[VmHandle]:
     backend_cls = _BACKENDS_BY_ENV.get(env_name)
     if backend_cls is None:
         raise VmBackendUnavailable(f"no VM backend registered for env {env_name!r}")

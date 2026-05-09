@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
+import tomli_w
+
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
-from dotgen.starship_config import render_starship_toml
 
 _SETUP = """\
 ensure_dir "$HOME/.local/bin"
@@ -16,6 +17,22 @@ if bin_exists starship; then
 fi
 """
 
+_DISABLED_MODULES: tuple[str, ...] = ("gcloud", "aws", "docker_context", "dotnet")
+
+_TOML = tomli_w.dumps(
+    {
+        "format": "$directory$git_branch$git_status$kubernetes$character",
+        "add_newline": False,
+        "kubernetes": {
+            "disabled": False,
+            "format": "[$symbol$context( \\($namespace\\))]($style) ",
+            "symbol": "⎈ ",
+            "contexts": [{"context_pattern": ".*prod.*", "style": "bold red"}],
+        },
+        **{m: {"disabled": True} for m in _DISABLED_MODULES},
+    }
+)
+
 
 @dataclass(frozen=True)
 class Starship:
@@ -28,5 +45,5 @@ class Starship:
         return Fragment(
             setup=_SETUP,
             bashrc=_BASHRC,
-            configs=(ConfigFile(dest="starship/starship.toml", content=render_starship_toml()),),
+            configs=(ConfigFile(dest="starship/starship.toml", content=_TOML),),
         )

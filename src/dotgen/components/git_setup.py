@@ -7,8 +7,12 @@ _GITCONFIG = """\
 [user]
     name = ${GIT_USER_NAME}
     email = ${GIT_USER_EMAIL}
-    signingkey = ${GIT_SIGNING_KEY}
+    signingkey = ~/.ssh/id_signing.pub
+[gpg]
+    format = ssh
 [commit]
+    gpgsign = true
+[tag]
     gpgsign = true
 [core]
     editor = hx
@@ -21,8 +25,10 @@ _GITCONFIG = """\
     algorithm = patience
 [init]
     defaultBranch = main
-[url "ssh://git@github.com/"]
-    insteadOf = https://github.com/
+[credential "https://github.com"]
+    helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+    helper = !gh auth git-credential
 """
 
 _GITIGNORE_GLOBAL = """\
@@ -35,7 +41,7 @@ node_modules/
 """
 
 _SETUP = """\
-install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
+install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL'
 install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 """
 
@@ -54,5 +60,5 @@ class GitSetup:
                 ConfigFile(dest="git/gitconfig", content=_GITCONFIG),
                 ConfigFile(dest="git/gitignore_global", content=_GITIGNORE_GLOBAL),
             ),
-            secrets=frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL", "GIT_SIGNING_KEY"}),
+            secrets=frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL"}),
         )

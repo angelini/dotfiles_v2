@@ -9,7 +9,7 @@ from dotgen.components.gcloud import Gcloud
 from dotgen.components.gh import Gh
 from dotgen.components.ghostty import Ghostty
 from dotgen.components.git_setup import GitSetup
-from dotgen.components.github_ssh import GitHubSsh
+from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
@@ -36,7 +36,6 @@ def env(request: pytest.FixtureRequest) -> Environment:
         BashBase,
         CoreUtils,
         GitSetup,
-        GitHubSsh,
         Helix,
         Starship,
         Zoxide,
@@ -44,6 +43,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
         ClaudeCode,
         PythonTools,
         Gh,
+        GitSigning,
     ],
 )
 def test_component_render_returns_fragment(env: Environment, cls) -> None:
@@ -92,16 +92,23 @@ def test_git_setup_uses_secret_placeholders() -> None:
     cfg = next(c for c in frag.configs if c.dest == "git/gitconfig")
     assert "${GIT_USER_NAME}" in cfg.content
     assert "${GIT_USER_EMAIL}" in cfg.content
-    assert "${GIT_SIGNING_KEY}" in cfg.content
-    assert frag.secrets == frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL", "GIT_SIGNING_KEY"})
+    assert frag.secrets == frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL"})
     assert "install_config_template " in frag.setup
 
 
-def test_github_ssh_macos_uses_keychain() -> None:
-    mac = GitHubSsh().render(ENVIRONMENTS["macos"]).setup
-    linux = GitHubSsh().render(ENVIRONMENTS["debian"]).setup
-    assert "apple-use-keychain" in mac
-    assert "apple-use-keychain" not in linux
+def test_git_setup_signs_with_ssh_key() -> None:
+    cfg = next(c for c in GitSetup().render(ENVIRONMENTS["macos"]).configs if c.dest == "git/gitconfig").content
+    assert "format = ssh" in cfg
+    assert "signingkey = ~/.ssh/id_signing.pub" in cfg
+    assert "gpgsign = true" in cfg
+
+
+def test_git_signing_uploads_via_gh() -> None:
+    setup = GitSigning().render(ENVIRONMENTS["macos"]).setup
+    assert "ssh-keygen -t ed25519" in setup
+    assert "id_signing" in setup
+    assert "gh ssh-key add" in setup
+    assert "--type signing" in setup
 
 
 def test_helix_emits_config_and_editor_env(env: Environment) -> None:

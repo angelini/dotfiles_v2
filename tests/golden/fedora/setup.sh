@@ -17,10 +17,6 @@ esac
 export DOTGEN_MODE
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
-  # ~/.gitconfig is dotgen-owned and gets re-installed by git_setup at the end of
-  # this run. Remove any prior copy so its url.insteadOf rewrite can't route
-  # brew/git fetches via SSH while no github SSH key is registered yet.
-  rm -f "$HOME/.gitconfig"
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
@@ -33,25 +29,6 @@ fi
 # --- core_utils ---
 component_begin "core_utils"
 install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion
-
-# --- github_ssh ---
-component_begin "github_ssh"
-ensure_dir "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-
-if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
-  ssh-keygen -t ed25519 -a 100 -N "" \
-    -C "$(detect_os)-$(hostname)" \
-    -f "$HOME/.ssh/id_ed25519"
-fi
-
-touch "$HOME/.ssh/known_hosts"
-chmod 644 "$HOME/.ssh/known_hosts"
-if ! grep -q '^github.com ' "$HOME/.ssh/known_hosts"; then
-  ssh-keyscan -t rsa,ed25519 github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
-fi
-log "Add this public key to GitHub: https://github.com/settings/keys"
-cat "$HOME/.ssh/id_ed25519.pub" >&2
 
 # --- helix ---
 component_begin "helix"
@@ -180,6 +157,27 @@ component_begin "gh"
 install_package gh
 install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
 
+# --- git_signing ---
+component_begin "git_signing"
+ensure_dir "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+if [ ! -f "$HOME/.ssh/id_signing" ]; then
+  ssh-keygen -t ed25519 -a 100 -N "" \
+    -C "$(detect_os)-$(hostname)-signing" \
+    -f "$HOME/.ssh/id_signing"
+fi
+if bin_exists gh && gh auth status >/dev/null 2>&1; then
+  _sig_key="$(awk '{print $2}' "$HOME/.ssh/id_signing.pub")"
+  if ! gh ssh-key list 2>/dev/null | grep -qF "$_sig_key"; then
+    gh ssh-key add "$HOME/.ssh/id_signing.pub" \
+      --type signing \
+      --title "$(detect_os)-$(hostname)-signing"
+  fi
+  unset _sig_key
+else
+  log "gh not authed; after 'gh auth login' run: gh ssh-key add ~/.ssh/id_signing.pub --type signing"
+fi
+
 # --- rust ---
 component_begin "rust"
 install_script cargo https://sh.rustup.rs -y --default-toolchain stable
@@ -190,7 +188,10 @@ install_script fnm https://fnm.vercel.app/install --skip-shell
 
 # --- go_lang ---
 component_begin "go_lang"
-install_package golang
+install_packages curl git make bison gcc glibc-devel
+if [ ! -s "$HOME/.gvm/scripts/gvm" ]; then
+  install_script gvm https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer
+fi
 
 # --- gcloud ---
 component_begin "gcloud"
@@ -233,7 +234,7 @@ install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
 
 # --- git_setup ---
 component_begin "git_setup"
-install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
+install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL'
 install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 
 # --- dotfiles_deploy ---

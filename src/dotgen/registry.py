@@ -8,7 +8,7 @@ from dotgen.components.gcloud import Gcloud
 from dotgen.components.gh import Gh
 from dotgen.components.ghostty import Ghostty
 from dotgen.components.git_setup import GitSetup
-from dotgen.components.github_ssh import GitHubSsh
+from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
@@ -24,7 +24,6 @@ from dotgen.types import OS, PkgMgr
 _BASE: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
-    GitHubSsh(),
     Helix(),
 )
 
@@ -35,6 +34,7 @@ _SHARED: tuple[Component, ...] = _BASE + (
     PythonTools(),
     ClaudeCode(),
     Gh(),
+    GitSigning(),
 )
 
 _FULL_ADDONS: tuple[Component, ...] = (
@@ -46,9 +46,8 @@ _FULL_ADDONS: tuple[Component, ...] = (
     Zed(),
 )
 
-# GitSetup writes ~/.gitconfig with a url.insteadOf rewrite that routes
-# https://github.com/ through SSH; running it last keeps brew/git fetches earlier
-# in setup.sh on plain HTTPS, before any github SSH key is registered.
+# GitSetup wires `gh auth git-credential` as the github HTTPS credential
+# helper, so it must run after Gh() (in _SHARED) has put gh on PATH.
 _LAST: tuple[Component, ...] = (GitSetup(), DotfilesDeploy())
 
 ENVIRONMENTS: dict[str, Environment] = {

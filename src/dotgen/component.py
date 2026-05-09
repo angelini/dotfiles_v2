@@ -7,7 +7,8 @@ if TYPE_CHECKING:
 
 
 class Component(Protocol):
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def applies_to(self, env: "Environment") -> bool: ...
 

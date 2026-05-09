@@ -5,7 +5,7 @@ from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
 _CONFIG = """\
-git_protocol: ssh
+git_protocol: https
 prompt: enabled
 aliases:
     co: pr checkout
