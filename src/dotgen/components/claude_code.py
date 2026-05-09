@@ -1,11 +1,8 @@
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _SETTINGS_JSON = (
     json.dumps(
@@ -87,7 +84,7 @@ _install_serena() {
   if "$uv_bin" tool list 2>/dev/null | grep -q '^serena-agent'; then
     return 0
   fi
-  "$uv_bin" tool install --from git+https://github.com/oraios/serena serena-agent
+  "$uv_bin" tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent
 }
 _register_serena_mcp() {
   if ! bin_exists claude; then
@@ -119,10 +116,10 @@ fi
 class ClaudeCode:
     name: str = "claude_code"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP,
             bashrc=_BASHRC,

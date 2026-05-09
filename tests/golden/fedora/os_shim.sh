@@ -109,6 +109,57 @@ install_config() {
   install -m 0644 "$src" "$dst"
 }
 
+load_secrets() {
+  [ "${_DOTGEN_SECRETS_LOADED:-0}" = 1 ] && return 0
+  local f="${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+  if [ ! -r "$f" ]; then
+    error "missing secrets file: $f"
+    error "copy from \$DIR/config/dotgen/secrets.env.template and fill in"
+    return 1
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "$f"
+  set +a
+  _DOTGEN_SECRETS_LOADED=1
+}
+
+install_config_template() {
+  local src="$1" dst="$2" vars="$3"
+  load_secrets || return 1
+  local missing=() v subst_spec=""
+  for v in $vars; do
+    if [ -z "${!v:-}" ]; then
+      missing+=("$v")
+    fi
+    subst_spec="${subst_spec}\${${v}} "
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    error "secrets.env missing values: ${missing[*]}"
+    return 1
+  fi
+  if ! bin_exists envsubst; then
+    error "envsubst not installed (gettext)"
+    return 1
+  fi
+  local rendered
+  rendered="$(mktemp)"
+  envsubst "$subst_spec" < "$src" > "$rendered"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    if [ ! -e "$dst" ]; then
+      printf '+ NEW    %s (templated)\n' "$dst"
+    elif ! cmp -s "$rendered" "$dst"; then
+      printf '~ CHANGE %s (templated)\n' "$dst"
+      diff -u "$dst" "$rendered" || true
+    fi
+    rm -f "$rendered"
+    return 0
+  fi
+  ensure_dir "$(dirname "$dst")"
+  install -m 0644 "$rendered" "$dst"
+  rm -f "$rendered"
+}
+
 install_script() {
   local name="$1" url="$2" tmp
   shift 2

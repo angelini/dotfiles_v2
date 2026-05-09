@@ -14,6 +14,7 @@ class Fragment:
     alias: str = ""
     bashrc: str = ""
     configs: tuple[ConfigFile, ...] = ()
+    secrets: frozenset[str] = frozenset()
 
     def merge(self, other: "Fragment") -> "Fragment":
         return Fragment(
@@ -21,6 +22,7 @@ class Fragment:
             alias=_join(self.alias, other.alias),
             bashrc=_join(self.bashrc, other.bashrc),
             configs=self.configs + other.configs,
+            secrets=self.secrets | other.secrets,
         )
 
 

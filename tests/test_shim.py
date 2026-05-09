@@ -29,10 +29,7 @@ def test_function_set_identical_across_oses() -> None:
     sets = {os: set(_DEF_RE.findall(OSShim(os).render())) for os in OS}
     canonical = sets[OS.MACOS]
     for os, found in sets.items():
-        assert found == canonical, (
-            f"{os.value} differs: "
-            f"missing={canonical - found} extra={found - canonical}"
-        )
+        assert found == canonical, f"{os.value} differs: missing={canonical - found} extra={found - canonical}"
 
 
 _MODE_AWARE = (
@@ -82,24 +79,129 @@ def test_mode_aware_helpers_branch_on_diff(shim_text: str) -> None:
         if '"$DOTGEN_MODE" = diff' in body:
             continue
         # OK if this OS's body is a stub (e.g. install_cask on linux)
-        assert not any(t in body for t in _SIDE_EFFECT_TOKENS), (
-            f"{fn} has side effects without a diff-mode branch:\n{body}"
-        )
+        assert not any(t in body for t in _SIDE_EFFECT_TOKENS), f"{fn} has side effects without a diff-mode branch:\n{body}"
 
 
 def _run_shim_fn(tmp_path, shim_text: str, mode: str, call: str) -> str:
     script = tmp_path / "run.sh"
-    script.write_text(
-        f'{shim_text}\nDOTGEN_MODE={mode}\n{call}\n'
-    )
+    script.write_text(f"{shim_text}\nDOTGEN_MODE={mode}\n{call}\n")
     return subprocess.check_output(["bash", str(script)]).decode()
 
 
 def test_component_begin_prints_in_diff_mode(tmp_path, shim_text: str) -> None:
-    out = _run_shim_fn(tmp_path, shim_text, "diff", 'component_begin aws')
+    out = _run_shim_fn(tmp_path, shim_text, "diff", "component_begin aws")
     assert out == "--- aws ---\n"
 
 
 def test_component_begin_silent_in_deploy_mode(tmp_path, shim_text: str) -> None:
-    out = _run_shim_fn(tmp_path, shim_text, "deploy", 'component_begin aws')
+    out = _run_shim_fn(tmp_path, shim_text, "deploy", "component_begin aws")
     assert out == ""
+
+
+def _macos_shim() -> str:
+    return OSShim(OS.MACOS).render()
+
+
+def _write_secrets(tmp_path, body: str) -> None:
+    (tmp_path / "dotgen").mkdir()
+    (tmp_path / "dotgen" / "secrets.env").write_text(body)
+
+
+def _run_template(tmp_path, mode: str, src: str, vars_list: str, *, secrets: str) -> subprocess.CompletedProcess[str]:
+    _write_secrets(tmp_path, secrets)
+    src_path = tmp_path / "src"
+    src_path.write_text(src)
+    dst_path = tmp_path / "dst"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"{_macos_shim()}\n"
+        f"export XDG_CONFIG_HOME={tmp_path}\n"
+        f"export DOTGEN_MODE={mode}\n"
+        f"install_config_template {src_path} {dst_path} '{vars_list}'\n"
+    )
+    return subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+
+def test_install_config_template_renders(tmp_path) -> None:
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="name=${GIT_USER_NAME}\nemail=${GIT_USER_EMAIL}\n",
+        vars_list="GIT_USER_NAME GIT_USER_EMAIL",
+        secrets='GIT_USER_NAME="Alice"\nGIT_USER_EMAIL="a@example.com"\n',
+    )
+    assert res.returncode == 0, res.stderr
+    assert (tmp_path / "dst").read_text() == "name=Alice\nemail=a@example.com\n"
+
+
+def test_install_config_template_missing_secrets(tmp_path) -> None:
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="name=${GIT_USER_NAME}\nemail=${GIT_USER_EMAIL}\n",
+        vars_list="GIT_USER_NAME GIT_USER_EMAIL",
+        secrets='GIT_USER_NAME="Alice"\n',
+    )
+    assert res.returncode != 0
+    assert "GIT_USER_EMAIL" in res.stderr
+    assert not (tmp_path / "dst").exists()
+
+
+def test_install_config_template_whitelist_preserves_unrelated(tmp_path) -> None:
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="name=${GIT_USER_NAME}\npath=$PATH\n",
+        vars_list="GIT_USER_NAME",
+        secrets='GIT_USER_NAME="Alice"\n',
+    )
+    assert res.returncode == 0, res.stderr
+    out = (tmp_path / "dst").read_text()
+    assert "Alice" in out
+    assert "$PATH" in out
+
+
+def test_install_config_template_diff_mode_does_not_write(tmp_path) -> None:
+    res = _run_template(
+        tmp_path,
+        mode="diff",
+        src="name=${GIT_USER_NAME}\n",
+        vars_list="GIT_USER_NAME",
+        secrets='GIT_USER_NAME="Alice"\n',
+    )
+    assert res.returncode == 0, res.stderr
+    assert "(templated)" in res.stdout
+    assert not (tmp_path / "dst").exists()
+
+
+def test_install_config_template_missing_secrets_file(tmp_path) -> None:
+    src_path = tmp_path / "src"
+    src_path.write_text("name=${GIT_USER_NAME}\n")
+    dst_path = tmp_path / "dst"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"{_macos_shim()}\n"
+        f"export XDG_CONFIG_HOME={tmp_path}\n"
+        f"export DOTGEN_MODE=deploy\n"
+        f"install_config_template {src_path} {dst_path} 'GIT_USER_NAME'\n"
+    )
+    res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert res.returncode != 0
+    assert "missing secrets file" in res.stderr
+    assert not dst_path.exists()
+
+
+def test_load_secrets_idempotent(tmp_path) -> None:
+    _write_secrets(tmp_path, 'COUNTER="$((${COUNTER:-0}+1))"\n')
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"{_macos_shim()}\n"
+        f"export XDG_CONFIG_HOME={tmp_path}\n"
+        f"export DOTGEN_MODE=deploy\n"
+        "load_secrets\n"
+        "load_secrets\n"
+        'printf "%s" "$COUNTER"\n'
+    )
+    res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    assert res.stdout == "1"

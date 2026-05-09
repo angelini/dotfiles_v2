@@ -20,8 +20,9 @@ from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
-from dotgen.environment import ENVIRONMENTS, Environment
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment
+from dotgen.registry import ENVIRONMENTS
 
 
 @pytest.fixture(params=list(ENVIRONMENTS.values()), ids=list(ENVIRONMENTS))
@@ -32,8 +33,17 @@ def env(request: pytest.FixtureRequest) -> Environment:
 @pytest.mark.parametrize(
     "cls",
     [
-        BashBase, CoreUtils, GitSetup, GitHubSsh, Helix,
-        Starship, Zoxide, Kubectl, ClaudeCode, PythonTools, Gh,
+        BashBase,
+        CoreUtils,
+        GitSetup,
+        GitHubSsh,
+        Helix,
+        Starship,
+        Zoxide,
+        Kubectl,
+        ClaudeCode,
+        PythonTools,
+        Gh,
     ],
 )
 def test_component_render_returns_fragment(env: Environment, cls) -> None:
@@ -68,7 +78,7 @@ def test_core_utils_per_os_fd_token() -> None:
 
 def test_core_utils_debian_adds_fd_symlink() -> None:
     setup = CoreUtils().render(ENVIRONMENTS["debian"]).setup
-    assert "fdfind" in setup and 'ln -sf' in setup
+    assert "fdfind" in setup and "ln -sf" in setup
 
 
 def test_git_setup_emits_two_configs() -> None:
@@ -77,10 +87,14 @@ def test_git_setup_emits_two_configs() -> None:
     assert dests == ["git/gitconfig", "git/gitignore_global"]
 
 
-def test_git_setup_email() -> None:
+def test_git_setup_uses_secret_placeholders() -> None:
     frag = GitSetup().render(ENVIRONMENTS["macos"])
     cfg = next(c for c in frag.configs if c.dest == "git/gitconfig")
-    assert "alex.louis.angelini@gmail.com" in cfg.content
+    assert "${GIT_USER_NAME}" in cfg.content
+    assert "${GIT_USER_EMAIL}" in cfg.content
+    assert "${GIT_SIGNING_KEY}" in cfg.content
+    assert frag.secrets == frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL", "GIT_SIGNING_KEY"})
+    assert "install_config_template " in frag.setup
 
 
 def test_github_ssh_macos_uses_keychain() -> None:
@@ -139,9 +153,7 @@ def test_claude_code_emits_global_claude_md() -> None:
 
 def test_claude_code_emits_serena_hook_executable() -> None:
     frag = ClaudeCode().render(ENVIRONMENTS["macos"])
-    hook = next(
-        c for c in frag.configs if c.dest == "claude/hooks/serena-reminder.sh"
-    )
+    hook = next(c for c in frag.configs if c.dest == "claude/hooks/serena-reminder.sh")
     assert hook.mode == 0o755
     assert hook.content.startswith("#!/usr/bin/env bash")
     assert "mcp__serena__initial_instructions" in hook.content
@@ -149,16 +161,17 @@ def test_claude_code_emits_serena_hook_executable() -> None:
 
 def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     setup = ClaudeCode().render(ENVIRONMENTS["macos"]).setup
-    assert "tool install --from git+https://github.com/oraios/serena serena-agent" in setup
+    assert (
+        "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent"
+        in setup
+    )
     assert "claude mcp add serena" in setup
 
 
 def test_claude_code_runs_after_python_tools() -> None:
     for env in ENVIRONMENTS.values():
         names = [c.name for c in env.components]
-        assert names.index("python_tools") < names.index("claude_code"), (
-            f"{env.name}: claude_code must follow python_tools so uv is available"
-        )
+        assert names.index("python_tools") < names.index("claude_code"), f"{env.name}: claude_code must follow python_tools so uv is available"
 
 
 def test_python_tools_per_os_build_deps() -> None:
@@ -210,9 +223,7 @@ def test_gh_emits_config_in_every_env() -> None:
     for env_name in ("debian", "fedora", "macos"):
         frag = Gh().render(ENVIRONMENTS[env_name])
         assert any(c.dest == "gh/config.yml" for c in frag.configs)
-        assert "co: pr checkout" in next(
-            c for c in frag.configs if c.dest == "gh/config.yml"
-        ).content
+        assert "co: pr checkout" in next(c for c in frag.configs if c.dest == "gh/config.yml").content
 
 
 def test_gh_per_os_install() -> None:
@@ -265,9 +276,7 @@ def test_dotfiles_deploy_emits_bashrc_and_alias_install() -> None:
 
 def test_dotfiles_deploy_runs_last_in_every_env() -> None:
     for env in ENVIRONMENTS.values():
-        assert env.components[-1].name == "dotfiles_deploy", (
-            f"{env.name}: dotfiles_deploy must run last"
-        )
+        assert env.components[-1].name == "dotfiles_deploy", f"{env.name}: dotfiles_deploy must run last"
 
 
 def test_postgres_unwired_but_renders_per_os() -> None:

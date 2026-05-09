@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _CONFIG = """\
 font-family = UbuntuMonoNerdFont
@@ -17,20 +14,17 @@ audio-bell = false
 
 _GHOSTTY_DST = '"$HOME/Library/Application Support/com.mitchellh.ghostty/config"'
 
-_SETUP = (
-    "install_cask ghostty\n"
-    f'install_config "$DIR/config/ghostty/config" {_GHOSTTY_DST}\n'
-)
+_SETUP = f'install_cask ghostty\ninstall_config "$DIR/config/ghostty/config" {_GHOSTTY_DST}\n'
 
 
 @dataclass(frozen=True)
 class Ghostty:
     name: str = "ghostty"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return env.os is OS.MACOS
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP,
             configs=(ConfigFile(dest="ghostty/config", content=_CONFIG),),

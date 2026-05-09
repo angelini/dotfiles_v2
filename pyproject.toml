@@ -34,5 +34,5 @@ root = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["vm: integration test that boots an OrbStack VM (slow, opt-in)"]
+markers = ["vm: integration test that boots a VM (OrbStack for Linux, tart for macOS; slow, opt-in)"]
 addopts = "-m 'not vm'"

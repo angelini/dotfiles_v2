@@ -20,7 +20,8 @@ def test_shellcheck_clean(built_root: Path) -> None:
     files = sorted(built_root.glob("*/*.sh")) + sorted(built_root.glob("*/.bashrc"))
     cmd = [
         "shellcheck",
-        "-s", "bash",
+        "-s",
+        "bash",
         "--exclude=SC1090,SC1091",
         *(str(f) for f in files),
     ]

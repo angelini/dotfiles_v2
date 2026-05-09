@@ -1,12 +1,9 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from dotgen.bash import argv
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _PACKAGES: dict[OS, tuple[str, ...]] = {
     OS.DEBIAN: (
@@ -56,10 +53,10 @@ fi
 class CoreUtils:
     name: str = "core_utils"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         pkgs = _PACKAGES[env.os]
         body = argv("install_packages", *pkgs) + "\n"
         if env.os is OS.DEBIAN:

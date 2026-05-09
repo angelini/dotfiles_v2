@@ -1,7 +1,9 @@
 from pathlib import Path
 
-from dotgen.environment import ENVIRONMENTS, Environment
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment
+from dotgen.registry import ENVIRONMENTS
+from dotgen.secrets import DESCRIPTIONS
 from dotgen.shim import OSShim
 
 SETUP_HEADER = """\
@@ -22,17 +24,22 @@ case "$DOTGEN_MODE" in
     printf 'unknown mode: %s\\nusage: %s {diff|deploy}\\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
 esac
 export DOTGEN_MODE
+# setup runs before the user's github SSH key is registered, so suppress any
+# url.<...>.insteadOf rewrites in their gitconfig that would route brew/git fetches via SSH.
+export GIT_CONFIG_GLOBAL=/dev/null
 source "$DIR/os_shim.sh"
+if [ "$DOTGEN_MODE" = deploy ]; then
+  bin_exists envsubst || install_package gettext
+  if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
+    error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+    error "copy from: $DIR/config/dotgen/secrets.env.template"
+    exit 2
+  fi
+fi
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 """
 
-SETUP_FOOTER = (
-    'if [ "$DOTGEN_MODE" = diff ]; then\n'
-    '  log "diff complete (no changes applied)"\n'
-    "else\n"
-    '  log "setup complete"\n'
-    "fi\n"
-)
+SETUP_FOOTER = 'if [ "$DOTGEN_MODE" = diff ]; then\n  log "diff complete (no changes applied)"\nelse\n  log "setup complete"\nfi\n'
 
 ALIAS_HEADER = "# alias.sh — sourced by ~/.bashrc\n"
 
@@ -73,6 +80,22 @@ def build_env(env: Environment, out_dir: Path) -> None:
             dest.write_text(cf.content)
             dest.chmod(cf.mode)
 
+    if fragment.secrets:
+        _write_secrets_template(out_dir, fragment.secrets)
+
+
+def _write_secrets_template(out_dir: Path, secrets: frozenset[str]) -> None:
+    lines = [
+        "# dotgen secrets — fill in values, then move to ~/.config/dotgen/secrets.env\n",
+        "# values must be single-line; multi-line not supported in v1\n",
+        "\n",
+    ]
+    for key in sorted(secrets):
+        lines.append(f"# {DESCRIPTIONS.get(key, '')}\n{key}=\"\"\n\n")
+    dest_dir = out_dir / "config" / "dotgen"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    (dest_dir / "secrets.env.template").write_text("".join(lines))
+
 
 def build_all(out_root: Path) -> None:
     for name, env in ENVIRONMENTS.items():
@@ -84,14 +107,10 @@ _HEADER_FMT = "# --- {name} ---"
 
 def _decorate(name: str, frag: Fragment) -> Fragment:
     header = _HEADER_FMT.format(name=name) + "\n"
-    setup = (
-        f'{header}component_begin "{name}"\n{frag.setup}'
-        if frag.setup
-        else ""
-    )
+    setup = f'{header}component_begin "{name}"\n{frag.setup}' if frag.setup else ""
     alias = f"{header}{frag.alias}" if frag.alias else ""
     bashrc = f"{header}{frag.bashrc}" if frag.bashrc else ""
-    return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs)
+    return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs, secrets=frag.secrets)
 
 
 def _merge_fragments(env: Environment) -> Fragment:

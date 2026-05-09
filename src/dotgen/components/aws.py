@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _AWS_CONFIG = """\
 # Populate per-profile settings via `aws configure --profile <name>`.
@@ -52,14 +49,11 @@ fi
 class Aws:
     name: str = "aws"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return env.os in _SETUP_BY_OS
 
-    def render(self, env: "Environment") -> Fragment:
-        body = (
-            _SETUP_BY_OS[env.os]
-            + 'install_config "$DIR/config/aws/config" "$HOME/.aws/config"\n'
-        )
+    def render(self, env: Environment) -> Fragment:
+        body = _SETUP_BY_OS[env.os] + 'install_config "$DIR/config/aws/config" "$HOME/.aws/config"\n'
         return Fragment(
             setup=body,
             bashrc=_BASHRC,

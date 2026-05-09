@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.starship_config import render_starship_toml
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _SETUP = """\
 ensure_dir "$HOME/.local/bin"
@@ -24,14 +21,12 @@ fi
 class Starship:
     name: str = "starship"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP,
             bashrc=_BASHRC,
-            configs=(
-                ConfigFile(dest="starship/starship.toml", content=render_starship_toml()),
-            ),
+            configs=(ConfigFile(dest="starship/starship.toml", content=render_starship_toml()),),
         )

@@ -15,7 +15,18 @@ case "$DOTGEN_MODE" in
     printf 'unknown mode: %s\nusage: %s {diff|deploy}\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
 esac
 export DOTGEN_MODE
+# setup runs before the user's github SSH key is registered, so suppress any
+# url.<...>.insteadOf rewrites in their gitconfig that would route brew/git fetches via SSH.
+export GIT_CONFIG_GLOBAL=/dev/null
 source "$DIR/os_shim.sh"
+if [ "$DOTGEN_MODE" = deploy ]; then
+  bin_exists envsubst || install_package gettext
+  if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
+    error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+    error "copy from: $DIR/config/dotgen/secrets.env.template"
+    exit 2
+  fi
+fi
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 
 # --- core_utils ---
@@ -24,7 +35,7 @@ install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion
 
 # --- git_setup ---
 component_begin "git_setup"
-install_config "$DIR/config/git/gitconfig" "$HOME/.gitconfig"
+install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
 install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 
 # --- github_ssh ---
@@ -129,7 +140,7 @@ _install_serena() {
   if "$uv_bin" tool list 2>/dev/null | grep -q '^serena-agent'; then
     return 0
   fi
-  "$uv_bin" tool install --from git+https://github.com/oraios/serena serena-agent
+  "$uv_bin" tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent
 }
 _register_serena_mcp() {
   if ! bin_exists claude; then

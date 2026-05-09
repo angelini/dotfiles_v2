@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _FEDORA_REPO = r"""[google-cloud-cli]
 name=Google Cloud CLI
@@ -18,10 +15,7 @@ gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 
 _SETUP_MACOS = "install_cask google-cloud-sdk\n"
 
-_SETUP_FEDORA = (
-    f'add_repo dnf google-cloud-cli "{_FEDORA_REPO}"\n'
-    "install_package google-cloud-cli\n"
-)
+_SETUP_FEDORA = f'add_repo dnf google-cloud-cli "{_FEDORA_REPO}"\ninstall_package google-cloud-cli\n'
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: _SETUP_MACOS,
@@ -44,10 +38,10 @@ unset _f
 class Gcloud:
     name: str = "gcloud"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return env.os in _SETUP_BY_OS
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP_BY_OS[env.os],
             bashrc=_BASHRC,

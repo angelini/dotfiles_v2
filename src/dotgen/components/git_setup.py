@@ -1,15 +1,15 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _GITCONFIG = """\
 [user]
-    name = Alex Angelini
-    email = alex.louis.angelini@gmail.com
+    name = ${GIT_USER_NAME}
+    email = ${GIT_USER_EMAIL}
+    signingkey = ${GIT_SIGNING_KEY}
+[commit]
+    gpgsign = true
 [core]
     editor = hx
     excludesFile = ~/.gitignore_global
@@ -35,7 +35,7 @@ node_modules/
 """
 
 _SETUP = """\
-install_config "$DIR/config/git/gitconfig" "$HOME/.gitconfig"
+install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL GIT_SIGNING_KEY'
 install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 """
 
@@ -44,14 +44,15 @@ install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
 class GitSetup:
     name: str = "git_setup"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP,
             configs=(
                 ConfigFile(dest="git/gitconfig", content=_GITCONFIG),
                 ConfigFile(dest="git/gitignore_global", content=_GITIGNORE_GLOBAL),
             ),
+            secrets=frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL", "GIT_SIGNING_KEY"}),
         )

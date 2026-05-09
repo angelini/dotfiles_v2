@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from dotgen.environment import ENVIRONMENTS
+from dotgen.registry import ENVIRONMENTS
 from dotgen.render import build_all, build_env
 from dotgen.shim import SHIM_FUNCTIONS
 

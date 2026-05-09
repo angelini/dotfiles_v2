@@ -17,7 +17,7 @@ just clean              # rm -rf dist
 
 ```bash
 scp dist/macos.tar.gz host:
-ssh host 'tar xzf macos.tar.gz && bash macos/setup.sh'
+ssh host 'tar xzf macos.tar.gz && bash macos/setup.sh deploy'
 ```
 
 Or locally on the build host:
@@ -25,6 +25,18 @@ Or locally on the build host:
 ```bash
 just install macos
 ```
+
+## Secrets / PII
+
+The tarball is safe to publish — PII (git identity, signing key, account IDs, tokens) is never embedded. Components reference secrets as `${VAR}` placeholders that are substituted at install time via `envsubst`, sourced from a per-machine file:
+
+```
+~/.config/dotgen/secrets.env
+```
+
+Before `setup.sh deploy`, populate that file using `dist/<env>/config/dotgen/secrets.env.template` as a checklist (it lists every key the bundle needs). Single-line `KEY="value"` per line. `setup.sh deploy` aborts if the file is missing.
+
+Authoritative copy lives in your password manager; copy onto each new box once.
 
 ## Layout
 

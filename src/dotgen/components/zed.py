@@ -1,12 +1,9 @@
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _SETTINGS: dict = {
     "edit_predictions": {"provider": "none"},
@@ -107,20 +104,17 @@ _SETUP_BY_OS: dict[OS, str] = {
     OS.DEBIAN: "install_script zed https://zed.dev/install.sh\n",
 }
 
-_SETUP_TAIL = (
-    'install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\n'
-    'install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'
-)
+_SETUP_TAIL = 'install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\ninstall_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'
 
 
 @dataclass(frozen=True)
 class Zed:
     name: str = "zed"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         body = _SETUP_BY_OS[env.os] + _SETUP_TAIL
         return Fragment(
             setup=body,

@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _SETUP_COMMON = r"""ensure_dir "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
@@ -38,10 +35,10 @@ cat "$HOME/.ssh/id_ed25519.pub" >&2
 class GitHubSsh:
     name: str = "github_ssh"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         body = _SETUP_COMMON
         if env.os is OS.MACOS:
             body += _SETUP_MACOS_AGENT

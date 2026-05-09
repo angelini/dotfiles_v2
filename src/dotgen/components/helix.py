@@ -1,21 +1,20 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import tomli_w
 
+from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
-
-_HELIX_CONFIG = tomli_w.dumps({
-    "theme": "default",
-    "editor": {
-        "line-number": "relative",
-        "cursor-shape": {"insert": "bar"},
-    },
-})
+_HELIX_CONFIG = tomli_w.dumps(
+    {
+        "theme": "default",
+        "editor": {
+            "line-number": "relative",
+            "cursor-shape": {"insert": "bar"},
+        },
+    }
+)
 
 _BASHRC = """\
 export EDITOR=hx
@@ -53,6 +52,7 @@ if ! bin_exists hx; then
 fi
 """
 
+
 _SETUP_TAIL = 'install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"\n'
 
 
@@ -60,10 +60,10 @@ _SETUP_TAIL = 'install_config "$DIR/config/helix/config.toml" "$HOME/.config/hel
 class Helix:
     name: str = "helix"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         setup = "install_package helix\n" if env.os is OS.MACOS else _linux_setup(env.os)
         body = setup + _SETUP_TAIL
         return Fragment(

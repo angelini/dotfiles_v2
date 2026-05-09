@@ -1,11 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
-
-if TYPE_CHECKING:
-    from dotgen.environment import Environment
 
 _KUBE_VERSION = "v1.35.4"
 _HELM_VERSION = "v3.20.2"
@@ -44,12 +41,7 @@ _install_k9s_linux() {
 
 _SETUP_MACOS = "install_packages kubectl helm k9s\n"
 
-_SETUP_LINUX = (
-    _LINUX_HELPERS
-    + "_install_kubectl_linux\n"
-    + "_install_helm_linux\n"
-    + "_install_k9s_linux\n"
-)
+_SETUP_LINUX = _LINUX_HELPERS + "_install_kubectl_linux\n" + "_install_helm_linux\n" + "_install_k9s_linux\n"
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: _SETUP_MACOS,
@@ -100,10 +92,10 @@ k8s_all_resources_in_ns() {
 class Kubectl:
     name: str = "kubectl"
 
-    def applies_to(self, env: "Environment") -> bool:
+    def applies_to(self, env: Environment) -> bool:
         return True
 
-    def render(self, env: "Environment") -> Fragment:
+    def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP_BY_OS[env.os],
             bashrc=_BASHRC,
