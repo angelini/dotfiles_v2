@@ -43,6 +43,18 @@ _SHARED: tuple[Component, ...] = (
 
 _MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed())
 
+_DOCKER_SKIP = {
+    "fonts",
+    "git_signing",
+    "aws",
+    "gcloud",
+    "rust",
+    "node_fnm",
+    "go_lang",
+    "python_tools",
+    "claude_code",
+}
+
 # GitSetup wires `gh auth git-credential` as the github HTTPS credential
 # helper, so it must run after Gh() (in _SHARED) has put gh on PATH.
 _LAST: tuple[Component, ...] = (GitSetup(), DotfilesDeploy())
@@ -53,6 +65,12 @@ ENVIRONMENTS: dict[str, Environment] = {
         OS.DEBIAN,
         PkgMgr.APT,
         components=_SHARED + _LAST,
+    ),
+    "debian-docker": Environment(
+        "debian-docker",
+        OS.DEBIAN,
+        PkgMgr.APT,
+        components=tuple(c for c in _SHARED if c.name not in _DOCKER_SKIP) + _LAST,
     ),
     "macos": Environment(
         "macos",

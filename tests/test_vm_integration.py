@@ -19,11 +19,12 @@ MACOS_IMAGE = "ghcr.io/cirruslabs/macos-sequoia-base@sha256:cae088989568978bcc9e
 
 IMAGES = {
     "debian": "debian:trixie",
+    "debian-docker": "dist/debian-docker",
     "macos": MACOS_IMAGE,
 }
 
-_DEPLOY_TIMEOUT = {"debian": 900, "macos": 1800}
-_REDEPLOY_TIMEOUT = {"debian": 600, "macos": 600}
+_DEPLOY_TIMEOUT = {"debian": 900, "debian-docker": 900, "macos": 1800}
+_REDEPLOY_TIMEOUT = {"debian": 600, "debian-docker": 600, "macos": 600}
 
 
 def _deploy_cmd(env_name: str) -> str:
@@ -40,6 +41,12 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
     env_name: str = request.param
     work = tmp_path_factory.mktemp(f"vm-{env_name}")
     build_env(ENVIRONMENTS[env_name], work / env_name)
+
+    if env_name == "debian-docker":
+        image_spec = str(work / env_name)
+    else:
+        image_spec = IMAGES[env_name]
+
     tar_base = str(work / env_name)
     tar = shutil.make_archive(tar_base, "gztar", root_dir=str(work), base_dir=env_name)
 
@@ -47,7 +54,7 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
     secrets_local.write_text(_stub_secrets_env(work / env_name / "config" / "dotgen" / "secrets.env.template"))
 
     try:
-        with vm_session(env_name, IMAGES[env_name]) as handle:
+        with vm_session(env_name, image_spec) as handle:
             handle.push(Path(tar), "/tmp/dotgen.tar.gz")
             handle.push(secrets_local, "/tmp/secrets.env")
             handle.run("mkdir -p /tmp/dotgen && tar xzf /tmp/dotgen.tar.gz -C /tmp/dotgen")
@@ -67,11 +74,11 @@ def test_core_utils_installed(vm: tuple[str, VmHandle]) -> None:
 
 
 def test_shared_tooling_installed(vm: tuple[str, VmHandle]) -> None:
-    _, handle = vm
-    handle.assert_cmd(
-        "command -v kubectl && command -v helm && command -v starship && command -v zoxide && command -v uv && command -v gh && command -v claude",
-        login=True,
-    )
+    env_name, handle = vm
+    cmds = ["command -v kubectl", "command -v helm", "command -v starship", "command -v zoxide", "command -v gh"]
+    if env_name != "debian-docker":
+        cmds.extend(["command -v uv", "command -v claude"])
+    handle.assert_cmd(" && ".join(cmds), login=True)
 
 
 def test_helix_installed(vm: tuple[str, VmHandle]) -> None:
@@ -97,6 +104,8 @@ def test_login_shell_loads_kubectl_alias(vm: tuple[str, VmHandle]) -> None:
 
 def test_full_addons(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
+    if env_name == "debian-docker":
+        pytest.skip("Full addons excluded from debian-docker")
     handle.assert_cmd(
         "command -v cargo && command -v fnm && command -v go && command -v aws && command -v gcloud",
         login=True,
@@ -114,7 +123,8 @@ def test_ghostty_app_installed(vm: tuple[str, VmHandle]) -> None:
 
 def test_setup_is_idempotent(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
-    before = handle.run("sha256sum $HOME/.bashrc $HOME/.aliases $HOME/.gitconfig").stdout
+    sum_cmd = "sha256sum" if env_name != "macos" else "shasum -a 256"
+    before = handle.run(f"{sum_cmd} $HOME/.bashrc $HOME/.aliases $HOME/.gitconfig").stdout
     handle.run(_deploy_cmd(env_name), timeout=_REDEPLOY_TIMEOUT[env_name])
-    after = handle.run("sha256sum $HOME/.bashrc $HOME/.aliases $HOME/.gitconfig").stdout
+    after = handle.run(f"{sum_cmd} $HOME/.bashrc $HOME/.aliases $HOME/.gitconfig").stdout
     assert before == after, f"second setup.sh run mutated dotfiles\nbefore:\n{before}\nafter:\n{after}"

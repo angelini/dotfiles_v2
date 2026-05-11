@@ -184,7 +184,8 @@ def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
 def test_claude_code_runs_after_python_tools() -> None:
     for env in ENVIRONMENTS.values():
         names = [c.name for c in env.components]
-        assert names.index("python_tools") < names.index("claude_code"), f"{env.name}: claude_code must follow python_tools so uv is available"
+        if "python_tools" in names and "claude_code" in names:
+            assert names.index("python_tools") < names.index("claude_code"), f"{env.name}: claude_code must follow python_tools so uv is available"
 
 
 def test_python_tools_per_os_build_deps() -> None:

@@ -103,24 +103,110 @@ class _OrbBackend:
         flag = "-lc" if login else "-c"
         return subprocess.run(
             ["orb", "-m", vm_name, "-u", user, "bash", flag, cmd],
-            capture_output=True, text=True, check=False, timeout=timeout,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
         )
 
     def push(self, vm_name: str, user: str, src: Path, dest: str) -> None:
         subprocess.run(
             ["orb", "push", "-m", vm_name, str(src), dest],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
 
     def teardown(self, vm_name: str) -> None:
         subprocess.run(["orb", "delete", "-f", vm_name], capture_output=True, text=True, check=False)
 
 
+class _DockerBackend:
+    label = "docker"
+
+    def is_available(self) -> tuple[bool, str]:
+        if shutil.which("docker") is None:
+            return False, "docker not on PATH"
+        try:
+            subprocess.run(["docker", "info"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False, "docker daemon not reachable"
+        return True, ""
+
+    def create(self, vm_name: str, image: str) -> str:
+        # image for DockerBackend is the path to the Dockerfile's directory
+        subprocess.run(
+            ["docker", "build", "-t", vm_name, image],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Use a long-running command to keep the container alive
+        subprocess.run(
+            ["docker", "run", "-d", "--name", vm_name, vm_name, "tail", "-f", "/dev/null"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return "alex"
+
+    def run(
+        self,
+        vm_name: str,
+        user: str,
+        cmd: str,
+        *,
+        login: bool,
+        timeout: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        # Note: docker exec doesn't easily support login shells (-l) like bash -lc
+        # we wrap it in bash -c and handle login manually if requested
+        bash_cmd = ["bash"]
+        if login:
+            bash_cmd.append("-lc")
+        else:
+            bash_cmd.append("-c")
+        bash_cmd.append(cmd)
+
+        return subprocess.run(
+            ["docker", "exec", "-u", user, vm_name, *bash_cmd],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+
+    def push(self, vm_name: str, user: str, src: Path, dest: str) -> None:
+        # Docker CP doesn't preserve ownership if we don't use -a or similar,
+        # and it's easier to just push and then chown if needed,
+        # but for simple file pushes this works.
+        subprocess.run(
+            ["docker", "cp", str(src), f"{vm_name}:{dest}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Fix ownership since docker cp often copies as root
+        subprocess.run(
+            ["docker", "exec", "-u", "root", vm_name, "chown", "-R", f"{user}:{user}", dest],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def teardown(self, vm_name: str) -> None:
+        subprocess.run(["docker", "rm", "-f", vm_name], capture_output=True, text=True, check=False)
+
+
 _SSH_OPTS: tuple[str, ...] = (
-    "-o", "StrictHostKeyChecking=no",
-    "-o", "UserKnownHostsFile=/dev/null",
-    "-o", "LogLevel=ERROR",
-    "-o", "ConnectTimeout=5",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-o",
+    "LogLevel=ERROR",
+    "-o",
+    "ConnectTimeout=5",
 )
 
 
@@ -151,7 +237,8 @@ class _TartBackend:
         subprocess.run(["tart", "clone", image, vm_name], capture_output=True, text=True, check=True)
         popen = subprocess.Popen(
             ["tart", "run", "--no-graphics", vm_name],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         try:
             ip = self._wait_for_ip(vm_name, timeout=120)
@@ -178,16 +265,28 @@ class _TartBackend:
         ip = self._sessions[vm_name].ip
         flag = "-lc" if login else "-c"
         argv = [
-            "sshpass", "-p", self._SSH_PASS, "ssh", *_SSH_OPTS,
-            f"{user}@{ip}", "bash", flag, shlex.quote(cmd),
+            "sshpass",
+            "-p",
+            self._SSH_PASS,
+            "ssh",
+            *_SSH_OPTS,
+            f"{user}@{ip}",
+            "bash",
+            flag,
+            shlex.quote(cmd),
         ]
         return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout)
 
     def push(self, vm_name: str, user: str, src: Path, dest: str) -> None:
         ip = self._sessions[vm_name].ip
         argv = [
-            "sshpass", "-p", self._SSH_PASS, "scp", *_SSH_OPTS,
-            str(src), f"{user}@{ip}:{dest}",
+            "sshpass",
+            "-p",
+            self._SSH_PASS,
+            "scp",
+            *_SSH_OPTS,
+            str(src),
+            f"{user}@{ip}:{dest}",
         ]
         subprocess.run(argv, capture_output=True, text=True, check=True)
 
@@ -213,8 +312,13 @@ class _TartBackend:
     def _wait_for_ssh(self, ip: str, *, timeout: float) -> None:
         deadline = time.monotonic() + timeout
         argv = [
-            "sshpass", "-p", self._SSH_PASS, "ssh", *_SSH_OPTS,
-            f"{self._SSH_USER}@{ip}", "true",
+            "sshpass",
+            "-p",
+            self._SSH_PASS,
+            "ssh",
+            *_SSH_OPTS,
+            f"{self._SSH_USER}@{ip}",
+            "true",
         ]
         while time.monotonic() < deadline:
             result = subprocess.run(argv, capture_output=True, text=True, check=False, timeout=10)
@@ -226,17 +330,11 @@ class _TartBackend:
 
 def _ensure_tart_image_cached(image: str) -> None:
     if "@sha256:" not in image:
-        raise VmBackendUnavailable(
-            f"tart image must be digest-pinned (got {image!r}); "
-            f"see plans/06-macos-vm-integration.md for the bump procedure"
-        )
+        raise VmBackendUnavailable(f"tart image must be digest-pinned (got {image!r}); see plans/06-macos-vm-integration.md for the bump procedure")
     host_repo, digest = image.split("@", 1)
     cache = Path.home() / ".tart" / "cache" / "OCIs" / host_repo / digest
     if not cache.exists():
-        raise VmBackendUnavailable(
-            f"tart image {image} not in local cache; "
-            f"run `tart pull {image}` first (~30 GB, one-time)"
-        )
+        raise VmBackendUnavailable(f"tart image {image} not in local cache; run `tart pull {image}` first (~30 GB, one-time)")
 
 
 @dataclass(frozen=True)
@@ -285,6 +383,7 @@ class VmHandle:
 
 _BACKENDS_BY_ENV: dict[str, type[_VmBackend]] = {
     "debian": _OrbBackend,
+    "debian-docker": _DockerBackend,
     "macos": _TartBackend,
 }
 

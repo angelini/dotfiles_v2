@@ -48,6 +48,19 @@ bin_exists() { command -v "$1" >/dev/null 2>&1; }
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
 """
 
+DOCKERFILE_TEMPLATE = """\
+FROM debian:trixie
+RUN apt-get update && apt-get install -y sudo curl git gettext
+RUN useradd -m -s /bin/bash alex && echo "alex ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+USER alex
+WORKDIR /home/alex
+COPY --chown=alex:alex . /home/alex/dotgen
+RUN mkdir -p /home/alex/.config/dotgen && \\
+    cp /home/alex/dotgen/config/dotgen/secrets.env.template /home/alex/.config/dotgen/secrets.env && \\
+    cd /home/alex/dotgen && bash setup.sh deploy
+CMD ["/bin/bash"]
+"""
+
 
 def build_env(env: Environment, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +93,9 @@ def build_env(env: Environment, out_dir: Path) -> None:
 
     if fragment.secrets:
         _write_secrets_template(out_dir, fragment.secrets)
+
+    if env.name == "debian-docker":
+        (out_dir / "Dockerfile").write_text(DOCKERFILE_TEMPLATE)
 
 
 def _write_secrets_template(out_dir: Path, secrets: frozenset[str]) -> None:
