@@ -1,3 +1,5 @@
+> **Superseded — fedora removed in Plan 07.**
+
 # Plan 01 — Project scaffolding & core abstractions
 
 ## Context
@@ -106,7 +108,11 @@ ENVIRONMENTS: dict[str, Environment] = {
   - writes `os_shim.sh` from `OSShim(env.os).render()`
   - merges fragments (will be empty for now), writes `setup.sh` (header + body + footer), `alias.sh`, `.bashrc`
   - writes `config/` if any ConfigFiles present
-- Headers/footers as module-level constants. `setup.sh` header: `#!/usr/bin/env bash\nset -euo pipefail\nDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\nsource "$DIR/os_shim.sh"\nupdate_pkg_index`
+- Headers/footers as module-level constants. `setup.sh` header: `#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$DIR/os_shim.sh"
+update_pkg_index`
 - `bashrc` header: PATH prelude (`~/bin`, `~/.local/bin`) + `[ -f "$HOME/.aliases" ] && source "$HOME/.aliases"`
 
 ### 5. CLI

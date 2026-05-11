@@ -75,7 +75,6 @@ _SETUP_LINUX = (
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: _SETUP_MACOS,
     OS.DEBIAN: _SETUP_LINUX,
-    OS.FEDORA: _SETUP_LINUX,
 }
 
 _BASHRC = """\

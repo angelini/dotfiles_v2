@@ -100,8 +100,6 @@ _KEYMAP_JSON = json.dumps(_KEYMAP, indent=2) + "\n"
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: "install_cask zed\n",
-    OS.FEDORA: "install_script zed https://zed.dev/install.sh\n",
-    OS.DEBIAN: "install_script zed https://zed.dev/install.sh\n",
 }
 
 _SETUP_TAIL = 'install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\ninstall_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'
@@ -112,7 +110,7 @@ class Zed:
     name: str = "zed"
 
     def applies_to(self, env: Environment) -> bool:
-        return True
+        return env.os in _SETUP_BY_OS
 
     def render(self, env: Environment) -> Fragment:
         body = _SETUP_BY_OS[env.os] + _SETUP_TAIL

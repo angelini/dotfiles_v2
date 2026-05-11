@@ -1,3 +1,5 @@
+> **Superseded — fedora removed in Plan 07.**
+
 # Plan 06 — macOS VM integration tests via tart (unified backend)
 
 ## Context

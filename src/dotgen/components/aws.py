@@ -14,7 +14,8 @@ output = json
 
 _SETUP_MACOS = "install_package awscli\n"
 
-_SETUP_FEDORA = r"""_install_awscli_linux() {
+_SETUP_LINUX = r"""install_package unzip
+_install_awscli_linux() {
   local arch zip_arch tmp
   arch="$(detect_arch)"
   case "$arch" in
@@ -35,7 +36,7 @@ fi
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: _SETUP_MACOS,
-    OS.FEDORA: _SETUP_FEDORA,
+    OS.DEBIAN: _SETUP_LINUX,
 }
 
 _BASHRC = """\

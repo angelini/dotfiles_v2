@@ -62,16 +62,16 @@ if bin_exists fnm; then
 fi
 
 # --- go_lang ---
-[ -s "$HOME/.gvm/scripts/gvm" ] && source "$HOME/.gvm/scripts/gvm"
 export GOPATH="${GOPATH:-$HOME/go}"
-export PATH="$GOPATH/bin:$PATH"
+export GOROOT="$HOME/.local/share/go"
+export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 
 # --- gcloud ---
 for _f in \
   "/opt/homebrew/share/google-cloud-sdk/path.bash.inc" \
   "/opt/homebrew/share/google-cloud-sdk/completion.bash.inc" \
-  "/usr/lib64/google-cloud-sdk/path.bash.inc" \
-  "/usr/lib64/google-cloud-sdk/completion.bash.inc"; do
+  "/usr/lib/google-cloud-sdk/path.bash.inc" \
+  "/usr/lib/google-cloud-sdk/completion.bash.inc"; do
   [ -f "$_f" ] && source "$_f"
 done
 unset _f

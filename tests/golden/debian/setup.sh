@@ -28,175 +28,366 @@ fi
 
 # --- core_utils ---
 component_begin "core_utils"
-install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion
-ensure_dir "$HOME/bin"
-if bin_exists fdfind && ! bin_exists fd; then
-  ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
+if (
+  set -e
+  install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion bsdmainutils
+  ensure_dir "$HOME/bin"
+  if bin_exists fdfind && ! bin_exists fd; then
+    ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
+  fi
+); then
+  component_end "core_utils" 0
+else
+  _rc=$?; component_end "core_utils" "$_rc"; exit "$_rc"
 fi
 
 # --- helix ---
 component_begin "helix"
-_install_helix_linux() {
-  local tarch tmp dir
-  case "$(detect_arch)" in
-    x86_64) tarch=x86_64 ;;
-    aarch64|arm64) tarch=aarch64 ;;
-    *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
-  esac
-  install_package xz-utils
-  tmp="$(mktemp -d)"
-  dir="helix-25.07.1-${tarch}-linux"
-  curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" \
-    | tar -xJ -C "$tmp"
-  ensure_dir "$HOME/bin"
-  install -m 0755 "$tmp/$dir/hx" "$HOME/bin/hx"
-  ensure_dir "$HOME/.config/helix"
-  rm -rf "$HOME/.config/helix/runtime"
-  cp -r "$tmp/$dir/runtime" "$HOME/.config/helix/runtime"
-  rm -rf "$tmp"
-}
-if ! bin_exists hx; then
-  _install_helix_linux
+if (
+  set -e
+  _install_helix_linux() {
+    local tarch tmp dir
+    case "$(detect_arch)" in
+      x86_64) tarch=x86_64 ;;
+      aarch64|arm64) tarch=aarch64 ;;
+      *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
+    esac
+    install_package xz-utils
+    tmp="$(mktemp -d)"
+    dir="helix-25.07.1-${tarch}-linux"
+    curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" \
+      | tar -xJ -C "$tmp"
+    ensure_dir "$HOME/bin"
+    install -m 0755 "$tmp/$dir/hx" "$HOME/bin/hx"
+    ensure_dir "$HOME/.config/helix"
+    rm -rf "$HOME/.config/helix/runtime"
+    cp -r "$tmp/$dir/runtime" "$HOME/.config/helix/runtime"
+    rm -rf "$tmp"
+  }
+  if ! bin_exists hx; then
+    _install_helix_linux
+  fi
+  install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
+); then
+  component_end "helix" 0
+else
+  _rc=$?; component_end "helix" "$_rc"; exit "$_rc"
 fi
-install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
 
 # --- starship ---
 component_begin "starship"
-ensure_dir "$HOME/.local/bin"
-install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
-install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
+if (
+  set -e
+  ensure_dir "$HOME/.local/bin"
+  install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
+  install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
+); then
+  component_end "starship" 0
+else
+  _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
+fi
 
 # --- zoxide ---
 component_begin "zoxide"
-install_package zoxide
+if (
+  set -e
+  install_package zoxide
+); then
+  component_end "zoxide" 0
+else
+  _rc=$?; component_end "zoxide" "$_rc"; exit "$_rc"
+fi
 
 # --- kubectl ---
 component_begin "kubectl"
-_kube_arch() {
-  case "$(detect_arch)" in
-    x86_64) echo amd64 ;;
-    aarch64|arm64) echo arm64 ;;
-    *) error "unsupported arch: $(detect_arch)"; return 1 ;;
-  esac
-}
-_kubectx_arch() {
-  case "$(detect_arch)" in
-    x86_64) echo x86_64 ;;
-    aarch64|arm64) echo arm64 ;;
-    *) error "unsupported arch: $(detect_arch)"; return 1 ;;
-  esac
-}
-_install_kubectl_linux() {
-  local arch
-  arch="$(_kube_arch)"
-  download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl"
-}
-_install_helm_linux() {
-  local arch
-  arch="$(_kube_arch)"
-  download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm"
-}
-_install_k9s_linux() {
-  local arch
-  arch="$(_kube_arch)"
-  download_tar_bin k9s "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz" "k9s"
-}
-_install_kubectx_linux() {
-  local arch
-  arch="$(_kubectx_arch)"
-  download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx"
-}
-_install_kubens_linux() {
-  local arch
-  arch="$(_kubectx_arch)"
-  download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens"
-}
-_install_kubectl_linux
-_install_helm_linux
-_install_k9s_linux
-_install_kubectx_linux
-_install_kubens_linux
+if (
+  set -e
+  _kube_arch() {
+    case "$(detect_arch)" in
+      x86_64) echo amd64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
+    esac
+  }
+  _kubectx_arch() {
+    case "$(detect_arch)" in
+      x86_64) echo x86_64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
+    esac
+  }
+  _install_kubectl_linux() {
+    local arch
+    arch="$(_kube_arch)"
+    download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl"
+  }
+  _install_helm_linux() {
+    local arch
+    arch="$(_kube_arch)"
+    download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm"
+  }
+  _install_k9s_linux() {
+    local arch
+    arch="$(_kube_arch)"
+    download_tar_bin k9s "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz" "k9s"
+  }
+  _install_kubectx_linux() {
+    local arch
+    arch="$(_kubectx_arch)"
+    download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx"
+  }
+  _install_kubens_linux() {
+    local arch
+    arch="$(_kubectx_arch)"
+    download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens"
+  }
+  _install_kubectl_linux
+  _install_helm_linux
+  _install_k9s_linux
+  _install_kubectx_linux
+  _install_kubens_linux
+); then
+  component_end "kubectl" 0
+else
+  _rc=$?; component_end "kubectl" "$_rc"; exit "$_rc"
+fi
 
 # --- python_tools ---
 component_begin "python_tools"
-install_packages build-essential libssl-dev libffi-dev
-install_script uv https://astral.sh/uv/install.sh
+if (
+  set -e
+  install_packages build-essential libssl-dev libffi-dev
+  install_script uv https://astral.sh/uv/install.sh
+); then
+  component_end "python_tools" 0
+else
+  _rc=$?; component_end "python_tools" "$_rc"; exit "$_rc"
+fi
 
 # --- claude_code ---
 component_begin "claude_code"
-export PATH="$HOME/.local/bin:$PATH"
-install_script claude https://claude.ai/install.sh
-_install_serena() {
-  local uv_bin
-  uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
-  if [ ! -x "$uv_bin" ]; then
-    error "_install_serena: uv not found"
-    return 1
+if (
+  set -e
+  export PATH="$HOME/.local/bin:$PATH"
+  install_script claude https://claude.ai/install.sh
+  _install_serena() {
+    local uv_bin
+    uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+    if [ ! -x "$uv_bin" ]; then
+      error "_install_serena: uv not found"
+      return 1
+    fi
+    if "$uv_bin" tool list 2>/dev/null | grep -q '^serena-agent'; then
+      return 0
+    fi
+    "$uv_bin" tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent
+  }
+  _register_serena_mcp() {
+    if ! bin_exists claude; then
+      return 0
+    fi
+    if claude mcp list 2>/dev/null | grep -q '^serena'; then
+      return 0
+    fi
+    claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
+  }
+  install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"
+  install_config "$DIR/config/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+  install_config "$DIR/config/claude/hooks/serena-reminder.sh" "$HOME/.claude/hooks/serena-reminder.sh"
+  if [ "$DOTGEN_MODE" = deploy ]; then
+    chmod +x "$HOME/.claude/hooks/serena-reminder.sh"
+    _install_serena
+    _register_serena_mcp
   fi
-  if "$uv_bin" tool list 2>/dev/null | grep -q '^serena-agent'; then
-    return 0
-  fi
-  "$uv_bin" tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent
-}
-_register_serena_mcp() {
-  if ! bin_exists claude; then
-    return 0
-  fi
-  if claude mcp list 2>/dev/null | grep -q '^serena'; then
-    return 0
-  fi
-  claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
-}
-install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"
-install_config "$DIR/config/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
-install_config "$DIR/config/claude/hooks/serena-reminder.sh" "$HOME/.claude/hooks/serena-reminder.sh"
-if [ "$DOTGEN_MODE" = deploy ]; then
-  chmod +x "$HOME/.claude/hooks/serena-reminder.sh"
-  _install_serena
-  _register_serena_mcp
+); then
+  component_end "claude_code" 0
+else
+  _rc=$?; component_end "claude_code" "$_rc"; exit "$_rc"
 fi
 
 # --- gh ---
 component_begin "gh"
-add_repo apt githubcli "deb [signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
-update_pkg_index
-install_package gh
-install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
+if (
+  set -e
+  add_repo apt githubcli "deb [signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
+  update_pkg_index
+  install_package gh
+  install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
+); then
+  component_end "gh" 0
+else
+  _rc=$?; component_end "gh" "$_rc"; exit "$_rc"
+fi
 
 # --- git_signing ---
 component_begin "git_signing"
-ensure_dir "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-if [ ! -f "$HOME/.ssh/id_signing" ]; then
-  ssh-keygen -t ed25519 -a 100 -N "" \
-    -C "$(detect_os)-$(hostname)-signing" \
-    -f "$HOME/.ssh/id_signing"
-fi
-if bin_exists gh && gh auth status >/dev/null 2>&1; then
-  _sig_key="$(awk '{print $2}' "$HOME/.ssh/id_signing.pub")"
-  if ! gh ssh-key list 2>/dev/null | grep -qF "$_sig_key"; then
-    gh ssh-key add "$HOME/.ssh/id_signing.pub" \
-      --type signing \
-      --title "$(detect_os)-$(hostname)-signing"
+if (
+  set -e
+  ensure_dir "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  if [ ! -f "$HOME/.ssh/id_signing" ]; then
+    ssh-keygen -t ed25519 -a 100 -N "" \
+      -C "$(detect_os)-$(hostname)-signing" \
+      -f "$HOME/.ssh/id_signing"
   fi
-  unset _sig_key
+  if bin_exists gh && gh auth status >/dev/null 2>&1; then
+    _sig_key="$(awk '{print $2}' "$HOME/.ssh/id_signing.pub")"
+    if ! gh ssh-key list 2>/dev/null | grep -qF "$_sig_key"; then
+      gh ssh-key add "$HOME/.ssh/id_signing.pub" \
+        --type signing \
+        --title "$(detect_os)-$(hostname)-signing"
+    fi
+    unset _sig_key
+  else
+    log "gh not authed; after 'gh auth login' run: gh ssh-key add ~/.ssh/id_signing.pub --type signing"
+  fi
+); then
+  component_end "git_signing" 0
 else
-  log "gh not authed; after 'gh auth login' run: gh ssh-key add ~/.ssh/id_signing.pub --type signing"
+  _rc=$?; component_end "git_signing" "$_rc"; exit "$_rc"
+fi
+
+# --- rust ---
+component_begin "rust"
+if (
+  set -e
+  install_script cargo https://sh.rustup.rs -y --default-toolchain stable
+); then
+  component_end "rust" 0
+else
+  _rc=$?; component_end "rust" "$_rc"; exit "$_rc"
+fi
+
+# --- node_fnm ---
+component_begin "node_fnm"
+if (
+  set -e
+  install_package unzip
+  install_script fnm https://fnm.vercel.app/install --skip-shell
+); then
+  component_end "node_fnm" 0
+else
+  _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
+fi
+
+# --- go_lang ---
+component_begin "go_lang"
+if (
+  set -e
+  install_packages curl git make bison gcc libc6-dev
+  GO_VERSION="1.24.0"
+  GO_DIR="$HOME/.local/share/go"
+  if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
+    log "installing go $GO_VERSION..."
+    rm -rf "$GO_DIR"
+    ARCH="$(detect_arch)"
+    case "$ARCH" in
+      x86_64) GO_ARCH="amd64" ;;
+      arm64|aarch64) GO_ARCH="arm64" ;;
+      *) error "unsupported arch: $ARCH"; return 1 ;;
+    esac
+    OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
+  fi
+); then
+  component_end "go_lang" 0
+else
+  _rc=$?; component_end "go_lang" "$_rc"; exit "$_rc"
+fi
+
+# --- gcloud ---
+component_begin "gcloud"
+if (
+  set -e
+  add_repo apt google-cloud-sdk \
+    "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+    "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+  update_pkg_index
+  install_package google-cloud-cli
+); then
+  component_end "gcloud" 0
+else
+  _rc=$?; component_end "gcloud" "$_rc"; exit "$_rc"
+fi
+
+# --- aws ---
+component_begin "aws"
+if (
+  set -e
+  install_package unzip
+  _install_awscli_linux() {
+    local arch zip_arch tmp
+    arch="$(detect_arch)"
+    case "$arch" in
+      x86_64) zip_arch=x86_64 ;;
+      aarch64|arm64) zip_arch=aarch64 ;;
+      *) error "unsupported arch for awscli: $arch"; return 1 ;;
+    esac
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${zip_arch}.zip" -o "$tmp/awscli.zip"
+    unzip -q "$tmp/awscli.zip" -d "$tmp"
+    sudo "$tmp/aws/install" --update
+    rm -rf "$tmp"
+  }
+  if ! bin_exists aws; then
+    _install_awscli_linux
+  fi
+  install_config "$DIR/config/aws/config" "$HOME/.aws/config"
+); then
+  component_end "aws" 0
+else
+  _rc=$?; component_end "aws" "$_rc"; exit "$_rc"
+fi
+
+# --- fonts ---
+component_begin "fonts"
+if (
+  set -e
+  install_packages fontconfig xz-utils
+  _install_nerd_fonts() {
+    local tmp url
+    tmp="$(mktemp -d)"
+    url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/UbuntuMono.tar.xz"
+    curl -fsSL "$url" -o "$tmp/fonts.tar.xz"
+    mkdir -p "$HOME/.local/share/fonts"
+    tar -xf "$tmp/fonts.tar.xz" -C "$HOME/.local/share/fonts"
+    fc-cache -f
+    rm -rf "$tmp"
+  }
+  if [ ! -d "$HOME/.local/share/fonts/UbuntuMono" ]; then
+    _install_nerd_fonts
+  fi
+); then
+  component_end "fonts" 0
+else
+  _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
 fi
 
 # --- git_setup ---
 component_begin "git_setup"
-install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL'
-install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
+if (
+  set -e
+  install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL'
+  install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
+); then
+  component_end "git_setup" 0
+else
+  _rc=$?; component_end "git_setup" "$_rc"; exit "$_rc"
+fi
 
 # --- dotfiles_deploy ---
 component_begin "dotfiles_deploy"
-install_config "$DIR/.bashrc" "$HOME/.bashrc"
-install_config "$DIR/alias.sh" "$HOME/.aliases"
-install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
-
-if [ "$DOTGEN_MODE" = diff ]; then
-  log "diff complete (no changes applied)"
+if (
+  set -e
+  install_config "$DIR/.bashrc" "$HOME/.bashrc"
+  install_config "$DIR/alias.sh" "$HOME/.aliases"
+  install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
+); then
+  component_end "dotfiles_deploy" 0
 else
+  _rc=$?; component_end "dotfiles_deploy" "$_rc"; exit "$_rc"
+fi
+
+if [ "$DOTGEN_MODE" = deploy ]; then
   log "setup complete"
 fi

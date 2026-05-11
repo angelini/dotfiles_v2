@@ -16,7 +16,6 @@ _DEB_KEY_URL = "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.MACOS: "install_package gh\n",
-    OS.FEDORA: "install_package gh\n",
     OS.DEBIAN: (f'add_repo apt githubcli "{_DEB_LIST_LINE}" "{_DEB_KEY_URL}"\nupdate_pkg_index\ninstall_package gh\n'),
 }
 

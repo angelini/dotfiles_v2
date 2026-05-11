@@ -3,13 +3,11 @@ from enum import StrEnum
 
 class OS(StrEnum):
     DEBIAN = "debian"
-    FEDORA = "fedora"
     MACOS = "macos"
 
 
 class PkgMgr(StrEnum):
     APT = "apt"
-    DNF = "dnf"
     BREW = "brew"
 
 

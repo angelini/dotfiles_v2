@@ -285,7 +285,6 @@ class VmHandle:
 
 _BACKENDS_BY_ENV: dict[str, type[_VmBackend]] = {
     "debian": _OrbBackend,
-    "fedora": _OrbBackend,
     "macos": _TartBackend,
 }
 

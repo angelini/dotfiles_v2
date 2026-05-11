@@ -1,3 +1,5 @@
+> **Superseded — fedora removed in Plan 07.**
+
 # Plan 02 — OS shim implementation & foundational components
 
 ## Context
@@ -64,7 +66,7 @@ Each lives under `src/dotgen/components/`. Each is a `@dataclass(frozen=True)` i
 - `bashrc` contributions: `HISTSIZE=1000000`, `HISTFILESIZE=1000000`, `HISTCONTROL=ignoredups:erasedups`, `shopt -s histappend`, `ulimit -n 65536`.
 - `bashrc`: `set_win_title` function, `PROMPT_COMMAND="set_win_title; $PROMPT_COMMAND"`.
 - `bashrc`: `epoch()` function (Python one-liner converting Unix ts → readable).
-- `alias`: generic aliases — `l='ls -hlAG'` (macOS) / `l='ls -hlA --color=auto'` (linux), `klear='clear && printf "\033[3J"'`, `rgc='rg -C 30'`, `ip='curl -s ifconfig.me'`, git aliases (`gs`, `gc`, `ga`, `gpo`, `gpfo`, `gl` with the colored log format from v1 line 1–60 of `aliases`).
+- `alias`: generic aliases — `l='ls -hlAG'` (macOS) / `l='ls -hlA --color=auto'` (linux), `klear='clear && printf "[3J"'`, `rgc='rg -C 30'`, `ip='curl -s ifconfig.me'`, git aliases (`gs`, `gc`, `ga`, `gpo`, `gpfo`, `gl` with the colored log format from v1 line 1–60 of `aliases`).
 
 Per-OS `l` alias is the only branch.
 

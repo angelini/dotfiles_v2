@@ -4,6 +4,7 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 
 _SETUP = """\
+install_package unzip
 install_script fnm https://fnm.vercel.app/install --skip-shell
 """
 

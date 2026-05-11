@@ -7,7 +7,6 @@ from dotgen.types import OS
 
 _BUILD_DEPS: dict[OS, tuple[str, ...]] = {
     OS.DEBIAN: ("build-essential", "libssl-dev", "libffi-dev"),
-    OS.FEDORA: ("gcc", "gcc-c++", "openssl-devel", "libffi-devel"),
     OS.MACOS: (),
 }
 

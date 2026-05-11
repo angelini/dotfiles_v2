@@ -42,7 +42,7 @@ add_repo() {
       if [[ "$src" == http*://* ]]; then
         curl -fsSL "$src" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
       else
-        echo "$src" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
+        echo "$src" | sed "s|\[signed-by=[^]]*\]|\[signed-by=/etc/apt/keyrings/$id.gpg\]|" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
       fi
       ;;
     *)
@@ -196,6 +196,27 @@ download_tar_bin() {
   chmod +x "$HOME/bin/$name"
 }
 
+download_script() {
+  local name="$1" url="$2"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    [ -x "$HOME/bin/$name" ] || printf '+ INSTALL script %s (%s)\n' "$name" "$url"
+    return 0
+  fi
+  ensure_dir "$HOME/bin"
+  curl -fsSL "$url" -o "$HOME/bin/$name"
+  chmod +x "$HOME/bin/$name"
+}
+
+download_tar() {
+  local dir="$1" url="$2" strip="${3:-1}"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    [ -d "$dir" ] || printf '+ INSTALL tar %s (%s)\n' "$dir" "$url"
+    return 0
+  fi
+  ensure_dir "$dir"
+  curl -fsSL "$url" | tar -xz -C "$dir" --strip-components="$strip"
+}
+
 log() {
   printf '\033[1;34m[INFO]\033[0m %s\n' "$*" >&2
 }
@@ -212,6 +233,39 @@ ask() {
 }
 
 component_begin() {
-  [ "$DOTGEN_MODE" = diff ] && printf -- '--- %s ---\n' "$1"
-  return 0
+  local name="$1"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    printf -- '--- %s ---\n' "$name"
+    return 0
+  fi
+
+  # Save original stdout/stderr if not already saved
+  if [ -z "${_ORIG_STDOUT:-}" ]; then
+    exec 3>&1 4>&2
+    _ORIG_STDOUT=3
+    _ORIG_STDERR=4
+  fi
+
+  printf '  %-30s ' "$name..." >&3
+  _COMP_LOG=$(mktemp)
+  exec >"$_COMP_LOG" 2>&1
+}
+
+component_end() {
+  local name="$1" rc="$2"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    return 0
+  fi
+
+  # Restore original stdout/stderr
+  exec 1>&3 2>&4
+
+  if [ "$rc" -eq 0 ]; then
+    printf '\033[1;32mDONE\033[0m\n'
+  else
+    printf '\033[1;31mFAIL\033[0m (exit %d)\n' "$rc"
+    cat "$_COMP_LOG"
+  fi
+  rm -f "$_COMP_LOG"
+  unset _COMP_LOG
 }

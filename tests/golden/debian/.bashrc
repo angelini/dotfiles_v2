@@ -52,3 +52,32 @@ if bin_exists claude; then
   source <(claude completion bash 2>/dev/null) 2>/dev/null || true
 fi
 
+# --- rust ---
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+
+# --- node_fnm ---
+export PATH="$HOME/.local/share/fnm:$PATH"
+if bin_exists fnm; then
+  eval "$(fnm env --use-on-cd)"
+fi
+
+# --- go_lang ---
+export GOPATH="${GOPATH:-$HOME/go}"
+export GOROOT="$HOME/.local/share/go"
+export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
+
+# --- gcloud ---
+for _f in \
+  "/opt/homebrew/share/google-cloud-sdk/path.bash.inc" \
+  "/opt/homebrew/share/google-cloud-sdk/completion.bash.inc" \
+  "/usr/lib/google-cloud-sdk/path.bash.inc" \
+  "/usr/lib/google-cloud-sdk/completion.bash.inc"; do
+  [ -f "$_f" ] && source "$_f"
+done
+unset _f
+
+# --- aws ---
+if bin_exists aws_completer; then
+  complete -C "$(command -v aws_completer)" aws
+fi
+

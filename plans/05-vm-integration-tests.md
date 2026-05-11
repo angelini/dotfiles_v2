@@ -1,3 +1,5 @@
+> **Superseded — fedora removed in Plan 07.**
+
 # Plan 05 — VM-based integration tests via OrbStack
 
 ## Context

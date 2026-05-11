@@ -1,3 +1,5 @@
+> **Superseded — fedora removed in Plan 07.**
+
 # Plan 03 — Cross-platform tooling components
 
 ## Context

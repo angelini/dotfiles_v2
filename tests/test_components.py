@@ -54,7 +54,7 @@ def test_component_render_returns_fragment(env: Environment, cls) -> None:
 
 @pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed])
 def test_addon_component_renders_for_supported_oses(cls) -> None:
-    for env_name in ("fedora", "macos"):
+    for env_name in ("macos",):
         env = ENVIRONMENTS[env_name]
         comp = cls()
         if comp.applies_to(env):
@@ -70,10 +70,8 @@ def test_bash_base_ls_alias_per_os() -> None:
 
 def test_core_utils_per_os_fd_token() -> None:
     debian = CoreUtils().render(ENVIRONMENTS["debian"]).setup
-    fedora = CoreUtils().render(ENVIRONMENTS["fedora"]).setup
     macos = CoreUtils().render(ENVIRONMENTS["macos"]).setup
     assert "fd-find" in debian
-    assert "fd-find" in fedora
     assert " fd " in macos and "fd-find" not in macos
 
 
@@ -106,10 +104,10 @@ def test_git_setup_signs_with_ssh_key() -> None:
 
 def test_fonts_per_os_packages() -> None:
     macos = Fonts().render(ENVIRONMENTS["macos"]).setup
-    fedora = Fonts().render(ENVIRONMENTS["fedora"]).setup
+    debian = Fonts().render(ENVIRONMENTS["debian"]).setup
     assert "font-ubuntu" in macos and "font-ubuntu-mono-nerd-font" in macos
-    assert "ubuntu-family-fonts" in fedora
-    assert not Fonts().applies_to(ENVIRONMENTS["debian"])
+    assert "fontconfig" in debian
+    assert Fonts().applies_to(ENVIRONMENTS["debian"])
 
 
 def test_git_signing_uploads_via_gh() -> None:
@@ -140,20 +138,18 @@ def test_starship_emits_config_and_init() -> None:
 def test_kubectl_per_os_branching() -> None:
     macos = Kubectl().render(ENVIRONMENTS["macos"]).setup
     debian = Kubectl().render(ENVIRONMENTS["debian"]).setup
-    fedora = Kubectl().render(ENVIRONMENTS["fedora"]).setup
     assert "install_packages kubectl helm k9s kubectx" in macos
     assert "_install_helm_linux" not in macos
-    assert "add_repo" not in debian and "add_repo" not in fedora
-    for body in (debian, fedora):
-        assert "_install_kubectl_linux" in body
-        assert "_install_helm_linux" in body
-        assert "_install_k9s_linux" in body
-        assert "_install_kubectx_linux" in body
-        assert "_install_kubens_linux" in body
-        assert "https://dl.k8s.io/release/v1.35.4/bin/linux/" in body
-        assert "helm-v3.20.2-linux-" in body
-        assert "kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_" in body
-        assert "kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_" in body
+    assert "add_repo" not in debian
+    assert "_install_kubectl_linux" in debian
+    assert "_install_helm_linux" in debian
+    assert "_install_k9s_linux" in debian
+    assert "_install_kubectx_linux" in debian
+    assert "_install_kubens_linux" in debian
+    assert "https://dl.k8s.io/release/v1.35.4/bin/linux/" in debian
+    assert "helm-v3.20.2-linux-" in debian
+    assert "kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_" in debian
+    assert "kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_" in debian
 
 
 def test_claude_code_settings() -> None:
@@ -181,10 +177,7 @@ def test_claude_code_emits_serena_hook_executable() -> None:
 
 def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     setup = ClaudeCode().render(ENVIRONMENTS["macos"]).setup
-    assert (
-        "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent"
-        in setup
-    )
+    assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
     assert "claude mcp add serena" in setup
 
 
@@ -196,18 +189,15 @@ def test_claude_code_runs_after_python_tools() -> None:
 
 def test_python_tools_per_os_build_deps() -> None:
     debian = PythonTools().render(ENVIRONMENTS["debian"]).setup
-    fedora = PythonTools().render(ENVIRONMENTS["fedora"]).setup
     macos = PythonTools().render(ENVIRONMENTS["macos"]).setup
     assert "build-essential" in debian
-    assert "openssl-devel" in fedora
     assert "install_packages" not in macos.split("install_script uv")[0]
-    for s in (debian, fedora, macos):
+    for s in (debian, macos):
         assert "install_script uv https://astral.sh/uv/install.sh" in s
 
 
-def test_go_lang_only_fedora_macos() -> None:
-    assert not GoLang().applies_to(ENVIRONMENTS["debian"])
-    assert GoLang().applies_to(ENVIRONMENTS["fedora"])
+def test_go_lang_only_macos() -> None:
+    assert GoLang().applies_to(ENVIRONMENTS["debian"])
     assert GoLang().applies_to(ENVIRONMENTS["macos"])
 
 
@@ -220,19 +210,33 @@ def test_aws_emits_config_with_secure_mode() -> None:
 
 def test_environment_component_distribution() -> None:
     debian_names = {c.name for c in ENVIRONMENTS["debian"].components}
-    fedora_names = {c.name for c in ENVIRONMENTS["fedora"].components}
     macos_names = {c.name for c in ENVIRONMENTS["macos"].components}
-    full_only = {"rust", "node_fnm", "go_lang", "gcloud", "aws", "zed"}
-    assert full_only.isdisjoint(debian_names)
-    assert full_only.issubset(fedora_names)
-    assert "ghostty" in macos_names
-    assert "ghostty" not in debian_names | fedora_names
+    shared_names = {
+        "bash_base",
+        "core_utils",
+        "helix",
+        "starship",
+        "zoxide",
+        "kubectl",
+        "python_tools",
+        "claude_code",
+        "gh",
+        "git_signing",
+        "rust",
+        "node_fnm",
+        "go_lang",
+        "gcloud",
+        "aws",
+        "fonts",
+    }
+    assert shared_names.issubset(debian_names & macos_names)
+    assert {"ghostty", "zed"}.isdisjoint(debian_names)
+    assert {"ghostty", "zed"}.issubset(macos_names)
 
 
 def test_ghostty_macos_only_and_emits_config() -> None:
     assert Ghostty().applies_to(ENVIRONMENTS["macos"])
     assert not Ghostty().applies_to(ENVIRONMENTS["debian"])
-    assert not Ghostty().applies_to(ENVIRONMENTS["fedora"])
     frag = Ghostty().render(ENVIRONMENTS["macos"])
     assert any(c.dest == "ghostty/config" for c in frag.configs)
     assert "install_cask ghostty" in frag.setup
@@ -240,7 +244,7 @@ def test_ghostty_macos_only_and_emits_config() -> None:
 
 
 def test_gh_emits_config_in_every_env() -> None:
-    for env_name in ("debian", "fedora", "macos"):
+    for env_name in ("debian", "macos"):
         frag = Gh().render(ENVIRONMENTS[env_name])
         assert any(c.dest == "gh/config.yml" for c in frag.configs)
         assert "co: pr checkout" in next(c for c in frag.configs if c.dest == "gh/config.yml").content
@@ -248,24 +252,19 @@ def test_gh_emits_config_in_every_env() -> None:
 
 def test_gh_per_os_install() -> None:
     debian = Gh().render(ENVIRONMENTS["debian"]).setup
-    fedora = Gh().render(ENVIRONMENTS["fedora"]).setup
     macos = Gh().render(ENVIRONMENTS["macos"]).setup
     assert "add_repo apt githubcli" in debian and "install_package gh" in debian
-    assert "install_package gh" in fedora and "add_repo" not in fedora
     assert "install_package gh" in macos and "add_repo" not in macos
 
 
-def test_zed_fedora_macos_only_and_emits_configs() -> None:
+def test_zed_macos_only_and_emits_configs() -> None:
     debian_names = {c.name for c in ENVIRONMENTS["debian"].components}
     assert "zed" not in debian_names
-    for env_name in ("fedora", "macos"):
-        frag = Zed().render(ENVIRONMENTS[env_name])
-        dests = sorted(c.dest for c in frag.configs)
-        assert dests == ["zed/keymap.json", "zed/settings.json"]
+    frag = Zed().render(ENVIRONMENTS["macos"])
+    dests = sorted(c.dest for c in frag.configs)
+    assert dests == ["zed/keymap.json", "zed/settings.json"]
     macos = Zed().render(ENVIRONMENTS["macos"]).setup
-    fedora = Zed().render(ENVIRONMENTS["fedora"]).setup
     assert "install_cask zed" in macos
-    assert "install_script zed https://zed.dev/install.sh" in fedora
 
 
 def test_install_script_used_for_curl_installers() -> None:
@@ -288,7 +287,7 @@ def test_install_script_used_for_curl_installers() -> None:
 
 
 def test_dotfiles_deploy_emits_bashrc_and_alias_install() -> None:
-    for env_name in ("debian", "fedora", "macos"):
+    for env_name in ("debian", "macos"):
         setup = DotfilesDeploy().render(ENVIRONMENTS[env_name]).setup
         assert 'install_config "$DIR/.bashrc" "$HOME/.bashrc"' in setup
         assert 'install_config "$DIR/alias.sh" "$HOME/.aliases"' in setup
@@ -300,7 +299,7 @@ def test_dotfiles_deploy_runs_last_in_every_env() -> None:
 
 
 def test_postgres_unwired_but_renders_per_os() -> None:
-    for env_name in ("debian", "fedora", "macos"):
+    for env_name in ("debian", "macos"):
         env = ENVIRONMENTS[env_name]
         names = {c.name for c in env.components}
         assert "postgres" not in names, "postgres must stay opt-in"
@@ -308,7 +307,5 @@ def test_postgres_unwired_but_renders_per_os() -> None:
         assert frag.bashrc and "PATH" in frag.bashrc
     mac = Postgres().render(ENVIRONMENTS["macos"]).setup
     deb = Postgres().render(ENVIRONMENTS["debian"]).setup
-    fed = Postgres().render(ENVIRONMENTS["fedora"]).setup
     assert "install_package postgresql@18" in mac
     assert "add_repo apt pgdg" in deb and "postgresql-18" in deb
-    assert "add_repo dnf pgdg18" in fed and "postgresql18-server" in fed

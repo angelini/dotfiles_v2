@@ -22,13 +22,10 @@ from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
 from dotgen.types import OS, PkgMgr
 
-_BASE: tuple[Component, ...] = (
+_SHARED: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
     Helix(),
-)
-
-_SHARED: tuple[Component, ...] = _BASE + (
     Starship(),
     Zoxide(),
     Kubectl(),
@@ -36,29 +33,31 @@ _SHARED: tuple[Component, ...] = _BASE + (
     ClaudeCode(),
     Gh(),
     GitSigning(),
-)
-
-_FULL_ADDONS: tuple[Component, ...] = (
     Rust(),
     NodeFnm(),
     GoLang(),
     Gcloud(),
     Aws(),
     Fonts(),
-    Zed(),
 )
+
+_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed())
 
 # GitSetup wires `gh auth git-credential` as the github HTTPS credential
 # helper, so it must run after Gh() (in _SHARED) has put gh on PATH.
 _LAST: tuple[Component, ...] = (GitSetup(), DotfilesDeploy())
 
 ENVIRONMENTS: dict[str, Environment] = {
-    "debian": Environment("debian", OS.DEBIAN, PkgMgr.APT, components=_SHARED + _LAST),
-    "fedora": Environment("fedora", OS.FEDORA, PkgMgr.DNF, components=_SHARED + _FULL_ADDONS + _LAST),
+    "debian": Environment(
+        "debian",
+        OS.DEBIAN,
+        PkgMgr.APT,
+        components=_SHARED + _LAST,
+    ),
     "macos": Environment(
         "macos",
         OS.MACOS,
         PkgMgr.BREW,
-        components=_SHARED + _FULL_ADDONS + (Ghostty(),) + _LAST,
+        components=_SHARED + _MACOS_GUI + _LAST,
     ),
 }

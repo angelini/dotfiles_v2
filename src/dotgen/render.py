@@ -1,3 +1,4 @@
+import textwrap
 from pathlib import Path
 
 from dotgen.environment import Environment
@@ -36,7 +37,7 @@ fi
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 """
 
-SETUP_FOOTER = 'if [ "$DOTGEN_MODE" = diff ]; then\n  log "diff complete (no changes applied)"\nelse\n  log "setup complete"\nfi\n'
+SETUP_FOOTER = 'if [ "$DOTGEN_MODE" = deploy ]; then\n  log "setup complete"\nfi\n'
 
 ALIAS_HEADER = "# alias.sh — sourced by ~/.bashrc\n"
 
@@ -88,7 +89,7 @@ def _write_secrets_template(out_dir: Path, secrets: frozenset[str]) -> None:
         "\n",
     ]
     for key in sorted(secrets):
-        lines.append(f"# {DESCRIPTIONS.get(key, '')}\n{key}=\"\"\n\n")
+        lines.append(f'# {DESCRIPTIONS.get(key, "")}\n{key}=""\n\n')
     dest_dir = out_dir / "config" / "dotgen"
     dest_dir.mkdir(parents=True, exist_ok=True)
     (dest_dir / "secrets.env.template").write_text("".join(lines))
@@ -104,7 +105,22 @@ _HEADER_FMT = "# --- {name} ---"
 
 def _decorate(name: str, frag: Fragment) -> Fragment:
     header = _HEADER_FMT.format(name=name) + "\n"
-    setup = f'{header}component_begin "{name}"\n{frag.setup}' if frag.setup else ""
+    if not frag.setup:
+        setup = ""
+    else:
+        indented = textwrap.indent(frag.setup.rstrip(), "  ")
+        setup = textwrap.dedent(f"""\
+{header}component_begin "{name}"
+if (
+  set -e
+{indented}
+); then
+  component_end "{name}" 0
+else
+  _rc=$?; component_end "{name}" "$_rc"; exit "$_rc"
+fi
+        """).lstrip()
+
     alias = f"{header}{frag.alias}" if frag.alias else ""
     bashrc = f"{header}{frag.bashrc}" if frag.bashrc else ""
     return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs, secrets=frag.secrets)

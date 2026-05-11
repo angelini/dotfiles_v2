@@ -19,12 +19,11 @@ MACOS_IMAGE = "ghcr.io/cirruslabs/macos-sequoia-base@sha256:cae088989568978bcc9e
 
 IMAGES = {
     "debian": "debian:trixie",
-    "fedora": "fedora:43",
     "macos": MACOS_IMAGE,
 }
 
-_DEPLOY_TIMEOUT = {"debian": 900, "fedora": 900, "macos": 1800}
-_REDEPLOY_TIMEOUT = {"debian": 600, "fedora": 600, "macos": 600}
+_DEPLOY_TIMEOUT = {"debian": 900, "macos": 1800}
+_REDEPLOY_TIMEOUT = {"debian": 600, "macos": 600}
 
 
 def _deploy_cmd(env_name: str) -> str:
@@ -98,12 +97,12 @@ def test_login_shell_loads_kubectl_alias(vm: tuple[str, VmHandle]) -> None:
 
 def test_full_addons(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
-    if env_name == "debian":
-        pytest.skip("debian env does not include full addons")
     handle.assert_cmd(
-        "command -v cargo && command -v fnm && command -v go && command -v aws && command -v gcloud && command -v zed",
+        "command -v cargo && command -v fnm && command -v go && command -v aws && command -v gcloud",
         login=True,
     )
+    if env_name == "macos":
+        handle.assert_cmd("command -v zed", login=True)
 
 
 def test_ghostty_app_installed(vm: tuple[str, VmHandle]) -> None:

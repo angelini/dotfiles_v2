@@ -16,17 +16,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
         "htop",
         "gnupg2",
         "bash-completion",
-    ),
-    OS.FEDORA: (
-        "git",
-        "jq",
-        "ripgrep",
-        "fd-find",
-        "tree",
-        "vim",
-        "htop",
-        "gnupg2",
-        "bash-completion",
+        "bsdmainutils",
     ),
     OS.MACOS: (
         "git",

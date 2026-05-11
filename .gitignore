@@ -1,4 +1,6 @@
 dist/
+.pi
+.pi-lens
 .venv/
 __pycache__/
 *.egg-info/

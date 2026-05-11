@@ -28,144 +28,287 @@ fi
 
 # --- core_utils ---
 component_begin "core_utils"
-install_packages git jq ripgrep fd tree vim htop gnupg bash-completion
+if (
+  set -e
+  install_packages git jq ripgrep fd tree vim htop gnupg bash-completion
+); then
+  component_end "core_utils" 0
+else
+  _rc=$?; component_end "core_utils" "$_rc"; exit "$_rc"
+fi
 
 # --- helix ---
 component_begin "helix"
-install_package helix
-install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
+if (
+  set -e
+  install_package helix
+  install_config "$DIR/config/helix/config.toml" "$HOME/.config/helix/config.toml"
+); then
+  component_end "helix" 0
+else
+  _rc=$?; component_end "helix" "$_rc"; exit "$_rc"
+fi
 
 # --- starship ---
 component_begin "starship"
-ensure_dir "$HOME/.local/bin"
-install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
-install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
+if (
+  set -e
+  ensure_dir "$HOME/.local/bin"
+  install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
+  install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
+); then
+  component_end "starship" 0
+else
+  _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
+fi
 
 # --- zoxide ---
 component_begin "zoxide"
-install_package zoxide
+if (
+  set -e
+  install_package zoxide
+); then
+  component_end "zoxide" 0
+else
+  _rc=$?; component_end "zoxide" "$_rc"; exit "$_rc"
+fi
 
 # --- kubectl ---
 component_begin "kubectl"
-install_packages kubectl helm k9s kubectx
+if (
+  set -e
+  install_packages kubectl helm k9s kubectx
+); then
+  component_end "kubectl" 0
+else
+  _rc=$?; component_end "kubectl" "$_rc"; exit "$_rc"
+fi
 
 # --- python_tools ---
 component_begin "python_tools"
-install_script uv https://astral.sh/uv/install.sh
+if (
+  set -e
+  install_script uv https://astral.sh/uv/install.sh
+); then
+  component_end "python_tools" 0
+else
+  _rc=$?; component_end "python_tools" "$_rc"; exit "$_rc"
+fi
 
 # --- claude_code ---
 component_begin "claude_code"
-export PATH="$HOME/.local/bin:$PATH"
-install_script claude https://claude.ai/install.sh
-_install_serena() {
-  local uv_bin
-  uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
-  if [ ! -x "$uv_bin" ]; then
-    error "_install_serena: uv not found"
-    return 1
+if (
+  set -e
+  export PATH="$HOME/.local/bin:$PATH"
+  install_script claude https://claude.ai/install.sh
+  _install_serena() {
+    local uv_bin
+    uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+    if [ ! -x "$uv_bin" ]; then
+      error "_install_serena: uv not found"
+      return 1
+    fi
+    if "$uv_bin" tool list 2>/dev/null | grep -q '^serena-agent'; then
+      return 0
+    fi
+    "$uv_bin" tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent
+  }
+  _register_serena_mcp() {
+    if ! bin_exists claude; then
+      return 0
+    fi
+    if claude mcp list 2>/dev/null | grep -q '^serena'; then
+      return 0
+    fi
+    claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
+  }
+  install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"
+  install_config "$DIR/config/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+  install_config "$DIR/config/claude/hooks/serena-reminder.sh" "$HOME/.claude/hooks/serena-reminder.sh"
+  if [ "$DOTGEN_MODE" = deploy ]; then
+    chmod +x "$HOME/.claude/hooks/serena-reminder.sh"
+    _install_serena
+    _register_serena_mcp
   fi
-  if "$uv_bin" tool list 2>/dev/null | grep -q '^serena-agent'; then
-    return 0
-  fi
-  "$uv_bin" tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent
-}
-_register_serena_mcp() {
-  if ! bin_exists claude; then
-    return 0
-  fi
-  if claude mcp list 2>/dev/null | grep -q '^serena'; then
-    return 0
-  fi
-  claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
-}
-install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"
-install_config "$DIR/config/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
-install_config "$DIR/config/claude/hooks/serena-reminder.sh" "$HOME/.claude/hooks/serena-reminder.sh"
-if [ "$DOTGEN_MODE" = deploy ]; then
-  chmod +x "$HOME/.claude/hooks/serena-reminder.sh"
-  _install_serena
-  _register_serena_mcp
+); then
+  component_end "claude_code" 0
+else
+  _rc=$?; component_end "claude_code" "$_rc"; exit "$_rc"
 fi
 
 # --- gh ---
 component_begin "gh"
-install_package gh
-install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
+if (
+  set -e
+  install_package gh
+  install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
+); then
+  component_end "gh" 0
+else
+  _rc=$?; component_end "gh" "$_rc"; exit "$_rc"
+fi
 
 # --- git_signing ---
 component_begin "git_signing"
-ensure_dir "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-if [ ! -f "$HOME/.ssh/id_signing" ]; then
-  ssh-keygen -t ed25519 -a 100 -N "" \
-    -C "$(detect_os)-$(hostname)-signing" \
-    -f "$HOME/.ssh/id_signing"
-fi
-if bin_exists gh && gh auth status >/dev/null 2>&1; then
-  _sig_key="$(awk '{print $2}' "$HOME/.ssh/id_signing.pub")"
-  if ! gh ssh-key list 2>/dev/null | grep -qF "$_sig_key"; then
-    gh ssh-key add "$HOME/.ssh/id_signing.pub" \
-      --type signing \
-      --title "$(detect_os)-$(hostname)-signing"
+if (
+  set -e
+  ensure_dir "$HOME/.ssh"
+  chmod 700 "$HOME/.ssh"
+  if [ ! -f "$HOME/.ssh/id_signing" ]; then
+    ssh-keygen -t ed25519 -a 100 -N "" \
+      -C "$(detect_os)-$(hostname)-signing" \
+      -f "$HOME/.ssh/id_signing"
   fi
-  unset _sig_key
+  if bin_exists gh && gh auth status >/dev/null 2>&1; then
+    _sig_key="$(awk '{print $2}' "$HOME/.ssh/id_signing.pub")"
+    if ! gh ssh-key list 2>/dev/null | grep -qF "$_sig_key"; then
+      gh ssh-key add "$HOME/.ssh/id_signing.pub" \
+        --type signing \
+        --title "$(detect_os)-$(hostname)-signing"
+    fi
+    unset _sig_key
+  else
+    log "gh not authed; after 'gh auth login' run: gh ssh-key add ~/.ssh/id_signing.pub --type signing"
+  fi
+); then
+  component_end "git_signing" 0
 else
-  log "gh not authed; after 'gh auth login' run: gh ssh-key add ~/.ssh/id_signing.pub --type signing"
+  _rc=$?; component_end "git_signing" "$_rc"; exit "$_rc"
 fi
 
 # --- rust ---
 component_begin "rust"
-install_script cargo https://sh.rustup.rs -y --default-toolchain stable
+if (
+  set -e
+  install_script cargo https://sh.rustup.rs -y --default-toolchain stable
+); then
+  component_end "rust" 0
+else
+  _rc=$?; component_end "rust" "$_rc"; exit "$_rc"
+fi
 
 # --- node_fnm ---
 component_begin "node_fnm"
-install_script fnm https://fnm.vercel.app/install --skip-shell
+if (
+  set -e
+  install_package unzip
+  install_script fnm https://fnm.vercel.app/install --skip-shell
+); then
+  component_end "node_fnm" 0
+else
+  _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
+fi
 
 # --- go_lang ---
 component_begin "go_lang"
-install_packages mercurial
-if [ ! -s "$HOME/.gvm/scripts/gvm" ]; then
-  install_script gvm https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer
+if (
+  set -e
+  install_packages mercurial
+  GO_VERSION="1.24.0"
+  GO_DIR="$HOME/.local/share/go"
+  if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
+    log "installing go $GO_VERSION..."
+    rm -rf "$GO_DIR"
+    ARCH="$(detect_arch)"
+    case "$ARCH" in
+      x86_64) GO_ARCH="amd64" ;;
+      arm64|aarch64) GO_ARCH="arm64" ;;
+      *) error "unsupported arch: $ARCH"; return 1 ;;
+    esac
+    OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
+  fi
+); then
+  component_end "go_lang" 0
+else
+  _rc=$?; component_end "go_lang" "$_rc"; exit "$_rc"
 fi
 
 # --- gcloud ---
 component_begin "gcloud"
-install_cask google-cloud-sdk
+if (
+  set -e
+  install_cask google-cloud-sdk
+); then
+  component_end "gcloud" 0
+else
+  _rc=$?; component_end "gcloud" "$_rc"; exit "$_rc"
+fi
 
 # --- aws ---
 component_begin "aws"
-install_package awscli
-install_config "$DIR/config/aws/config" "$HOME/.aws/config"
+if (
+  set -e
+  install_package awscli
+  install_config "$DIR/config/aws/config" "$HOME/.aws/config"
+); then
+  component_end "aws" 0
+else
+  _rc=$?; component_end "aws" "$_rc"; exit "$_rc"
+fi
 
 # --- fonts ---
 component_begin "fonts"
-install_cask font-ubuntu
-install_cask font-ubuntu-mono-nerd-font
-
-# --- zed ---
-component_begin "zed"
-install_cask zed
-install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"
-install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
+if (
+  set -e
+  install_cask font-ubuntu
+  install_cask font-ubuntu-mono-nerd-font
+); then
+  component_end "fonts" 0
+else
+  _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
+fi
 
 # --- ghostty ---
 component_begin "ghostty"
-install_cask ghostty
-install_config "$DIR/config/ghostty/config" "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+if (
+  set -e
+  install_cask ghostty
+  install_config "$DIR/config/ghostty/config" "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+); then
+  component_end "ghostty" 0
+else
+  _rc=$?; component_end "ghostty" "$_rc"; exit "$_rc"
+fi
+
+# --- zed ---
+component_begin "zed"
+if (
+  set -e
+  install_cask zed
+  install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"
+  install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
+); then
+  component_end "zed" 0
+else
+  _rc=$?; component_end "zed" "$_rc"; exit "$_rc"
+fi
 
 # --- git_setup ---
 component_begin "git_setup"
-install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL'
-install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
+if (
+  set -e
+  install_config_template "$DIR/config/git/gitconfig" "$HOME/.gitconfig" 'GIT_USER_NAME GIT_USER_EMAIL'
+  install_config "$DIR/config/git/gitignore_global" "$HOME/.gitignore_global"
+); then
+  component_end "git_setup" 0
+else
+  _rc=$?; component_end "git_setup" "$_rc"; exit "$_rc"
+fi
 
 # --- dotfiles_deploy ---
 component_begin "dotfiles_deploy"
-install_config "$DIR/.bashrc" "$HOME/.bashrc"
-install_config "$DIR/alias.sh" "$HOME/.aliases"
-install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
-
-if [ "$DOTGEN_MODE" = diff ]; then
-  log "diff complete (no changes applied)"
+if (
+  set -e
+  install_config "$DIR/.bashrc" "$HOME/.bashrc"
+  install_config "$DIR/alias.sh" "$HOME/.aliases"
+  install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
+); then
+  component_end "dotfiles_deploy" 0
 else
+  _rc=$?; component_end "dotfiles_deploy" "$_rc"; exit "$_rc"
+fi
+
+if [ "$DOTGEN_MODE" = deploy ]; then
   log "setup complete"
 fi

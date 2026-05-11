@@ -1,3 +1,5 @@
+> **Superseded — fedora removed in Plan 07.**
+
 # Plan 04 — macOS extras, opt-in components, packaging & CI
 
 ## Context

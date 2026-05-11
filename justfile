@@ -33,7 +33,7 @@ typecheck:
 test:
     uv run pytest
 
-# env: debian | fedora | macos
+# env: debian | macos
 test-vm env="debian":
     uv run pytest tests/test_vm_integration.py -v -m vm -k {{env}}
 
