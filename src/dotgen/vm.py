@@ -88,7 +88,7 @@ class _OrbBackend:
         return True, ""
 
     def create(self, vm_name: str, image: str) -> str:
-        subprocess.run(["orb", "create", image, vm_name], capture_output=True, text=True, check=True)
+        _ = subprocess.run(["orb", "create", image, vm_name], capture_output=True, text=True, check=True)
         return os.environ["USER"]
 
     def run(
@@ -110,7 +110,7 @@ class _OrbBackend:
         )
 
     def push(self, vm_name: str, user: str, src: Path, dest: str) -> None:
-        subprocess.run(
+        _ = subprocess.run(
             ["orb", "push", "-m", vm_name, str(src), dest],
             capture_output=True,
             text=True,
@@ -118,7 +118,7 @@ class _OrbBackend:
         )
 
     def teardown(self, vm_name: str) -> None:
-        subprocess.run(["orb", "delete", "-f", vm_name], capture_output=True, text=True, check=False)
+        _ = subprocess.run(["orb", "delete", "-f", vm_name], capture_output=True, text=True, check=False)
 
 
 class _DockerBackend:
@@ -128,21 +128,21 @@ class _DockerBackend:
         if shutil.which("docker") is None:
             return False, "docker not on PATH"
         try:
-            subprocess.run(["docker", "info"], capture_output=True, check=True)
+            _ = subprocess.run(["docker", "info"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False, "docker daemon not reachable"
         return True, ""
 
     def create(self, vm_name: str, image: str) -> str:
-        # image for DockerBackend is the path to the Dockerfile's directory
-        subprocess.run(
+        # Build image from Dockerfile in the 'image' directory
+        _ = subprocess.run(
             ["docker", "build", "-t", vm_name, image],
             capture_output=True,
             text=True,
             check=True,
         )
-        # Use a long-running command to keep the container alive
-        subprocess.run(
+        # Keep container alive with tail
+        _ = subprocess.run(
             ["docker", "run", "-d", "--name", vm_name, vm_name, "tail", "-f", "/dev/null"],
             capture_output=True,
             text=True,
@@ -159,8 +159,7 @@ class _DockerBackend:
         login: bool,
         timeout: float | None,
     ) -> subprocess.CompletedProcess[str]:
-        # Note: docker exec doesn't easily support login shells (-l) like bash -lc
-        # we wrap it in bash -c and handle login manually if requested
+        # Wrap in bash -c as docker exec doesn't support -l
         bash_cmd = ["bash"]
         if login:
             bash_cmd.append("-lc")
@@ -177,17 +176,14 @@ class _DockerBackend:
         )
 
     def push(self, vm_name: str, user: str, src: Path, dest: str) -> None:
-        # Docker CP doesn't preserve ownership if we don't use -a or similar,
-        # and it's easier to just push and then chown if needed,
-        # but for simple file pushes this works.
-        subprocess.run(
+        _ = subprocess.run(
             ["docker", "cp", str(src), f"{vm_name}:{dest}"],
             capture_output=True,
             text=True,
             check=True,
         )
-        # Fix ownership since docker cp often copies as root
-        subprocess.run(
+        # docker cp copies as root; fix ownership
+        _ = subprocess.run(
             ["docker", "exec", "-u", "root", vm_name, "chown", "-R", f"{user}:{user}", dest],
             capture_output=True,
             text=True,
@@ -195,7 +191,7 @@ class _DockerBackend:
         )
 
     def teardown(self, vm_name: str) -> None:
-        subprocess.run(["docker", "rm", "-f", vm_name], capture_output=True, text=True, check=False)
+        _ = subprocess.run(["docker", "rm", "-f", vm_name], capture_output=True, text=True, check=False)
 
 
 _SSH_OPTS: tuple[str, ...] = (
@@ -234,7 +230,7 @@ class _TartBackend:
 
     def create(self, vm_name: str, image: str) -> str:
         _ensure_tart_image_cached(image)
-        subprocess.run(["tart", "clone", image, vm_name], capture_output=True, text=True, check=True)
+        _ = subprocess.run(["tart", "clone", image, vm_name], capture_output=True, text=True, check=True)
         popen = subprocess.Popen(
             ["tart", "run", "--no-graphics", vm_name],
             stdout=subprocess.DEVNULL,
@@ -247,8 +243,8 @@ class _TartBackend:
             popen.terminate()
             with contextlib.suppress(subprocess.TimeoutExpired):
                 popen.wait(timeout=10)
-            subprocess.run(["tart", "stop", vm_name], capture_output=True, text=True, check=False)
-            subprocess.run(["tart", "delete", vm_name], capture_output=True, text=True, check=False)
+            _ = subprocess.run(["tart", "stop", vm_name], capture_output=True, text=True, check=False)
+            _ = subprocess.run(["tart", "delete", vm_name], capture_output=True, text=True, check=False)
             raise
         self._sessions[vm_name] = _TartSession(popen=popen, ip=ip)
         return self._SSH_USER
@@ -288,7 +284,7 @@ class _TartBackend:
             str(src),
             f"{user}@{ip}:{dest}",
         ]
-        subprocess.run(argv, capture_output=True, text=True, check=True)
+        _ = subprocess.run(argv, capture_output=True, text=True, check=True)
 
     def teardown(self, vm_name: str) -> None:
         sess = self._sessions.pop(vm_name, None)
@@ -296,8 +292,8 @@ class _TartBackend:
             sess.popen.terminate()
             with contextlib.suppress(subprocess.TimeoutExpired):
                 sess.popen.wait(timeout=10)
-        subprocess.run(["tart", "stop", vm_name], capture_output=True, text=True, check=False)
-        subprocess.run(["tart", "delete", vm_name], capture_output=True, text=True, check=False)
+        _ = subprocess.run(["tart", "stop", vm_name], capture_output=True, text=True, check=False)
+        _ = subprocess.run(["tart", "delete", vm_name], capture_output=True, text=True, check=False)
 
     def _wait_for_ip(self, vm_name: str, *, timeout: float) -> str:
         deadline = time.monotonic() + timeout

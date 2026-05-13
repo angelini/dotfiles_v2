@@ -14,6 +14,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
+from dotgen.components.pi_agent import PiAgent
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
@@ -35,6 +36,7 @@ _SHARED: tuple[Component, ...] = (
     GitSigning(),
     Rust(),
     NodeFnm(),
+    PiAgent(),
     GoLang(),
     Gcloud(),
     Aws(),
@@ -55,8 +57,7 @@ _DOCKER_SKIP = {
     "claude_code",
 }
 
-# GitSetup wires `gh auth git-credential` as the github HTTPS credential
-# helper, so it must run after Gh() (in _SHARED) has put gh on PATH.
+# GitSetup depends on Gh
 _LAST: tuple[Component, ...] = (GitSetup(), DotfilesDeploy())
 
 ENVIRONMENTS: dict[str, Environment] = {

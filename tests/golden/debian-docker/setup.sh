@@ -116,6 +116,13 @@ if (
       *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
+  _kubie_arch() {
+    case "$(detect_arch)" in
+      x86_64) echo amd64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
+    esac
+  }
   _install_kubectl_linux() {
     local arch
     arch="$(_kube_arch)"
@@ -141,11 +148,17 @@ if (
     arch="$(_kubectx_arch)"
     download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens"
   }
+  _install_kubie_linux() {
+    local arch
+    arch="$(_kubie_arch)"
+    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.25.0/kubie-linux-${arch}"
+  }
   _install_kubectl_linux
   _install_helm_linux
   _install_k9s_linux
   _install_kubectx_linux
   _install_kubens_linux
+  _install_kubie_linux
 ); then
   component_end "kubectl" 0
 else
@@ -164,6 +177,20 @@ if (
   component_end "gh" 0
 else
   _rc=$?; component_end "gh" "$_rc"; exit "$_rc"
+fi
+
+# --- pi_agent ---
+component_begin "pi_agent"
+if (
+  set -e
+  install_npm_global @earendil-works/pi-coding-agent
+  install_npm_global @dreki-gg/pi-context7
+  ensure_dir "$HOME/.pi"
+  link_file "$HOME/repos/lpi/AGENTS.md" "$HOME/.pi/AGENTS.md"
+); then
+  component_end "pi_agent" 0
+else
+  _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
 fi
 
 # --- git_setup ---

@@ -1,5 +1,6 @@
 import re
 import subprocess
+import textwrap
 
 import pytest
 
@@ -113,12 +114,7 @@ def _run_template(tmp_path, mode: str, src: str, vars_list: str, *, secrets: str
     src_path.write_text(src)
     dst_path = tmp_path / "dst"
     script = tmp_path / "run.sh"
-    script.write_text(
-        f"{_macos_shim()}\n"
-        f"export XDG_CONFIG_HOME={tmp_path}\n"
-        f"export DOTGEN_MODE={mode}\n"
-        f"install_config_template {src_path} {dst_path} '{vars_list}'\n"
-    )
+    script.write_text(f"{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE={mode}\ninstall_config_template {src_path} {dst_path} '{vars_list}'\n")
     return subprocess.run(["bash", str(script)], capture_output=True, text=True)
 
 
@@ -179,12 +175,7 @@ def test_install_config_template_missing_secrets_file(tmp_path) -> None:
     src_path.write_text("name=${GIT_USER_NAME}\n")
     dst_path = tmp_path / "dst"
     script = tmp_path / "run.sh"
-    script.write_text(
-        f"{_macos_shim()}\n"
-        f"export XDG_CONFIG_HOME={tmp_path}\n"
-        f"export DOTGEN_MODE=deploy\n"
-        f"install_config_template {src_path} {dst_path} 'GIT_USER_NAME'\n"
-    )
+    script.write_text(f"{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE=deploy\ninstall_config_template {src_path} {dst_path} 'GIT_USER_NAME'\n")
     res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
     assert res.returncode != 0
     assert "missing secrets file" in res.stderr
@@ -194,14 +185,31 @@ def test_install_config_template_missing_secrets_file(tmp_path) -> None:
 def test_load_secrets_idempotent(tmp_path) -> None:
     _write_secrets(tmp_path, 'COUNTER="$((${COUNTER:-0}+1))"\n')
     script = tmp_path / "run.sh"
-    script.write_text(
-        f"{_macos_shim()}\n"
-        f"export XDG_CONFIG_HOME={tmp_path}\n"
-        f"export DOTGEN_MODE=deploy\n"
-        "load_secrets\n"
-        "load_secrets\n"
-        'printf "%s" "$COUNTER"\n'
-    )
+    script.write_text(f'{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE=deploy\nload_secrets\nload_secrets\nprintf "%s" "$COUNTER"\n')
     res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
     assert res.stdout == "1"
+
+
+def test_debian_shim_handles_missing_sudo(tmp_path) -> None:
+    shim = OSShim(OS.DEBIAN).render()
+    script = tmp_path / "run.sh"
+
+    # Mock pkg_installed to return false, and bin_exists to return false for sudo
+    script.write_text(
+        textwrap.dedent(f"""\
+        {shim}
+        DOTGEN_MODE=deploy
+        pkg_installed() {{ return 1; }}
+        bin_exists() {{ if [ "$1" = "sudo" ]; then return 1; else command -v "$1" >/dev/null; fi; }}
+        # Mock apt-get to just echo what it would do
+        apt-get() {{ echo "apt-get $*"; }}
+
+        install_package mypkg
+    """)
+    )
+
+    res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "apt-get install -y mypkg" in res.stdout
+    assert "sudo" not in res.stdout

@@ -43,4 +43,7 @@ fi
 if bin_exists helm; then
   source <(helm completion bash)
 fi
+if bin_exists kubie; then
+  source <(kubie generate-completion)
+fi
 

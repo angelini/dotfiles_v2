@@ -15,6 +15,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
+from dotgen.components.pi_agent import PiAgent
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
@@ -45,6 +46,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
         PythonTools,
         Gh,
         GitSigning,
+        PiAgent,
     ],
 )
 def test_component_render_returns_fragment(env: Environment, cls) -> None:
@@ -52,9 +54,9 @@ def test_component_render_returns_fragment(env: Environment, cls) -> None:
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed])
+@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls) -> None:
-    for env_name in ("macos",):
+    for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
         comp = cls()
         if comp.applies_to(env):
@@ -310,3 +312,9 @@ def test_postgres_unwired_but_renders_per_os() -> None:
     deb = Postgres().render(ENVIRONMENTS["debian"]).setup
     assert "install_package postgresql@18" in mac
     assert "add_repo apt pgdg" in deb and "postgresql-18" in deb
+
+
+def test_pi_agent_setup() -> None:
+    setup = PiAgent().render(ENVIRONMENTS["macos"]).setup
+    assert "install_npm_global @earendil-works/pi-coding-agent" in setup
+    assert 'link_file "$HOME/repos/lpi/AGENTS.md" "$HOME/.pi/AGENTS.md"' in setup

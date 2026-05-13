@@ -100,8 +100,8 @@ def build_env(env: Environment, out_dir: Path) -> None:
 
 def _write_secrets_template(out_dir: Path, secrets: frozenset[str]) -> None:
     lines = [
-        "# dotgen secrets — fill in values, then move to ~/.config/dotgen/secrets.env\n",
-        "# values must be single-line; multi-line not supported in v1\n",
+        "# dotgen secrets — fill and move to ~/.config/dotgen/secrets.env\n",
+        "# single-line values only\n",
         "\n",
     ]
     for key in sorted(secrets):

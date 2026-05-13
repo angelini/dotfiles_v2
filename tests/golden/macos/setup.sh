@@ -77,7 +77,7 @@ fi
 component_begin "kubectl"
 if (
   set -e
-  install_packages kubectl helm k9s kubectx
+  install_packages kubectl helm k9s kubectx kubie
 ); then
   component_end "kubectl" 0
 else
@@ -197,6 +197,20 @@ if (
   component_end "node_fnm" 0
 else
   _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
+fi
+
+# --- pi_agent ---
+component_begin "pi_agent"
+if (
+  set -e
+  install_npm_global @earendil-works/pi-coding-agent
+  install_npm_global @dreki-gg/pi-context7
+  ensure_dir "$HOME/.pi"
+  link_file "$HOME/repos/lpi/AGENTS.md" "$HOME/.pi/AGENTS.md"
+); then
+  component_end "pi_agent" 0
+else
+  _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
 fi
 
 # --- go_lang ---

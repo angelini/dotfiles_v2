@@ -31,3 +31,15 @@ def test_shim_contains_all_contract_functions(tmp_path: Path) -> None:
     text = (tmp_path / "os_shim.sh").read_text()
     for fn in SHIM_FUNCTIONS:
         assert f"{fn}() {{" in text, f"missing shim function: {fn}"
+
+
+def test_build_env_emits_dockerfile_only_for_docker_env(tmp_path: Path) -> None:
+    # Docker env should have Dockerfile
+    out_docker = tmp_path / "debian-docker"
+    build_env(ENVIRONMENTS["debian-docker"], out_docker)
+    assert (out_docker / "Dockerfile").is_file()
+
+    # Non-docker env should NOT have Dockerfile
+    out_macos = tmp_path / "macos"
+    build_env(ENVIRONMENTS["macos"], out_macos)
+    assert not (out_macos / "Dockerfile").exists()

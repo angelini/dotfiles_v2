@@ -42,10 +42,7 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
     work = tmp_path_factory.mktemp(f"vm-{env_name}")
     build_env(ENVIRONMENTS[env_name], work / env_name)
 
-    if env_name == "debian-docker":
-        image_spec = str(work / env_name)
-    else:
-        image_spec = IMAGES[env_name]
+    image_spec = str(work / env_name) if env_name == "debian-docker" else IMAGES[env_name]
 
     tar_base = str(work / env_name)
     tar = shutil.make_archive(tar_base, "gztar", root_dir=str(work), base_dir=env_name)

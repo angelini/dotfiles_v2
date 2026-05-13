@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 
-# macOS bash login shells read ~/.bash_profile, not ~/.bashrc; ensure both paths converge.
+# Ensure macOS login shells read .bashrc
 _BASH_PROFILE = '[ -r "$HOME/.bashrc" ] && source "$HOME/.bashrc"\n'
 
 _SETUP = """\

@@ -249,6 +249,16 @@ ask() {
   printf '%s' "$reply"
 }
 
+install_npm_global() {
+  local pkg="$1"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    printf '+ INSTALL npm %s\n' "$pkg"
+    return 0
+  fi
+  # npm available via node_fnm
+  npm install -g "$pkg"
+}
+
 component_begin() {
   local name="$1"
   if [ "$DOTGEN_MODE" = diff ]; then
@@ -256,7 +266,7 @@ component_begin() {
     return 0
   fi
 
-  # Save original stdout/stderr if not already saved
+  # Save original stdio
   if [ -z "${_ORIG_STDOUT:-}" ]; then
     exec 3>&1 4>&2
     _ORIG_STDOUT=3
@@ -274,7 +284,7 @@ component_end() {
     return 0
   fi
 
-  # Restore original stdout/stderr
+  # Restore stdio
   exec 1>&3 2>&4
 
   if [ "$rc" -eq 0 ]; then

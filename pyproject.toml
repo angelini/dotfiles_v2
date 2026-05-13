@@ -3,16 +3,10 @@ name = "dotgen"
 version = "0.1.0"
 description = "Per-environment bash bundle generator for fresh-machine bootstrap"
 requires-python = ">=3.12"
-dependencies = [
-    "tomli-w>=1.0",
-]
+dependencies = ["tomli-w>=1.0"]
 
 [dependency-groups]
-dev = [
-    "ruff>=0.6",
-    "ty>=0.0.1a1",
-    "pytest>=8",
-]
+dev = ["ruff>=0.6", "ty>=0.0.1a1", "pytest>=8"]
 
 [build-system]
 requires = ["hatchling"]
@@ -32,7 +26,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 root = ["src"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src"]
+typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.12"
@@ -41,5 +36,7 @@ extraPaths = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["vm: integration test that boots a VM (OrbStack for Linux, tart for macOS; slow, opt-in)"]
+markers = [
+  "vm: integration test that boots a VM (OrbStack for Linux, tart for macOS; slow, opt-in)",
+]
 addopts = "-m 'not vm'"

@@ -5,8 +5,6 @@ from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
 _AWS_CONFIG = """\
-# Populate per-profile settings via `aws configure --profile <name>`.
-# Generated stub — do not commit credentials here.
 [default]
 region = us-east-1
 output = json

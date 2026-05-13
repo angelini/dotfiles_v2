@@ -1,11 +1,12 @@
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
-_SETTINGS: dict = {
+_SETTINGS: dict[str, Any] = {
     "edit_predictions": {"provider": "none"},
     "show_edit_predictions": False,
     "disable_ai": True,
@@ -87,7 +88,7 @@ _SETTINGS: dict = {
     },
 }
 
-_KEYMAP: list = [
+_KEYMAP: list[dict[str, Any]] = [
     {
         "context": "Workspace",
         "bindings": {"cmd-w": "editor::ToggleFocus"},
