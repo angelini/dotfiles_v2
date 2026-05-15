@@ -299,9 +299,19 @@ component_begin "pi_agent"
 if (
   set -e
   install_npm_global @earendil-works/pi-coding-agent
-  install_npm_global @dreki-gg/pi-context7
-  ensure_dir "$HOME/.pi"
-  link_file "$HOME/repos/lpi/AGENTS.md" "$HOME/.pi/AGENTS.md"
+  install_npm_global pi-lens
+  install_npm_global pi-mcp-adapter
+  install_npm_global pi-subagents
+  install_npm_global pi-web-access
+  install_npm_global pi-simplify
+  install_npm_global @juicesharp/rpiv-ask-user-question
+  install_npm_global @juicesharp/rpiv-todo
+  install_npm_global @samfp/pi-memory
+  ensure_dir "$HOME/.pi/agent"
+  install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"
+  install_config_template "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json" "GOOGLE_GENERATIVE_AI_API_KEY"
+  install_config "$DIR/config/pi/agent/web-search.json" "$HOME/.pi/agent/web-search.json"
+  install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 ); then
   component_end "pi_agent" 0
 else

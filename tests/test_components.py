@@ -313,6 +313,17 @@ def test_postgres_renders_per_os() -> None:
 
 
 def test_pi_agent_setup() -> None:
-    setup = PiAgent().render(ENVIRONMENTS["macos"]).setup
-    assert "install_npm_global @earendil-works/pi-coding-agent" in setup
-    assert 'link_file "$HOME/repos/lpi/AGENTS.md" "$HOME/.pi/AGENTS.md"' in setup
+    frag = PiAgent().render(ENVIRONMENTS["macos"])
+    assert "install_npm_global @earendil-works/pi-coding-agent" in frag.setup
+    assert "install_npm_global pi-lens" in frag.setup
+    assert 'install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"' in frag.setup
+    assert "GOOGLE_GENERATIVE_AI_API_KEY" in frag.secrets
+    assert {cf.dest for cf in frag.configs} == {
+        "pi/agent/settings.json",
+        "pi/agent/models.json",
+        "pi/agent/web-search.json",
+        "pi/agent/AGENTS.md",
+    }
+    agents_config = next(cf for cf in frag.configs if cf.dest == "pi/agent/AGENTS.md")
+    assert "Present reasoning summaries in a concise, matter-of-fact tone" in agents_config.content
+    assert "Use subagents for most tasks." in agents_config.content
