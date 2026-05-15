@@ -301,11 +301,9 @@ def test_dotfiles_deploy_runs_last_in_every_env() -> None:
         assert env.components[-1].name == "dotfiles_deploy", f"{env.name}: dotfiles_deploy must run last"
 
 
-def test_postgres_unwired_but_renders_per_os() -> None:
+def test_postgres_renders_per_os() -> None:
     for env_name in ("debian", "macos"):
         env = ENVIRONMENTS[env_name]
-        names = {c.name for c in env.components}
-        assert "postgres" not in names, "postgres must stay opt-in"
         frag = Postgres().render(env)
         assert frag.bashrc and "PATH" in frag.bashrc
     mac = Postgres().render(ENVIRONMENTS["macos"]).setup

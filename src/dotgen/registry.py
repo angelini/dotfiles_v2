@@ -15,8 +15,10 @@ from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.pi_agent import PiAgent
+from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
+from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
@@ -28,6 +30,7 @@ _SHARED: tuple[Component, ...] = (
     CoreUtils(),
     Helix(),
     Starship(),
+    Shellcheck(),
     Zoxide(),
     Kubectl(),
     PythonTools(),
@@ -37,6 +40,7 @@ _SHARED: tuple[Component, ...] = (
     Rust(),
     NodeFnm(),
     PiAgent(),
+    Postgres(),
     GoLang(),
     Gcloud(),
     Aws(),
@@ -55,6 +59,7 @@ _DOCKER_SKIP = {
     "go_lang",
     "python_tools",
     "claude_code",
+    "postgres",
 }
 
 # GitSetup depends on Gh

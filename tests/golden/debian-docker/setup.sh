@@ -30,7 +30,7 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion bsdmainutils
+  install_packages git jq yq fzf ripgrep fd-find tree vim htop cloc gnupg2 bash-completion bsdmainutils
   ensure_dir "$HOME/bin"
   if bin_exists fdfind && ! bin_exists fd; then
     ln -sf "$(command -v fdfind)" "$HOME/bin/fd"

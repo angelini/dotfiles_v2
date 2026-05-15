@@ -64,6 +64,9 @@ if bin_exists fnm; then
   eval "$(fnm env --use-on-cd)"
 fi
 
+# --- postgres ---
+export PATH="/opt/homebrew/opt/postgresql@18/bin:$PATH"
+
 # --- go_lang ---
 export GOPATH="${GOPATH:-$HOME/go}"
 export GOROOT="$HOME/.local/share/go"

@@ -26,11 +26,32 @@ if [ "$DOTGEN_MODE" = deploy ]; then
 fi
 [ "$DOTGEN_MODE" = deploy ] && update_pkg_index
 
+# --- bash_base ---
+component_begin "bash_base"
+if (
+  set -e
+  if [ "$(detect_os)" = macos ]; then
+    install_package bash
+    if ! grep -q "/opt/homebrew/bin/bash" /etc/shells; then
+      log "adding homebrew bash to /etc/shells"
+      echo "/opt/homebrew/bin/bash" | sudo tee -a /etc/shells >/dev/null
+    fi
+    if [ "$SHELL" != "/opt/homebrew/bin/bash" ]; then
+      log "changing shell to homebrew bash"
+      chsh -s /opt/homebrew/bin/bash
+    fi
+  fi
+); then
+  component_end "bash_base" 0
+else
+  _rc=$?; component_end "bash_base" "$_rc"; exit "$_rc"
+fi
+
 # --- core_utils ---
 component_begin "core_utils"
 if (
   set -e
-  install_packages git jq ripgrep fd tree vim htop gnupg bash-completion
+  install_packages git jq yq fzf ripgrep fd tree vim htop cloc gnupg bash-completion
 ); then
   component_end "core_utils" 0
 else
@@ -60,6 +81,17 @@ if (
   component_end "starship" 0
 else
   _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
+fi
+
+# --- shellcheck ---
+component_begin "shellcheck"
+if (
+  set -e
+  install_package shellcheck
+); then
+  component_end "shellcheck" 0
+else
+  _rc=$?; component_end "shellcheck" "$_rc"; exit "$_rc"
 fi
 
 # --- zoxide ---
@@ -211,6 +243,17 @@ if (
   component_end "pi_agent" 0
 else
   _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
+fi
+
+# --- postgres ---
+component_begin "postgres"
+if (
+  set -e
+  install_package postgresql@18
+); then
+  component_end "postgres" 0
+else
+  _rc=$?; component_end "postgres" "$_rc"; exit "$_rc"
 fi
 
 # --- go_lang ---

@@ -45,6 +45,20 @@ _ALIAS_LS_MACOS = "alias l='ls -hlAG'\n"
 _ALIAS_LS_LINUX = "alias l='ls -hlA --color=auto'\n"
 
 
+_BASH_MACOS_SETUP = r"""if [ "$(detect_os)" = macos ]; then
+  install_package bash
+  if ! grep -q "/opt/homebrew/bin/bash" /etc/shells; then
+    log "adding homebrew bash to /etc/shells"
+    echo "/opt/homebrew/bin/bash" | sudo tee -a /etc/shells >/dev/null
+  fi
+  if [ "$SHELL" != "/opt/homebrew/bin/bash" ]; then
+    log "changing shell to homebrew bash"
+    chsh -s /opt/homebrew/bin/bash
+  fi
+fi
+"""
+
+
 @dataclass(frozen=True)
 class BashBase:
     name: str = "bash_base"
@@ -54,7 +68,9 @@ class BashBase:
 
     def render(self, env: Environment) -> Fragment:
         ls_alias = _ALIAS_LS_MACOS if env.os is OS.MACOS else _ALIAS_LS_LINUX
+        setup = _BASH_MACOS_SETUP if env.os is OS.MACOS else ""
         return Fragment(
+            setup=setup,
             bashrc=_BASHRC,
             alias=_ALIASES_COMMON + ls_alias,
         )

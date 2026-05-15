@@ -30,7 +30,7 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages git jq ripgrep fd-find tree vim htop gnupg2 bash-completion bsdmainutils
+  install_packages git jq yq fzf ripgrep fd-find tree vim htop cloc gnupg2 bash-completion bsdmainutils
   ensure_dir "$HOME/bin"
   if bin_exists fdfind && ! bin_exists fd; then
     ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
@@ -85,6 +85,17 @@ if (
   component_end "starship" 0
 else
   _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
+fi
+
+# --- shellcheck ---
+component_begin "shellcheck"
+if (
+  set -e
+  install_package shellcheck
+); then
+  component_end "shellcheck" 0
+else
+  _rc=$?; component_end "shellcheck" "$_rc"; exit "$_rc"
 fi
 
 # --- zoxide ---
@@ -295,6 +306,20 @@ if (
   component_end "pi_agent" 0
 else
   _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
+fi
+
+# --- postgres ---
+component_begin "postgres"
+if (
+  set -e
+  codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+  add_repo apt pgdg "deb [signed-by=/etc/apt/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+  update_pkg_index
+  install_package postgresql-18
+); then
+  component_end "postgres" 0
+else
+  _rc=$?; component_end "postgres" "$_rc"; exit "$_rc"
 fi
 
 # --- go_lang ---
