@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
+from dotgen.types import OS
 
 _SETTINGS_JSON = (
     json.dumps(
@@ -41,7 +42,7 @@ _MODELS_JSON = (
                 "google": {
                     "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
                     "api": "google-generative-ai",
-                    "apiKey": "${GOOGLE_GENERATIVE_AI_API_KEY}",
+                    "apiKey": "GOOGLE_GENERATIVE_AI_API_KEY",
                     "models": [
                         {
                             "id": "gemini-3-flash-preview",
@@ -116,16 +117,206 @@ _PI_PACKAGES = (
     "@samfp/pi-memory",
 )
 
-_SETUP = (
+_PI_SANDBOX_SH = r"""#!/usr/bin/env bash
+set -euo pipefail
+
+_die() {
+  printf 'pi-sandbox: %s\n' "$*" >&2
+  exit 2
+}
+
+_load_dotgen_secrets() {
+  local f="${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+  [ -r "$f" ] || return 0
+  set -a
+  # shellcheck disable=SC1090
+  source "$f"
+  set +a
+}
+
+_resolve_path() {
+  cd "$1" 2>/dev/null && pwd -P
+}
+
+main() {
+  local repos="$HOME/repos"
+  local cwd real_repos pi_bin
+  cwd="$(_resolve_path "$PWD")" || _die "cannot resolve current directory: $PWD"
+  real_repos="$(_resolve_path "$repos")" || _die "missing repos directory: $repos"
+  case "$cwd" in
+    "$real_repos"|"$real_repos"/*) ;;
+    *) _die "run pi-sandbox from within $repos" ;;
+  esac
+
+  pi_bin="$(command -v pi)" || _die "pi binary not found"
+  [ -x "$pi_bin" ] || _die "pi binary is not executable: $pi_bin"
+
+  _load_dotgen_secrets
+
+  case "$(uname -s)" in
+    Darwin) _run_macos "$pi_bin" "$@" ;;
+    Linux) _run_linux "$pi_bin" "$@" ;;
+    *) _die "unsupported OS: $(uname -s)" ;;
+  esac
+}
+
+_run_macos() {
+  local pi_bin="$1" profile="$HOME/.config/pi/sandbox/pi-macos.sb"
+  shift
+  [ -r "$profile" ] || _die "missing sandbox profile: $profile"
+  exec env -i \
+    "HOME=$HOME" \
+    "PATH=${PATH:-/usr/bin:/bin}" \
+    "SHELL=${SHELL:-/bin/bash}" \
+    "TERM=${TERM:-xterm-256color}" \
+    "LANG=${LANG:-C.UTF-8}" \
+    "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" \
+    "EXA_API_KEY=${EXA_API_KEY:-}" \
+    sandbox-exec \
+    -D "HOME=$HOME" \
+    -D "REPOS=$HOME/repos" \
+    -D "PI_AGENT=$HOME/.pi/agent" \
+    -D "TMPDIR=${TMPDIR:-/tmp}" \
+    -f "$profile" \
+    "$pi_bin" "$@"
+}
+
+_run_linux() {
+  local pi_bin="$1"
+  shift
+  command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
+  exec env -i \
+    "HOME=$HOME" \
+    "PATH=${PATH:-/usr/bin:/bin}" \
+    "SHELL=${SHELL:-/bin/bash}" \
+    "TERM=${TERM:-xterm-256color}" \
+    "LANG=${LANG:-C.UTF-8}" \
+    "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" \
+    "EXA_API_KEY=${EXA_API_KEY:-}" \
+    bwrap \
+    --unshare-user-try \
+    --unshare-ipc \
+    --unshare-pid \
+    --die-with-parent \
+    --proc /proc \
+    --dev-bind /dev /dev \
+    --tmpfs /tmp \
+    --dir "$HOME" \
+    --dir "$HOME/.pi" \
+    --dir "$HOME/.local" \
+    --dir "$HOME/.local/share" \
+    --dir "$HOME/.local/state" \
+    --bind "$HOME/repos" "$HOME/repos" \
+    --bind "$HOME/.pi/agent" "$HOME/.pi/agent" \
+    --ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm" \
+    --ro-bind-try "$HOME/.local/state/fnm_multishells" "$HOME/.local/state/fnm_multishells" \
+    --ro-bind /usr /usr \
+    --ro-bind /bin /bin \
+    --ro-bind-try /lib /lib \
+    --ro-bind-try /lib64 /lib64 \
+    --ro-bind /etc /etc \
+    --setenv HOME "$HOME" \
+    --chdir "$PWD" \
+    "$pi_bin" "$@"
+}
+
+main "$@"
+"""
+
+_PI_MACOS_SB = r"""(version 1)
+(deny default)
+
+(allow process*)
+(allow signal)
+(allow sysctl*)
+(allow mach-lookup)
+
+(allow file-read* file-write* (subpath (param "REPOS")))
+(allow file-read* file-write* (subpath (param "PI_AGENT")))
+(allow file-read* file-write* (subpath (param "TMPDIR")))
+(allow file-read* file-write-data
+  (literal "/dev/null")
+  (literal "/dev/zero"))
+
+(allow file-read*
+  (subpath "/bin")
+  (subpath "/sbin")
+  (subpath "/usr/bin")
+  (subpath "/usr/sbin")
+  (subpath "/usr/lib")
+  (subpath "/usr/share")
+  (subpath "/System/Library")
+  (subpath "/Library")
+  (subpath "/opt/homebrew")
+  (subpath "/usr/local")
+  (subpath (string-append (param "HOME") "/.local/share/fnm"))
+  (subpath (string-append (param "HOME") "/.local/state/fnm_multishells")))
+
+(allow file-read-metadata
+  (literal "/")
+  (literal (param "HOME"))
+  (literal (string-append (param "HOME") "/.pi"))
+  (literal (string-append (param "HOME") "/.local"))
+  (literal (string-append (param "HOME") "/.local/share"))
+  (literal (string-append (param "HOME") "/.local/state"))
+  (literal "/private")
+  (literal "/private/tmp")
+  (literal "/private/var")
+  (literal "/private/var/tmp"))
+
+(deny file* (with no-report)
+  (subpath (string-append (param "HOME") "/.ssh"))
+  (subpath (string-append (param "HOME") "/.gnupg"))
+  (subpath (string-append (param "HOME") "/.aws"))
+  (subpath (string-append (param "HOME") "/.azure"))
+  (subpath (string-append (param "HOME") "/.config/gcloud"))
+  (subpath (string-append (param "HOME") "/.config/dotgen"))
+  (subpath (string-append (param "HOME") "/.kube"))
+  (literal (string-append (param "HOME") "/.docker/config.json"))
+  (literal (string-append (param "HOME") "/.config/gh/hosts.yml"))
+  (literal (string-append (param "HOME") "/.git-credentials"))
+  (literal (string-append (param "HOME") "/.netrc"))
+  (literal (string-append (param "HOME") "/.npmrc"))
+  (literal (string-append (param "HOME") "/.pypirc"))
+  (literal (string-append (param "HOME") "/.cargo/credentials.toml"))
+  (subpath (string-append (param "HOME") "/.claude"))
+  (literal (string-append (param "HOME") "/.bash_history"))
+  (literal (string-append (param "HOME") "/.zsh_history"))
+  (literal (string-append (param "HOME") "/.python_history")))
+"""
+
+_ALIAS = """\
+pi() {
+  pi-sandbox "$@"
+}
+
+pi-unsafe() {
+  command pi "$@"
+}
+"""
+
+_SETUP_BASE = (
     "\n".join(f"install_npm_global {pkg}" for pkg in _PI_PACKAGES)
     + """
 ensure_dir "$HOME/.pi/agent"
+ensure_dir "$HOME/.config/pi/sandbox"
+ensure_dir "$HOME/.local/bin"
 install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"
-install_config_template "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json" "GOOGLE_GENERATIVE_AI_API_KEY"
+install_config "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json"
 install_config "$DIR/config/pi/agent/web-search.json" "$HOME/.pi/agent/web-search.json"
 install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
+install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 """
 )
+
+
+def _setup_for(env: Environment) -> str:
+    parts: list[str] = []
+    if env.os is OS.DEBIAN:
+        parts.append("install_package bubblewrap")
+    parts.append(_SETUP_BASE)
+    return "\n".join(parts)
 
 
 @dataclass(frozen=True)
@@ -137,12 +328,15 @@ class PiAgent:
 
     def render(self, env: Environment) -> Fragment:
         return Fragment(
-            setup=_SETUP,
+            setup=_setup_for(env),
+            alias=_ALIAS,
             configs=(
                 ConfigFile(dest="pi/agent/settings.json", content=_SETTINGS_JSON),
                 ConfigFile(dest="pi/agent/models.json", content=_MODELS_JSON, mode=0o600),
                 ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
                 ConfigFile(dest="pi/agent/AGENTS.md", content=_AGENTS_MD),
+                ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
+                ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
             ),
             secrets=frozenset({"EXA_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"}),
         )

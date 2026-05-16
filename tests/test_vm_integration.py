@@ -99,6 +99,33 @@ def test_login_shell_loads_kubectl_alias(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd("alias kc", login=True)
 
 
+def test_pi_sandbox_blocks_home_secret_access(vm: tuple[str, VmHandle]) -> None:
+    _, handle = vm
+    cmd = r"""
+set -euo pipefail
+mkdir -p "$HOME/repos/sandbox-smoke" "$HOME/.ssh"
+printf 'secret\n' > "$HOME/.ssh/sandbox-secret"
+cat > "$HOME/repos/sandbox-smoke/pi" <<'SH'
+#!/usr/bin/env bash
+cat "$HOME/.ssh/sandbox-secret"
+SH
+chmod +x "$HOME/repos/sandbox-smoke/pi"
+cd "$HOME/repos/sandbox-smoke"
+[ "$(./pi)" = secret ]
+if PATH="$PWD:$PATH" pi-sandbox >/tmp/pi-sandbox-secret.out 2>/tmp/pi-sandbox-secret.err; then
+  echo "pi-sandbox unexpectedly read ~/.ssh/sandbox-secret"
+  cat /tmp/pi-sandbox-secret.out
+  exit 1
+fi
+if grep -q secret /tmp/pi-sandbox-secret.out; then
+  echo "pi-sandbox exposed ~/.ssh/sandbox-secret"
+  cat /tmp/pi-sandbox-secret.out
+  exit 1
+fi
+"""
+    handle.assert_cmd(cmd, login=True)
+
+
 def test_full_addons(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":

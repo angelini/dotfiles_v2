@@ -53,7 +53,7 @@ _BASH_MACOS_SETUP = r"""if [ "$(detect_os)" = macos ]; then
   fi
   if [ "$SHELL" != "/opt/homebrew/bin/bash" ]; then
     log "changing shell to homebrew bash"
-    chsh -s /opt/homebrew/bin/bash
+    sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"
   fi
 fi
 """

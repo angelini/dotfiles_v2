@@ -298,6 +298,7 @@ fi
 component_begin "pi_agent"
 if (
   set -e
+  install_package bubblewrap
   install_npm_global @earendil-works/pi-coding-agent
   install_npm_global pi-lens
   install_npm_global pi-mcp-adapter
@@ -308,10 +309,14 @@ if (
   install_npm_global @juicesharp/rpiv-todo
   install_npm_global @samfp/pi-memory
   ensure_dir "$HOME/.pi/agent"
+  ensure_dir "$HOME/.config/pi/sandbox"
+  ensure_dir "$HOME/.local/bin"
   install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"
-  install_config_template "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json" "GOOGLE_GENERATIVE_AI_API_KEY"
+  install_config "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json"
   install_config "$DIR/config/pi/agent/web-search.json" "$HOME/.pi/agent/web-search.json"
   install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+  install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
+  install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 ); then
   component_end "pi_agent" 0
 else

@@ -43,3 +43,12 @@ k8s_all_resources_in_ns() {
     | xargs -n 1 kubectl get --show-kind --ignore-not-found -n "$ns"
 }
 
+# --- pi_agent ---
+pi() {
+  pi-sandbox "$@"
+}
+
+pi-unsafe() {
+  command pi "$@"
+}
+

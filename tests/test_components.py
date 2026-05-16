@@ -1,5 +1,6 @@
 import pytest
 
+from dotgen.component import Component
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
@@ -49,13 +50,13 @@ def env(request: pytest.FixtureRequest) -> Environment:
         PiAgent,
     ],
 )
-def test_component_render_returns_fragment(env: Environment, cls) -> None:
-    frag = cls().render(env)
+def test_component_render_returns_fragment(env: Environment, cls: type[Component]) -> None:
+    frag: Fragment = cls().render(env)
     assert isinstance(frag, Fragment)
 
 
 @pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed, PiAgent])
-def test_addon_component_renders_for_supported_oses(cls) -> None:
+def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
         comp = cls()
@@ -68,6 +69,11 @@ def test_bash_base_ls_alias_per_os() -> None:
     linux = BashBase().render(ENVIRONMENTS["debian"]).alias
     assert "ls -hlAG" in mac
     assert "--color=auto" in linux
+
+
+def test_bash_base_macos_changes_shell_with_sudo() -> None:
+    setup = BashBase().render(ENVIRONMENTS["macos"]).setup
+    assert 'sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"' in setup
 
 
 def test_core_utils_per_os_fd_token() -> None:
@@ -317,13 +323,46 @@ def test_pi_agent_setup() -> None:
     assert "install_npm_global @earendil-works/pi-coding-agent" in frag.setup
     assert "install_npm_global pi-lens" in frag.setup
     assert 'install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"' in frag.setup
+    assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GOOGLE_GENERATIVE_AI_API_KEY" in frag.secrets
     assert {cf.dest for cf in frag.configs} == {
         "pi/agent/settings.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
         "pi/agent/AGENTS.md",
+        "pi/sandbox/pi-sandbox.sh",
+        "pi/sandbox/pi-macos.sb",
     }
     agents_config = next(cf for cf in frag.configs if cf.dest == "pi/agent/AGENTS.md")
     assert "Present reasoning summaries in a concise, matter-of-fact tone" in agents_config.content
-    assert "Use subagents for most tasks." in agents_config.content
+    assert "Use subagents for reviewing, researching, planning and scouting code bases." in agents_config.content
+
+
+def test_pi_agent_sandbox_aliases() -> None:
+    frag = PiAgent().render(ENVIRONMENTS["macos"])
+    assert 'pi-sandbox "$@"' in frag.alias
+    assert 'command pi "$@"' in frag.alias
+
+
+def test_pi_agent_bubblewrap_linux_only() -> None:
+    assert "install_package bubblewrap" in PiAgent().render(ENVIRONMENTS["debian"]).setup
+    assert "install_package bubblewrap" not in PiAgent().render(ENVIRONMENTS["macos"]).setup
+
+
+def test_pi_agent_sandbox_configs() -> None:
+    frag = PiAgent().render(ENVIRONMENTS["macos"])
+    script = next(cf for cf in frag.configs if cf.dest == "pi/sandbox/pi-sandbox.sh")
+    profile = next(cf for cf in frag.configs if cf.dest == "pi/sandbox/pi-macos.sb")
+    models = next(cf for cf in frag.configs if cf.dest == "pi/agent/models.json")
+    assert script.mode == 0o755
+    assert '--bind "$HOME/.pi/agent" "$HOME/.pi/agent"' in script.content
+    assert '--ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm"' in script.content
+    assert "--unshare-net" not in script.content
+    assert 'pi_bin="$(command -v pi)"' in script.content
+    assert '"$pi_bin" "$@"' in script.content
+    assert "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" in script.content
+    assert '(allow file-read* file-write* (subpath (param "PI_AGENT")))' in profile.content
+    assert "$HOME/.ssh" not in script.content
+    assert '/.ssh"' in profile.content
+    assert '"apiKey": "GOOGLE_GENERATIVE_AI_API_KEY"' in models.content
+    assert "${GOOGLE_GENERATIVE_AI_API_KEY}" not in models.content

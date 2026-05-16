@@ -38,7 +38,7 @@ if (
     fi
     if [ "$SHELL" != "/opt/homebrew/bin/bash" ]; then
       log "changing shell to homebrew bash"
-      chsh -s /opt/homebrew/bin/bash
+      sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"
     fi
   fi
 ); then
@@ -245,10 +245,14 @@ if (
   install_npm_global @juicesharp/rpiv-todo
   install_npm_global @samfp/pi-memory
   ensure_dir "$HOME/.pi/agent"
+  ensure_dir "$HOME/.config/pi/sandbox"
+  ensure_dir "$HOME/.local/bin"
   install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"
-  install_config_template "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json" "GOOGLE_GENERATIVE_AI_API_KEY"
+  install_config "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json"
   install_config "$DIR/config/pi/agent/web-search.json" "$HOME/.pi/agent/web-search.json"
   install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+  install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
+  install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 ); then
   component_end "pi_agent" 0
 else
