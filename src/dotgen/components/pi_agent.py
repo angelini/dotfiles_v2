@@ -21,6 +21,8 @@ _SETTINGS_JSON = (
                 "npm:pi-subagents",
                 "npm:pi-web-access",
                 "npm:pi-simplify",
+                "npm:@plannotator/pi-extension",
+                "npm:@dreki-gg/pi-context7",
                 "npm:@juicesharp/rpiv-ask-user-question",
                 "npm:@juicesharp/rpiv-todo",
                 "npm:@samfp/pi-memory",
@@ -112,6 +114,8 @@ _PI_PACKAGES = (
     "pi-subagents",
     "pi-web-access",
     "pi-simplify",
+    "@plannotator/pi-extension",
+    "@dreki-gg/pi-context7",
     "@juicesharp/rpiv-ask-user-question",
     "@juicesharp/rpiv-todo",
     "@samfp/pi-memory",
@@ -172,6 +176,7 @@ _run_macos() {
     "LANG=${LANG:-C.UTF-8}" \
     "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
+    "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     sandbox-exec \
     -D "HOME=$HOME" \
     -D "REPOS=$HOME/repos" \
@@ -193,6 +198,7 @@ _run_linux() {
     "LANG=${LANG:-C.UTF-8}" \
     "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
+    "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     bwrap \
     --unshare-user-try \
     --unshare-ipc \
@@ -338,5 +344,5 @@ class PiAgent:
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
             ),
-            secrets=frozenset({"EXA_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"}),
+            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"}),
         )

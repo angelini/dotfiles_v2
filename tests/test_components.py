@@ -322,9 +322,16 @@ def test_pi_agent_setup() -> None:
     frag = PiAgent().render(ENVIRONMENTS["macos"])
     assert "install_npm_global @earendil-works/pi-coding-agent" in frag.setup
     assert "install_npm_global pi-lens" in frag.setup
+    assert "install_npm_global @plannotator/pi-extension" in frag.setup
+    assert "install_npm_global @dreki-gg/pi-context7" in frag.setup
     assert 'install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GOOGLE_GENERATIVE_AI_API_KEY" in frag.secrets
+    assert "EXA_API_KEY" in frag.secrets
+    assert "CONTEXT7_API_KEY" in frag.secrets
+    settings = next(cf for cf in frag.configs if cf.dest == "pi/agent/settings.json")
+    assert "npm:@plannotator/pi-extension" in settings.content
+    assert "npm:@dreki-gg/pi-context7" in settings.content
     assert {cf.dest for cf in frag.configs} == {
         "pi/agent/settings.json",
         "pi/agent/models.json",
@@ -361,6 +368,8 @@ def test_pi_agent_sandbox_configs() -> None:
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content
     assert "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" in script.content
+    assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
+    assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
     assert '(allow file-read* file-write* (subpath (param "PI_AGENT")))' in profile.content
     assert "$HOME/.ssh" not in script.content
     assert '/.ssh"' in profile.content

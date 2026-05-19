@@ -241,6 +241,8 @@ if (
   install_npm_global pi-subagents
   install_npm_global pi-web-access
   install_npm_global pi-simplify
+  install_npm_global @plannotator/pi-extension
+  install_npm_global @dreki-gg/pi-context7
   install_npm_global @juicesharp/rpiv-ask-user-question
   install_npm_global @juicesharp/rpiv-todo
   install_npm_global @samfp/pi-memory
