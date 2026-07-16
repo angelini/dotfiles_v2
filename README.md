@@ -44,15 +44,25 @@ If a sudo-capable user already exists, install the prerequisite packages and ski
 
 ## Deploy Debian from the Mac
 
-Build and transfer directly from the Mac:
+Build and transfer the sanitized bundle directly from the Mac, then explicitly send the selected environment's secrets:
 
 ```bash
 just build debian
 scp dist/debian.tar.gz <user>@<host>:
+uv run python -m dotgen send-secrets debian <user>@<host> --from-file
 ssh <user>@<host>
 ```
 
-On Debian, extract the bundle and prepare its per-machine secrets file:
+`--from-file` without a path reads `${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env` on the Mac. An explicit file or exported process-environment values can be used instead:
+
+```bash
+uv run python -m dotgen send-secrets debian <user>@<host> --from-file ~/path/to/secrets.env
+uv run python -m dotgen send-secrets debian <user>@<host> --from-env
+```
+
+Values used by `--from-env` must be exported. Only keys declared by components in the selected environment are sent. The command uses the caller's normal OpenSSH configuration and host-key verification, and atomically installs a mode-`0600` `~/.config/dotgen/secrets.env` under a mode-`0700` directory.
+
+Real values never enter `dist/<env>/` or `dist/<env>.tar.gz`. To provision manually or from a password manager instead, extract the bundle and prepare the target file from its sanitized template:
 
 ```bash
 tar xzf debian.tar.gz
@@ -63,11 +73,12 @@ chmod 600 ~/.config/dotgen/secrets.env
 $EDITOR ~/.config/dotgen/secrets.env
 ```
 
-Populate values from the password manager using single-line `KEY="value"` entries. Git name and email are required; API keys are needed for their corresponding services. Google model access uses `GEMINI_API_KEY`. Deployment aborts if the file is absent or a required template value is empty.
+Populate manual files using single-line `KEY="value"` entries. Git name and email are required; API keys are needed for their corresponding services. Google model access uses `GEMINI_API_KEY`. Deployment aborts if the file is absent or a required template value is empty.
 
-Run the generated bundle, then start a new login shell:
+On Debian, extract the bundle if needed, run it, then start a new login shell:
 
 ```bash
+tar xzf debian.tar.gz
 bash debian/setup.sh deploy
 rm debian.tar.gz
 exec bash -l

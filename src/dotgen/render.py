@@ -128,6 +128,10 @@ def build_all(out_root: Path) -> None:
         build_env(env, out_root / name)
 
 
+def required_secrets(env: Environment) -> frozenset[str]:
+    return _merge_fragments(env).secrets
+
+
 _HEADER_FMT = "# --- {name} ---"
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from dotgen.registry import ENVIRONMENTS
-from dotgen.render import build_env
+from dotgen.render import build_env, required_secrets
 from dotgen.secrets import all_keys
 
 _TEMPLATE_CALL_RE = re.compile(
@@ -54,11 +54,10 @@ def test_template_lists_every_referenced_key(built_root: Path, env_name: str) ->
 
 
 @pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
-def test_no_unregistered_keys(built_root: Path, env_name: str) -> None:
-    setup = (built_root / env_name / "setup.sh").read_text()
-    referenced = _keys_referenced_in_setup(setup)
-    unknown = referenced - set(all_keys())
-    assert not unknown, f"{env_name}: keys referenced in setup.sh but missing from SecretKey: {unknown}"
+def test_no_unregistered_keys(env_name: str) -> None:
+    declared = required_secrets(ENVIRONMENTS[env_name])
+    unknown = declared - set(all_keys())
+    assert not unknown, f"{env_name}: component-declared keys missing from SecretKey: {unknown}"
 
 
 def test_at_least_one_env_has_secrets(built_root: Path) -> None:

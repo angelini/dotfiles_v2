@@ -110,12 +110,13 @@ class _OrbBackend:
         )
 
     def push(self, vm_name: str, user: str, src: Path, dest: str) -> None:
-        _ = subprocess.run(
-            ["orb", "push", "-m", vm_name, str(src), dest],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        with src.open("rb") as stdin:
+            _ = subprocess.run(
+                ["orb", "-m", vm_name, "-u", user, "sh", "-c", 'cat > "$1"', "sh", dest],
+                stdin=stdin,
+                capture_output=True,
+                check=True,
+            )
 
     def teardown(self, vm_name: str) -> None:
         _ = subprocess.run(["orb", "delete", "-f", vm_name], capture_output=True, text=True, check=False)
