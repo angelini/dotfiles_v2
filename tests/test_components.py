@@ -21,6 +21,7 @@ from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
+from dotgen.components.supacode import Supacode
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
@@ -55,7 +56,7 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed, PiAgent])
+@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed, Supacode, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
@@ -239,8 +240,8 @@ def test_environment_component_distribution() -> None:
         "fonts",
     }
     assert shared_names.issubset(debian_names & macos_names)
-    assert {"ghostty", "zed"}.isdisjoint(debian_names)
-    assert {"ghostty", "zed"}.issubset(macos_names)
+    assert {"ghostty", "zed", "supacode"}.isdisjoint(debian_names)
+    assert {"ghostty", "zed", "supacode"}.issubset(macos_names)
 
 
 def test_ghostty_macos_only_and_emits_config() -> None:
@@ -274,6 +275,12 @@ def test_zed_macos_only_and_emits_configs() -> None:
     assert dests == ["zed/keymap.json", "zed/settings.json"]
     macos = Zed().render(ENVIRONMENTS["macos"]).setup
     assert "install_cask zed" in macos
+
+
+def test_supacode_macos_only_and_installs_cask() -> None:
+    assert Supacode().applies_to(ENVIRONMENTS["macos"])
+    assert not Supacode().applies_to(ENVIRONMENTS["debian"])
+    assert "install_cask supacode" in Supacode().render(ENVIRONMENTS["macos"]).setup
 
 
 def test_install_script_used_for_curl_installers() -> None:
@@ -326,20 +333,33 @@ def test_pi_agent_setup() -> None:
     assert "install_npm_global @dreki-gg/pi-context7" in frag.setup
     assert 'install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
-    assert "GOOGLE_GENERATIVE_AI_API_KEY" in frag.secrets
+    assert "GEMINI_API_KEY" in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
     assert "CONTEXT7_API_KEY" in frag.secrets
     settings = next(cf for cf in frag.configs if cf.dest == "pi/agent/settings.json")
+    assert '"defaultThinkingLevel": "high"' in settings.content
+    assert "lastChangelogVersion" not in settings.content
     assert "npm:@plannotator/pi-extension" in settings.content
     assert "npm:@dreki-gg/pi-context7" in settings.content
-    assert {cf.dest for cf in frag.configs} == {
+    assert '"~/repos/pi-angelini"' in settings.content
+    assert "install_npm_global ~/repos/pi-angelini" not in frag.setup
+    assert '_install_pi_angelini' in frag.setup
+    dests = {cf.dest for cf in frag.configs}
+    assert {
         "pi/agent/settings.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
         "pi/agent/AGENTS.md",
+        "pi/agent/plannotator.json",
+        "pi/agent/extensions/supacode/index.ts",
+        "pi/agent/skills/supacode-cli/SKILL.md",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
-    }
+        "pi-angelini/package.json",
+        "pi-angelini/packages/editor-file-links/index.ts",
+    }.issubset(dests)
+    assert "pi-angelini/node_modules/package.json" not in dests
+    assert "pi-angelini/package-lock.json" not in dests
     agents_config = next(cf for cf in frag.configs if cf.dest == "pi/agent/AGENTS.md")
     assert "Present reasoning summaries in a concise, matter-of-fact tone" in agents_config.content
     assert "Use subagents for reviewing, researching, planning and scouting code bases." in agents_config.content
@@ -367,11 +387,11 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "--unshare-net" not in script.content
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content
-    assert "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" in script.content
+    assert "GEMINI_API_KEY=${GEMINI_API_KEY:-}" in script.content
     assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
     assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
     assert '(allow file-read* file-write* (subpath (param "PI_AGENT")))' in profile.content
     assert "$HOME/.ssh" not in script.content
     assert '/.ssh"' in profile.content
-    assert '"apiKey": "GOOGLE_GENERATIVE_AI_API_KEY"' in models.content
-    assert "${GOOGLE_GENERATIVE_AI_API_KEY}" not in models.content
+    assert '"apiKey": "GEMINI_API_KEY"' in models.content
+    assert "${GEMINI_API_KEY}" not in models.content

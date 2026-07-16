@@ -1,5 +1,7 @@
 import json
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
@@ -10,7 +12,7 @@ _SETTINGS_JSON = (
         {
             "defaultProvider": "openai-codex",
             "defaultModel": "gpt-5.5",
-            "defaultThinkingLevel": "medium",
+            "defaultThinkingLevel": "high",
             "enabledModels": [
                 "google/gemini-3-flash-preview",
                 "openai-codex/gpt-5.5",
@@ -26,11 +28,11 @@ _SETTINGS_JSON = (
                 "npm:@juicesharp/rpiv-ask-user-question",
                 "npm:@juicesharp/rpiv-todo",
                 "npm:@samfp/pi-memory",
+                "~/repos/pi-angelini",
             ],
             "quietStartup": False,
             "collapseChangelog": True,
             "theme": "light",
-            "lastChangelogVersion": "0.74.0",
         },
         indent=2,
     )
@@ -44,7 +46,7 @@ _MODELS_JSON = (
                 "google": {
                     "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
                     "api": "google-generative-ai",
-                    "apiKey": "GOOGLE_GENERATIVE_AI_API_KEY",
+                    "apiKey": "GEMINI_API_KEY",
                     "models": [
                         {
                             "id": "gemini-3-flash-preview",
@@ -64,6 +66,49 @@ _MODELS_JSON = (
 )
 
 _WEB_SEARCH_JSON = json.dumps({"provider": "exa"}, indent=2) + "\n"
+
+_RESOURCE_ROOT = Path(__file__).resolve().parents[1] / "resources" / "pi_agent"
+
+
+def _resource_text(relative_path: str) -> str:
+    return (_RESOURCE_ROOT / relative_path).read_text()
+
+
+_PLANNOTATOR_JSON = _resource_text("plannotator.json")
+_SUPACODE_EXTENSION_TS = _resource_text("extensions/supacode/index.ts.txt")
+_SUPACODE_SKILL_MD = _resource_text("skills/supacode-cli/SKILL.md")
+
+_PI_ANGELINI_EXCLUDED_DIRS = frozenset(
+    {".git", "node_modules", ".pytest_cache", ".ruff_cache", ".serena", "dist"}
+)
+_PI_ANGELINI_EXCLUDED_NAMES = frozenset({"package-lock.json", "pi-system-audit-plan.md"})
+
+
+def _pi_angelini_root() -> Path:
+    configured = os.environ.get("DOTGEN_PI_ANGELINI_ROOT")
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parents[4] / "pi-angelini"
+
+
+def _pi_angelini_configs() -> tuple[ConfigFile, ...]:
+    root = _pi_angelini_root()
+    if not root.is_dir():
+        raise FileNotFoundError(f"pi-angelini source not found: {root}")
+
+    configs: list[ConfigFile] = []
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root)
+        if any(part in _PI_ANGELINI_EXCLUDED_DIRS for part in rel.parts):
+            continue
+        if path.is_dir():
+            continue
+        if path.name in _PI_ANGELINI_EXCLUDED_NAMES or path.name.endswith(".test.ts"):
+            continue
+        configs.append(
+            ConfigFile(dest=f"pi-angelini/{rel.as_posix()}", content=path.read_text())
+        )
+    return tuple(configs)
 
 _AGENTS_MD = """\
 # Agent instructions for this workspace
@@ -174,7 +219,7 @@ _run_macos() {
     "SHELL=${SHELL:-/bin/bash}" \
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
-    "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" \
+    "GEMINI_API_KEY=${GEMINI_API_KEY:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     sandbox-exec \
@@ -196,7 +241,7 @@ _run_linux() {
     "SHELL=${SHELL:-/bin/bash}" \
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
-    "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}" \
+    "GEMINI_API_KEY=${GEMINI_API_KEY:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     bwrap \
@@ -303,7 +348,7 @@ pi-unsafe() {
 
 _SETUP_BASE = (
     "\n".join(f"install_npm_global {pkg}" for pkg in _PI_PACKAGES)
-    + """
+    + r"""
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"
 ensure_dir "$HOME/.local/bin"
@@ -311,8 +356,34 @@ install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.js
 install_config "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json"
 install_config "$DIR/config/pi/agent/web-search.json" "$HOME/.pi/agent/web-search.json"
 install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+install_config "$DIR/config/pi/agent/plannotator.json" "$HOME/.pi/agent/plannotator.json"
+install_config "$DIR/config/pi/agent/extensions/supacode/index.ts" "$HOME/.pi/agent/extensions/supacode/index.ts"
+install_config "$DIR/config/pi/agent/skills/supacode-cli/SKILL.md" "$HOME/.pi/agent/skills/supacode-cli/SKILL.md"
 install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
 install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
+
+_install_pi_angelini() {
+  local src="$DIR/config/pi-angelini" dst="$HOME/repos/pi-angelini"
+  if [ "$DOTGEN_MODE" = diff ]; then
+    if [ ! -d "$dst" ]; then
+      printf '+ COPY   %s\n' "$dst"
+    elif ! diff -qr -x .git -x node_modules -x .pytest_cache "$src" "$dst" >/dev/null 2>&1; then
+      printf '~ SYNC   %s\n' "$dst"
+    fi
+    return 0
+  fi
+
+  ensure_dir "$HOME/repos"
+  if [ -d "$dst/.git" ]; then
+    cp -R "$src"/. "$dst"/
+    return 0
+  fi
+
+  rm -rf "$dst"
+  ensure_dir "$dst"
+  cp -R "$src"/. "$dst"/
+}
+_install_pi_angelini
 """
 )
 
@@ -341,8 +412,12 @@ class PiAgent:
                 ConfigFile(dest="pi/agent/models.json", content=_MODELS_JSON, mode=0o600),
                 ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
                 ConfigFile(dest="pi/agent/AGENTS.md", content=_AGENTS_MD),
+                ConfigFile(dest="pi/agent/plannotator.json", content=_PLANNOTATOR_JSON),
+                ConfigFile(dest="pi/agent/extensions/supacode/index.ts", content=_SUPACODE_EXTENSION_TS),
+                ConfigFile(dest="pi/agent/skills/supacode-cli/SKILL.md", content=_SUPACODE_SKILL_MD),
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
-            ),
-            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"}),
+            )
+            + _pi_angelini_configs(),
+            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GEMINI_API_KEY"}),
         )

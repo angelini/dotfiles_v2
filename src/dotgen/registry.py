@@ -20,6 +20,7 @@ from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
+from dotgen.components.supacode import Supacode
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
@@ -47,7 +48,7 @@ _SHARED: tuple[Component, ...] = (
     Fonts(),
 )
 
-_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed())
+_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), Supacode())
 
 _DOCKER_SKIP = {
     "fonts",

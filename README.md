@@ -36,7 +36,15 @@ The tarball is safe to publish — PII (git identity, signing key, account IDs, 
 
 Before `setup.sh deploy`, populate that file using `dist/<env>/config/dotgen/secrets.env.template` as a checklist (it lists every key the bundle needs). Single-line `KEY="value"` per line. `setup.sh deploy` aborts if the file is missing.
 
-Authoritative copy lives in your password manager; copy onto each new box once.
+Authoritative copy lives in your password manager; copy onto each new box once. Google model access uses `GEMINI_API_KEY`.
+
+## Pi system
+
+The Pi component installs the Pi CLI/packages, writes managed config under `~/.pi/agent`, and installs the sandbox wrapper. It also bundles a sanitized copy of the sibling `pi-angelini` repository into the artifact and syncs it to `~/repos/pi-angelini` during deploy. The bundle excludes `.git`, `node_modules`, lockfiles, caches, tests, and plan artifacts; Pi then loads it as the local package source `~/repos/pi-angelini`.
+
+Managed Pi config includes Plannotator, the Supacode Pi extension, and the `supacode-cli` skill. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
+
+On macOS, setup installs the Supacode app via the Homebrew cask.
 
 ## Layout
 
@@ -46,6 +54,7 @@ Authoritative copy lives in your password manager; copy onto each new box once.
   - `render.py` — fragment merge + file emit
   - `bash.py` — quoting/section helpers
   - `components/<name>.py` — each `@dataclass(frozen=True)` implementing `Component`
+  - `resources/` — static files copied into generated bundles
 - `tests/golden/<env>/` — pinned bundle snapshots; refresh with `UPDATE_GOLDEN=1 just test`
 
 ## Add a new environment
