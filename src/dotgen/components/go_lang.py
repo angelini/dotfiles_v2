@@ -10,7 +10,7 @@ _DEPS_BY_OS: dict[OS, tuple[str, ...]] = {
 }
 
 _INSTALL_GO = """\
-GO_VERSION="1.24.0"
+GO_VERSION="1.25.5"
 GO_DIR="$HOME/.local/share/go"
 if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
   log "installing go $GO_VERSION..."

@@ -56,7 +56,6 @@ _DOCKER_SKIP = {
     "aws",
     "gcloud",
     "rust",
-    "node_fnm",
     "go_lang",
     "python_tools",
     "claude_code",

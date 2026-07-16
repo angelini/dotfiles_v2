@@ -16,7 +16,7 @@ package-all:
     for e in $(uv run python -m dotgen list-envs); do just package "$e"; done
 
 install env:
-    bash dist/{{env}}/setup.sh
+    bash dist/{{env}}/setup.sh deploy
 
 list:
     uv run python -m dotgen list-envs

@@ -1,6 +1,6 @@
 import re
 import subprocess
-import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -15,7 +15,7 @@ def shim_text(request: pytest.FixtureRequest) -> str:
     return OSShim(request.param).render()
 
 
-def test_shim_is_bash_clean(tmp_path, shim_text: str) -> None:
+def test_shim_is_bash_clean(tmp_path: Path, shim_text: str) -> None:
     f = tmp_path / "shim.sh"
     f.write_text(shim_text)
     subprocess.run(["bash", "-n", str(f)], check=True)
@@ -82,18 +82,18 @@ def test_mode_aware_helpers_branch_on_diff(shim_text: str) -> None:
         assert not any(t in body for t in _SIDE_EFFECT_TOKENS), f"{fn} has side effects without a diff-mode branch:\n{body}"
 
 
-def _run_shim_fn(tmp_path, shim_text: str, mode: str, call: str) -> str:
+def _run_shim_fn(tmp_path: Path, shim_text: str, mode: str, call: str) -> str:
     script = tmp_path / "run.sh"
     script.write_text(f"{shim_text}\nDOTGEN_MODE={mode}\n{call}\n")
     return subprocess.check_output(["bash", str(script)]).decode()
 
 
-def test_component_begin_prints_in_diff_mode(tmp_path, shim_text: str) -> None:
+def test_component_begin_prints_in_diff_mode(tmp_path: Path, shim_text: str) -> None:
     out = _run_shim_fn(tmp_path, shim_text, "diff", "component_begin aws")
     assert out == "--- aws ---\n"
 
 
-def test_component_begin_silent_in_deploy_mode(tmp_path, shim_text: str) -> None:
+def test_component_begin_silent_in_deploy_mode(tmp_path: Path, shim_text: str) -> None:
     out = _run_shim_fn(tmp_path, shim_text, "deploy", "component_begin aws")
     # In deploy mode it might print a progress line, which is fine
     assert "---" not in out
@@ -103,12 +103,12 @@ def _macos_shim() -> str:
     return OSShim(OS.MACOS).render()
 
 
-def _write_secrets(tmp_path, body: str) -> None:
+def _write_secrets(tmp_path: Path, body: str) -> None:
     (tmp_path / "dotgen").mkdir()
     (tmp_path / "dotgen" / "secrets.env").write_text(body)
 
 
-def _run_template(tmp_path, mode: str, src: str, vars_list: str, *, secrets: str) -> subprocess.CompletedProcess[str]:
+def _run_template(tmp_path: Path, mode: str, src: str, vars_list: str, *, secrets: str) -> subprocess.CompletedProcess[str]:
     _write_secrets(tmp_path, secrets)
     src_path = tmp_path / "src"
     src_path.write_text(src)
@@ -118,7 +118,7 @@ def _run_template(tmp_path, mode: str, src: str, vars_list: str, *, secrets: str
     return subprocess.run(["bash", str(script)], capture_output=True, text=True)
 
 
-def test_install_config_template_renders(tmp_path) -> None:
+def test_install_config_template_renders(tmp_path: Path) -> None:
     res = _run_template(
         tmp_path,
         mode="deploy",
@@ -130,7 +130,7 @@ def test_install_config_template_renders(tmp_path) -> None:
     assert (tmp_path / "dst").read_text() == "name=Alice\nemail=a@example.com\n"
 
 
-def test_install_config_template_missing_secrets(tmp_path) -> None:
+def test_install_config_template_missing_secrets(tmp_path: Path) -> None:
     res = _run_template(
         tmp_path,
         mode="deploy",
@@ -143,7 +143,7 @@ def test_install_config_template_missing_secrets(tmp_path) -> None:
     assert not (tmp_path / "dst").exists()
 
 
-def test_install_config_template_whitelist_preserves_unrelated(tmp_path) -> None:
+def test_install_config_template_whitelist_preserves_unrelated(tmp_path: Path) -> None:
     res = _run_template(
         tmp_path,
         mode="deploy",
@@ -157,7 +157,7 @@ def test_install_config_template_whitelist_preserves_unrelated(tmp_path) -> None
     assert "$PATH" in out
 
 
-def test_install_config_template_diff_mode_does_not_write(tmp_path) -> None:
+def test_install_config_template_diff_mode_does_not_write(tmp_path: Path) -> None:
     res = _run_template(
         tmp_path,
         mode="diff",
@@ -170,7 +170,7 @@ def test_install_config_template_diff_mode_does_not_write(tmp_path) -> None:
     assert not (tmp_path / "dst").exists()
 
 
-def test_install_config_template_missing_secrets_file(tmp_path) -> None:
+def test_install_config_template_missing_secrets_file(tmp_path: Path) -> None:
     src_path = tmp_path / "src"
     src_path.write_text("name=${GIT_USER_NAME}\n")
     dst_path = tmp_path / "dst"
@@ -182,7 +182,7 @@ def test_install_config_template_missing_secrets_file(tmp_path) -> None:
     assert not dst_path.exists()
 
 
-def test_load_secrets_idempotent(tmp_path) -> None:
+def test_load_secrets_idempotent(tmp_path: Path) -> None:
     _write_secrets(tmp_path, 'COUNTER="$((${COUNTER:-0}+1))"\n')
     script = tmp_path / "run.sh"
     script.write_text(f'{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE=deploy\nload_secrets\nload_secrets\nprintf "%s" "$COUNTER"\n')
@@ -191,25 +191,32 @@ def test_load_secrets_idempotent(tmp_path) -> None:
     assert res.stdout == "1"
 
 
-def test_debian_shim_handles_missing_sudo(tmp_path) -> None:
+def test_debian_shim_uses_sudo_for_package_install(tmp_path: Path) -> None:
     shim = OSShim(OS.DEBIAN).render()
     script = tmp_path / "run.sh"
-
-    # Mock pkg_installed to return false, and bin_exists to return false for sudo
     script.write_text(
-        textwrap.dedent(f"""\
-        {shim}
-        DOTGEN_MODE=deploy
-        pkg_installed() {{ return 1; }}
-        bin_exists() {{ if [ "$1" = "sudo" ]; then return 1; else command -v "$1" >/dev/null; fi; }}
-        # Mock apt-get to just echo what it would do
-        apt-get() {{ echo "apt-get $*"; }}
-
-        install_package mypkg
-    """)
+        f"""{shim}
+DOTGEN_MODE=deploy
+pkg_installed() {{ return 1; }}
+sudo() {{ printf 'sudo %s\\n' "$*"; }}
+install_package mypkg
+"""
     )
 
     res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
     assert res.returncode == 0
-    assert "apt-get install -y mypkg" in res.stdout
-    assert "sudo" not in res.stdout
+    assert "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mypkg" in res.stdout
+
+
+def test_debian_privileged_helpers_require_sudo() -> None:
+    shim = OSShim(OS.DEBIAN).render()
+    assert "sudo install -d -m 0755 /etc/apt/keyrings" in _function_body(shim, "add_repo")
+    assert "sudo DEBIAN_FRONTEND=noninteractive apt-get update -y" in _function_body(shim, "update_pkg_index")
+    assert 'sudo systemctl enable --now "$1"' in _function_body(shim, "service_enable")
+
+
+def test_npm_install_activates_fnm_in_its_component_subshell() -> None:
+    body = _function_body(OSShim(OS.DEBIAN).render(), "install_npm_global")
+    assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in body
+    assert 'eval "$("$fnm_bin" env --shell bash)"' in body
+    assert 'error "npm unavailable; node_fnm must run before npm installs"' in body

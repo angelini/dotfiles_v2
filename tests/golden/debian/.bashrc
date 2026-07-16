@@ -12,7 +12,7 @@ ulimit -n 65536
 set_win_title() {
   printf '\033]0;%s@%s:%s\007' "${USER:-?}" "${HOSTNAME%%.*}" "${PWD/#$HOME/~}"
 }
-PROMPT_COMMAND="set_win_title;${PROMPT_COMMAND:-}"
+PROMPT_COMMAND="history -a;set_win_title;${PROMPT_COMMAND:-}"
 
 epoch() {
   python3 - "$1" <<'PYEOF'
@@ -61,7 +61,7 @@ fi
 # --- node_fnm ---
 export PATH="$HOME/.local/share/fnm:$PATH"
 if bin_exists fnm; then
-  eval "$(fnm env --use-on-cd)"
+  eval "$(fnm env --use-on-cd --shell bash)"
 fi
 
 # --- postgres ---

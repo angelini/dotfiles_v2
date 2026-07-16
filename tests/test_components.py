@@ -77,6 +77,11 @@ def test_bash_base_macos_changes_shell_with_sudo() -> None:
     assert 'sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"' in setup
 
 
+def test_bash_base_flushes_history_and_updates_title() -> None:
+    bashrc = BashBase().render(ENVIRONMENTS["macos"]).bashrc
+    assert 'PROMPT_COMMAND="history -a;set_win_title;' in bashrc
+
+
 def test_core_utils_per_os_fd_token() -> None:
     debian = CoreUtils().render(ENVIRONMENTS["debian"]).setup
     macos = CoreUtils().render(ENVIRONMENTS["macos"]).setup
@@ -111,6 +116,12 @@ def test_git_setup_signs_with_ssh_key() -> None:
     assert "gpgsign = true" in cfg
 
 
+def test_git_setup_ignores_local_agent_state() -> None:
+    cfg = next(c for c in GitSetup().render(ENVIRONMENTS["macos"]).configs if c.dest == "git/gitignore_global").content
+    for pattern in (".pi/APPEND_SYSTEM.md", ".pi/settings.json", ".pi-lens/", ".pi-subagents/", "**/.claude/settings.local.json"):
+        assert pattern in cfg
+
+
 def test_fonts_per_os_packages() -> None:
     macos = Fonts().render(ENVIRONMENTS["macos"]).setup
     debian = Fonts().render(ENVIRONMENTS["debian"]).setup
@@ -129,7 +140,12 @@ def test_git_signing_uploads_via_gh() -> None:
 
 def test_helix_emits_config_and_editor_env(env: Environment) -> None:
     frag = Helix().render(env)
-    assert any(c.dest == "helix/config.toml" for c in frag.configs)
+    cfg = next(c for c in frag.configs if c.dest == "helix/config.toml").content
+    assert 'theme = "github_light"' in cfg
+    assert 'normal = "block"' in cfg
+    assert 'select = "underline"' in cfg
+    assert "[editor.file-picker]" in cfg
+    assert "hidden = false" in cfg
     assert "EDITOR=hx" in frag.bashrc
 
 
@@ -172,7 +188,8 @@ def test_claude_code_settings() -> None:
 def test_claude_code_emits_global_claude_md() -> None:
     frag = ClaudeCode().render(ENVIRONMENTS["macos"])
     cfg = next(c for c in frag.configs if c.dest == "claude/CLAUDE.md")
-    assert "Rules for generating responses" in cfg.content
+    assert "Always keep output concise" in cfg.content
+    assert "Default to zero comments" in cfg.content
     assert "Serena" in cfg.content
 
 
@@ -209,6 +226,7 @@ def test_python_tools_per_os_build_deps() -> None:
 def test_go_lang_only_macos() -> None:
     assert GoLang().applies_to(ENVIRONMENTS["debian"])
     assert GoLang().applies_to(ENVIRONMENTS["macos"])
+    assert 'GO_VERSION="1.25.5"' in GoLang().render(ENVIRONMENTS["macos"]).setup
 
 
 def test_aws_emits_config_with_secure_mode() -> None:
@@ -242,13 +260,24 @@ def test_environment_component_distribution() -> None:
     assert shared_names.issubset(debian_names & macos_names)
     assert {"ghostty", "zed", "supacode"}.isdisjoint(debian_names)
     assert {"ghostty", "zed", "supacode"}.issubset(macos_names)
+    assert "node_fnm" in {c.name for c in ENVIRONMENTS["debian-docker"].components}
+
+
+def test_node_precedes_pi_in_every_environment() -> None:
+    for env in ENVIRONMENTS.values():
+        names = [component.name for component in env.components]
+        if "pi_agent" in names:
+            assert names.index("node_fnm") < names.index("pi_agent")
 
 
 def test_ghostty_macos_only_and_emits_config() -> None:
     assert Ghostty().applies_to(ENVIRONMENTS["macos"])
     assert not Ghostty().applies_to(ENVIRONMENTS["debian"])
     frag = Ghostty().render(ENVIRONMENTS["macos"])
-    assert any(c.dest == "ghostty/config" for c in frag.configs)
+    cfg = next(c for c in frag.configs if c.dest == "ghostty/config").content
+    assert "theme = Tomorrow" in cfg
+    assert "shell-integration-features = ssh-env,ssh-terminfo" in cfg
+    assert "scrollback-limit = 100_000_000" in cfg
     assert "install_cask ghostty" in frag.setup
     assert "Library/Application Support/com.mitchellh.ghostty" in frag.setup
 
@@ -273,6 +302,10 @@ def test_zed_macos_only_and_emits_configs() -> None:
     frag = Zed().render(ENVIRONMENTS["macos"])
     dests = sorted(c.dest for c in frag.configs)
     assert dests == ["zed/keymap.json", "zed/settings.json"]
+    settings = next(c for c in frag.configs if c.dest == "zed/settings.json").content
+    assert '"cli_default_open_behavior": "new_window"' in settings
+    assert '"diff_view_style": "unified"' in settings
+    assert '"**/deploy/helm/templates/**/*.yaml"' in settings
     macos = Zed().render(ENVIRONMENTS["macos"]).setup
     assert "install_cask zed" in macos
 
@@ -287,7 +320,7 @@ def test_install_script_used_for_curl_installers() -> None:
     expected = {
         "starship": "install_script starship https://starship.rs/install.sh -y",
         "rust": "install_script cargo https://sh.rustup.rs -y --default-toolchain stable",
-        "node_fnm": "install_script fnm https://fnm.vercel.app/install --skip-shell",
+        "node_fnm": 'install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"',
         "claude_code": "install_script claude https://claude.ai/install.sh",
     }
     renders = {
@@ -300,6 +333,16 @@ def test_install_script_used_for_curl_installers() -> None:
         body = renders[name]
         assert expected_line in body, f"{name} missing install_script call"
         assert "curl " not in body, f"{name} still has raw curl invocation"
+
+
+def test_node_fnm_activates_latest_lts_during_deploy() -> None:
+    frag = NodeFnm().render(ENVIRONMENTS["debian"])
+    assert 'if [ "$DOTGEN_MODE" = deploy ]; then' in frag.setup
+    assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in frag.setup
+    assert "exit 1" in frag.setup
+    assert 'eval "$("$fnm_bin" env --shell bash)"' in frag.setup
+    assert '"$fnm_bin" install --lts --use' in frag.setup
+    assert 'eval "$(fnm env --use-on-cd --shell bash)"' in frag.bashrc
 
 
 def test_dotfiles_deploy_emits_bashrc_and_alias_install() -> None:
@@ -331,19 +374,28 @@ def test_pi_agent_setup() -> None:
     assert "install_npm_global pi-lens" in frag.setup
     assert "install_npm_global @plannotator/pi-extension" in frag.setup
     assert "install_npm_global @dreki-gg/pi-context7" in frag.setup
+    assert "install_npm_global @juicesharp/rpiv-btw" in frag.setup
+    assert "install_npm_global @vanillagreen/pi-web-tools" in frag.setup
+    assert "install_npm_global pi-web-access" not in frag.setup
     assert 'install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GEMINI_API_KEY" in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
     assert "CONTEXT7_API_KEY" in frag.secrets
     settings = next(cf for cf in frag.configs if cf.dest == "pi/agent/settings.json")
+    assert '"defaultModel": "gpt-5.6-sol"' in settings.content
     assert '"defaultThinkingLevel": "high"' in settings.content
+    assert "openai-codex/gpt-5.6-luna" in settings.content
+    assert "openai-codex/gpt-5.6-terra" in settings.content
     assert "lastChangelogVersion" not in settings.content
     assert "npm:@plannotator/pi-extension" in settings.content
     assert "npm:@dreki-gg/pi-context7" in settings.content
+    assert "npm:@juicesharp/rpiv-btw" in settings.content
+    assert "npm:@vanillagreen/pi-web-tools" in settings.content
+    assert "npm:pi-web-access" not in settings.content
     assert '"~/repos/pi-angelini"' in settings.content
     assert "install_npm_global ~/repos/pi-angelini" not in frag.setup
-    assert '_install_pi_angelini' in frag.setup
+    assert "_install_pi_angelini" in frag.setup
     dests = {cf.dest for cf in frag.configs}
     assert {
         "pi/agent/settings.json",
@@ -353,16 +405,28 @@ def test_pi_agent_setup() -> None:
         "pi/agent/plannotator.json",
         "pi/agent/extensions/supacode/index.ts",
         "pi/agent/skills/supacode-cli/SKILL.md",
+        "pi/agent/agents/claude-pipeline/architect.md",
+        "pi/agent/agents/claude-pipeline/editor.md",
+        "pi/agent/agents/claude-pipeline/planner.md",
+        "pi/agent/agents/claude-pipeline/reviewer.md",
+        "pi/agent/agents/claude-pipeline/scout.md",
+        "pi/agent/chains/pipeline.chain.md",
+        "pi/agent/prompts/pipeline.md",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
         "pi-angelini/package.json",
         "pi-angelini/packages/editor-file-links/index.ts",
     }.issubset(dests)
     assert "pi-angelini/node_modules/package.json" not in dests
+    assert "pi-angelini/packages/editor-file-links/.pi-lens/cache/review-graph.json" not in dests
     assert "pi-angelini/package-lock.json" not in dests
     agents_config = next(cf for cf in frag.configs if cf.dest == "pi/agent/AGENTS.md")
-    assert "Present reasoning summaries in a concise, matter-of-fact tone" in agents_config.content
+    assert "Do not use first-person phrasing in reasoning summaries or final responses." in agents_config.content
+    assert "/simplify --staged" not in agents_config.content
     assert "Use subagents for reviewing, researching, planning and scouting code bases." in agents_config.content
+    supacode = next(cf for cf in frag.configs if cf.dest == "pi/agent/extensions/supacode/index.ts")
+    assert "OSC 3008" in supacode.content
+    assert 'openSync("/dev/tty", "w")' in supacode.content
 
 
 def test_pi_agent_sandbox_aliases() -> None:

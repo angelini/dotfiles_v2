@@ -126,6 +126,11 @@ fi
     handle.assert_cmd(cmd, login=True)
 
 
+def test_node_and_npm_installed(vm: tuple[str, VmHandle]) -> None:
+    _, handle = vm
+    handle.assert_cmd("command -v node && command -v npm", login=True)
+
+
 def test_full_addons(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":

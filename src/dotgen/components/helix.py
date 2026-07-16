@@ -8,10 +8,14 @@ from dotgen.types import OS
 
 _HELIX_CONFIG = tomli_w.dumps(
     {
-        "theme": "default",
+        "theme": "github_light",
         "editor": {
-            "line-number": "relative",
-            "cursor-shape": {"insert": "bar"},
+            "cursor-shape": {
+                "insert": "bar",
+                "normal": "block",
+                "select": "underline",
+            },
+            "file-picker": {"hidden": False},
         },
     }
 )

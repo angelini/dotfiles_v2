@@ -5,11 +5,14 @@ from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
 _CONFIG = """\
-font-family = UbuntuMonoNerdFont
-font-size = 14
-theme = default
-window-decoration = true
-audio-bell = false
+theme = Tomorrow
+shell-integration = bash
+working-directory = home
+window-inherit-working-directory = false
+tab-inherit-working-directory = false
+scrollback-limit = 100_000_000
+bell-features = no-audio, no-system, no-attention, no-title
+shell-integration-features = ssh-env,ssh-terminfo
 """
 
 _GHOSTTY_DST = '"$HOME/Library/Application Support/com.mitchellh.ghostty/config"'

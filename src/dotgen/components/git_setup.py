@@ -33,11 +33,19 @@ _GITCONFIG = """\
 
 _GITIGNORE_GLOBAL = """\
 .DS_Store
+.DS_Store?
 __scratch__.*
+.#__scratch__.*
 CLAUDE.md
 .serena/
 .node-version
+.nvmrc
 node_modules/
+.pi/APPEND_SYSTEM.md
+.pi/settings.json
+.pi-lens/
+.pi-subagents/
+**/.claude/settings.local.json
 """
 
 _SETUP = """\

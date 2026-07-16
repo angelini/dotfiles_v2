@@ -17,6 +17,18 @@ esac
 export DOTGEN_MODE
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
+  if [ "$(id -u)" -eq 0 ]; then
+    error "deploy must run as a regular user, not root"
+    exit 2
+  fi
+  if ! bin_exists sudo; then
+    error "deploy requires sudo"
+    exit 2
+  fi
+  if ! sudo -v; then
+    error "unable to authenticate with sudo"
+    exit 2
+  fi
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
@@ -224,7 +236,16 @@ component_begin "node_fnm"
 if (
   set -e
   install_package unzip
-  install_script fnm https://fnm.vercel.app/install --skip-shell
+  install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"
+  if [ "$DOTGEN_MODE" = deploy ]; then
+    fnm_bin="$HOME/.local/share/fnm/fnm"
+    if [ ! -x "$fnm_bin" ]; then
+      error "fnm installer completed; fnm unavailable"
+      exit 1
+    fi
+    eval "$("$fnm_bin" env --shell bash)"
+    "$fnm_bin" install --lts --use
+  fi
 ); then
   component_end "node_fnm" 0
 else
@@ -239,13 +260,14 @@ if (
   install_npm_global pi-lens
   install_npm_global pi-mcp-adapter
   install_npm_global pi-subagents
-  install_npm_global pi-web-access
   install_npm_global pi-simplify
   install_npm_global @plannotator/pi-extension
   install_npm_global @dreki-gg/pi-context7
   install_npm_global @juicesharp/rpiv-ask-user-question
+  install_npm_global @juicesharp/rpiv-btw
   install_npm_global @juicesharp/rpiv-todo
   install_npm_global @samfp/pi-memory
+  install_npm_global @vanillagreen/pi-web-tools
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
@@ -256,6 +278,13 @@ if (
   install_config "$DIR/config/pi/agent/plannotator.json" "$HOME/.pi/agent/plannotator.json"
   install_config "$DIR/config/pi/agent/extensions/supacode/index.ts" "$HOME/.pi/agent/extensions/supacode/index.ts"
   install_config "$DIR/config/pi/agent/skills/supacode-cli/SKILL.md" "$HOME/.pi/agent/skills/supacode-cli/SKILL.md"
+  install_config "$DIR/config/pi/agent/agents/claude-pipeline/architect.md" "$HOME/.pi/agent/agents/claude-pipeline/architect.md"
+  install_config "$DIR/config/pi/agent/agents/claude-pipeline/editor.md" "$HOME/.pi/agent/agents/claude-pipeline/editor.md"
+  install_config "$DIR/config/pi/agent/agents/claude-pipeline/planner.md" "$HOME/.pi/agent/agents/claude-pipeline/planner.md"
+  install_config "$DIR/config/pi/agent/agents/claude-pipeline/reviewer.md" "$HOME/.pi/agent/agents/claude-pipeline/reviewer.md"
+  install_config "$DIR/config/pi/agent/agents/claude-pipeline/scout.md" "$HOME/.pi/agent/agents/claude-pipeline/scout.md"
+  install_config "$DIR/config/pi/agent/chains/pipeline.chain.md" "$HOME/.pi/agent/chains/pipeline.chain.md"
+  install_config "$DIR/config/pi/agent/prompts/pipeline.md" "$HOME/.pi/agent/prompts/pipeline.md"
   install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
@@ -303,7 +332,7 @@ component_begin "go_lang"
 if (
   set -e
   install_packages mercurial
-  GO_VERSION="1.24.0"
+  GO_VERSION="1.25.5"
   GO_DIR="$HOME/.local/share/go"
   if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
     log "installing go $GO_VERSION..."

@@ -234,12 +234,21 @@ ask() {
 }
 
 install_npm_global() {
-  local pkg="$1"
+  local pkg="$1" fnm_bin
   if [ "$DOTGEN_MODE" = diff ]; then
     printf '+ INSTALL npm %s\n' "$pkg"
     return 0
   fi
-  # npm available via node_fnm
+  if ! bin_exists npm; then
+    fnm_bin="$HOME/.local/share/fnm/fnm"
+    if [ -x "$fnm_bin" ]; then
+      eval "$("$fnm_bin" env --shell bash)"
+    fi
+  fi
+  if ! bin_exists npm; then
+    error "npm unavailable; node_fnm must run before npm installs"
+    return 1
+  fi
   npm install -g "$pkg"
 }
 

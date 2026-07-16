@@ -7,6 +7,8 @@ from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
 _SETTINGS: dict[str, Any] = {
+    "cli_default_open_behavior": "new_window",
+    "diff_view_style": "unified",
     "edit_predictions": {"provider": "none"},
     "show_edit_predictions": False,
     "disable_ai": True,
@@ -83,7 +85,24 @@ _SETTINGS: dict[str, Any] = {
         "dark": "One Dark",
     },
     "file_types": {
-        "Helm": ["**/charts/**/*.yaml", "**/*.tpl"],
+        "Helm": [
+            "**/charts/*/templates/*.yaml",
+            "**/charts/*/templates/**/*.yaml",
+            "**/charts/*/templates/*.yml",
+            "**/charts/*/templates/**/*.yml",
+            "**/charts/*/templates/*.tpl",
+            "**/charts/*/templates/**/*.tpl",
+            "**/charts/*/values*.yaml",
+            "**/charts/*/values*.yml",
+            "**/deploy/helm/templates/*.yaml",
+            "**/deploy/helm/templates/**/*.yaml",
+            "**/deploy/helm/templates/*.yml",
+            "**/deploy/helm/templates/**/*.yml",
+            "**/deploy/helm/templates/*.tpl",
+            "**/deploy/helm/templates/**/*.tpl",
+            "**/deploy/helm/values*.yaml",
+            "**/deploy/helm/values*.yml",
+        ],
         "Shell Script": ["**/terraform/tf"],
     },
 }

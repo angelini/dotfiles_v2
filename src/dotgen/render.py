@@ -27,6 +27,18 @@ esac
 export DOTGEN_MODE
 source "$DIR/os_shim.sh"
 if [ "$DOTGEN_MODE" = deploy ]; then
+  if [ "$(id -u)" -eq 0 ]; then
+    error "deploy must run as a regular user, not root"
+    exit 2
+  fi
+  if ! bin_exists sudo; then
+    error "deploy requires sudo"
+    exit 2
+  fi
+  if ! sudo -v; then
+    error "unable to authenticate with sudo"
+    exit 2
+  fi
   bin_exists envsubst || install_package gettext
   if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
     error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"

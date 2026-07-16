@@ -11,23 +11,25 @@ _SETTINGS_JSON = (
     json.dumps(
         {
             "defaultProvider": "openai-codex",
-            "defaultModel": "gpt-5.5",
+            "defaultModel": "gpt-5.6-sol",
             "defaultThinkingLevel": "high",
             "enabledModels": [
-                "google/gemini-3-flash-preview",
-                "openai-codex/gpt-5.5",
+                "openai-codex/gpt-5.6-sol",
+                "openai-codex/gpt-5.6-luna",
+                "openai-codex/gpt-5.6-terra",
             ],
             "packages": [
                 "npm:pi-lens",
                 "npm:pi-mcp-adapter",
                 "npm:pi-subagents",
-                "npm:pi-web-access",
                 "npm:pi-simplify",
                 "npm:@plannotator/pi-extension",
                 "npm:@dreki-gg/pi-context7",
                 "npm:@juicesharp/rpiv-ask-user-question",
+                "npm:@juicesharp/rpiv-btw",
                 "npm:@juicesharp/rpiv-todo",
                 "npm:@samfp/pi-memory",
+                "npm:@vanillagreen/pi-web-tools",
                 "~/repos/pi-angelini",
             ],
             "quietStartup": False,
@@ -77,9 +79,25 @@ def _resource_text(relative_path: str) -> str:
 _PLANNOTATOR_JSON = _resource_text("plannotator.json")
 _SUPACODE_EXTENSION_TS = _resource_text("extensions/supacode/index.ts.txt")
 _SUPACODE_SKILL_MD = _resource_text("skills/supacode-cli/SKILL.md")
+_PIPELINE_ARCHITECT_MD = _resource_text("agents/claude-pipeline/architect.md")
+_PIPELINE_EDITOR_MD = _resource_text("agents/claude-pipeline/editor.md")
+_PIPELINE_PLANNER_MD = _resource_text("agents/claude-pipeline/planner.md")
+_PIPELINE_REVIEWER_MD = _resource_text("agents/claude-pipeline/reviewer.md")
+_PIPELINE_SCOUT_MD = _resource_text("agents/claude-pipeline/scout.md")
+_PIPELINE_CHAIN_MD = _resource_text("chains/pipeline.chain.md")
+_PIPELINE_PROMPT_MD = _resource_text("prompts/pipeline.md")
 
 _PI_ANGELINI_EXCLUDED_DIRS = frozenset(
-    {".git", "node_modules", ".pytest_cache", ".ruff_cache", ".serena", "dist"}
+    {
+        ".git",
+        ".pi-lens",
+        ".pi-subagents",
+        "node_modules",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".serena",
+        "dist",
+    }
 )
 _PI_ANGELINI_EXCLUDED_NAMES = frozenset({"package-lock.json", "pi-system-audit-plan.md"})
 
@@ -105,25 +123,26 @@ def _pi_angelini_configs() -> tuple[ConfigFile, ...]:
             continue
         if path.name in _PI_ANGELINI_EXCLUDED_NAMES or path.name.endswith(".test.ts"):
             continue
-        configs.append(
-            ConfigFile(dest=f"pi-angelini/{rel.as_posix()}", content=path.read_text())
-        )
+        configs.append(ConfigFile(dest=f"pi-angelini/{rel.as_posix()}", content=path.read_text()))
     return tuple(configs)
+
 
 _AGENTS_MD = """\
 # Agent instructions for this workspace
 
 Use these instructions for every pi session from this workspace or any subdirectory.
 
-## Core behavior
+## **IMPORTANT** Core behavior
 
 - Keep responses concise.
 - Prefer minimal, targeted changes over broad rewrites.
-- Present reasoning summaries in a concise, matter-of-fact tone. Avoid first-person phrasing, speculation, enthusiasm, or motivational language. Use short declarative sentences.
 - When suggesting code changes, show a diff or minimal snippet.
 - Do not record implementation-session context in code comments.
 - Do not guess APIs. If an API matters, verify the installed version first, then check docs for that version.
 - At task start, if `.pi/APPEND_SYSTEM.md` exists in the repo, read it before running commands.
+- Do not use first-person phrasing in reasoning summaries or final responses. Avoid phrases like "I think", "I’ll",
+  "I found", "I recommend", "we should", and "it seems". Use concise, declarative statements instead.
+  Prefer "Changed X", "Run Y", "Likely cause: Z", "Next step: A".
 
 ## Tooling
 
@@ -146,10 +165,6 @@ Use these instructions for every pi session from this workspace or any subdirect
 
 - In Nx monorepos, prefer `npx nx <target> <project>` over direct `npm run`.
 - Use the repository’s local instructions before proposing commands.
-
-## Final checks
-
-- After non-trivial diffs, run `/simplify --staged` and apply suggestions you agree with.
 """
 
 _PI_PACKAGES = (
@@ -157,13 +172,14 @@ _PI_PACKAGES = (
     "pi-lens",
     "pi-mcp-adapter",
     "pi-subagents",
-    "pi-web-access",
     "pi-simplify",
     "@plannotator/pi-extension",
     "@dreki-gg/pi-context7",
     "@juicesharp/rpiv-ask-user-question",
+    "@juicesharp/rpiv-btw",
     "@juicesharp/rpiv-todo",
     "@samfp/pi-memory",
+    "@vanillagreen/pi-web-tools",
 )
 
 _PI_SANDBOX_SH = r"""#!/usr/bin/env bash
@@ -359,6 +375,13 @@ install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 install_config "$DIR/config/pi/agent/plannotator.json" "$HOME/.pi/agent/plannotator.json"
 install_config "$DIR/config/pi/agent/extensions/supacode/index.ts" "$HOME/.pi/agent/extensions/supacode/index.ts"
 install_config "$DIR/config/pi/agent/skills/supacode-cli/SKILL.md" "$HOME/.pi/agent/skills/supacode-cli/SKILL.md"
+install_config "$DIR/config/pi/agent/agents/claude-pipeline/architect.md" "$HOME/.pi/agent/agents/claude-pipeline/architect.md"
+install_config "$DIR/config/pi/agent/agents/claude-pipeline/editor.md" "$HOME/.pi/agent/agents/claude-pipeline/editor.md"
+install_config "$DIR/config/pi/agent/agents/claude-pipeline/planner.md" "$HOME/.pi/agent/agents/claude-pipeline/planner.md"
+install_config "$DIR/config/pi/agent/agents/claude-pipeline/reviewer.md" "$HOME/.pi/agent/agents/claude-pipeline/reviewer.md"
+install_config "$DIR/config/pi/agent/agents/claude-pipeline/scout.md" "$HOME/.pi/agent/agents/claude-pipeline/scout.md"
+install_config "$DIR/config/pi/agent/chains/pipeline.chain.md" "$HOME/.pi/agent/chains/pipeline.chain.md"
+install_config "$DIR/config/pi/agent/prompts/pipeline.md" "$HOME/.pi/agent/prompts/pipeline.md"
 install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
 install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
@@ -415,6 +438,13 @@ class PiAgent:
                 ConfigFile(dest="pi/agent/plannotator.json", content=_PLANNOTATOR_JSON),
                 ConfigFile(dest="pi/agent/extensions/supacode/index.ts", content=_SUPACODE_EXTENSION_TS),
                 ConfigFile(dest="pi/agent/skills/supacode-cli/SKILL.md", content=_SUPACODE_SKILL_MD),
+                ConfigFile(dest="pi/agent/agents/claude-pipeline/architect.md", content=_PIPELINE_ARCHITECT_MD),
+                ConfigFile(dest="pi/agent/agents/claude-pipeline/editor.md", content=_PIPELINE_EDITOR_MD),
+                ConfigFile(dest="pi/agent/agents/claude-pipeline/planner.md", content=_PIPELINE_PLANNER_MD),
+                ConfigFile(dest="pi/agent/agents/claude-pipeline/reviewer.md", content=_PIPELINE_REVIEWER_MD),
+                ConfigFile(dest="pi/agent/agents/claude-pipeline/scout.md", content=_PIPELINE_SCOUT_MD),
+                ConfigFile(dest="pi/agent/chains/pipeline.chain.md", content=_PIPELINE_CHAIN_MD),
+                ConfigFile(dest="pi/agent/prompts/pipeline.md", content=_PIPELINE_PROMPT_MD),
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
             )

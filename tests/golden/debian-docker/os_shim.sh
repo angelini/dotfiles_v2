@@ -15,11 +15,7 @@ install_package() {
   if pkg_installed "$1"; then
     return 0
   fi
-  if bin_exists sudo; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
-  else
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
-  fi
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
 }
 
 install_packages() {
@@ -40,18 +36,16 @@ add_repo() {
     [ -f "/etc/apt/sources.list.d/$id.list" ] || printf '+ ADD REPO %s (%s)\n' "$id" "$kind"
     return 0
   fi
-  local sudo_cmd=""
-  bin_exists sudo && sudo_cmd="sudo"
   case "$kind" in
     apt)
-      $sudo_cmd install -d -m 0755 /etc/apt/keyrings
+      sudo install -d -m 0755 /etc/apt/keyrings
       if [ -n "$key" ]; then
-        curl -fsSL "$key" | $sudo_cmd gpg --dearmor --yes -o "/etc/apt/keyrings/$id.gpg"
+        curl -fsSL "$key" | sudo gpg --dearmor --yes -o "/etc/apt/keyrings/$id.gpg"
       fi
       if [[ "$src" == http*://* ]]; then
-        curl -fsSL "$src" | $sudo_cmd tee "/etc/apt/sources.list.d/$id.list" >/dev/null
+        curl -fsSL "$src" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
       else
-        echo "$src" | sed "s|\[signed-by=[^]]*\]|\[signed-by=/etc/apt/keyrings/$id.gpg\]|" | $sudo_cmd tee "/etc/apt/sources.list.d/$id.list" >/dev/null
+        echo "$src" | sed "s|\[signed-by=[^]]*\]|\[signed-by=/etc/apt/keyrings/$id.gpg\]|" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
       fi
       ;;
     *)
@@ -63,11 +57,7 @@ add_repo() {
 
 update_pkg_index() {
   [ "$DOTGEN_MODE" = diff ] && return 0
-  if bin_exists sudo; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-  else
-    DEBIAN_FRONTEND=noninteractive apt-get update -y
-  fi
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
 }
 
 service_enable() {
@@ -75,11 +65,7 @@ service_enable() {
     systemctl is-enabled --quiet "$1" 2>/dev/null || printf '+ ENABLE service %s\n' "$1"
     return 0
   fi
-  if bin_exists sudo; then
-    sudo systemctl enable --now "$1"
-  else
-    systemctl enable --now "$1"
-  fi
+  sudo systemctl enable --now "$1"
 }
 
 detect_arch() {
@@ -250,12 +236,21 @@ ask() {
 }
 
 install_npm_global() {
-  local pkg="$1"
+  local pkg="$1" fnm_bin
   if [ "$DOTGEN_MODE" = diff ]; then
     printf '+ INSTALL npm %s\n' "$pkg"
     return 0
   fi
-  # npm available via node_fnm
+  if ! bin_exists npm; then
+    fnm_bin="$HOME/.local/share/fnm/fnm"
+    if [ -x "$fnm_bin" ]; then
+      eval "$("$fnm_bin" env --shell bash)"
+    fi
+  fi
+  if ! bin_exists npm; then
+    error "npm unavailable; node_fnm must run before npm installs"
+    return 1
+  fi
   npm install -g "$pkg"
 }
 

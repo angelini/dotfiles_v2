@@ -29,25 +29,42 @@ _SETTINGS_JSON = (
 _CLAUDE_MD = """\
 # CLAUDE.md
 
-Rules for generating responses:
-
-- Always keep output consice
-- If possible include code examples
+- Always keep output concise
+- When suggesting code changes, show the diff or a minimal snippet, not just a description
 - Include references and links to docs to support the code examples
-- Reference APIs based on local installed version, read docs online for those specific versions
+- Before citing an API, run npm ls <pkg> (or go list -m) to confirm the installed version, then fetch docs for that version
 - Do not guess what APIs exist, be clear if you cannot generate code with known APIs
-
-## Code search
-
-- For symbol-level work (definitions, callers, rename) prefer Serena's `find_symbol`, `find_referencing_symbols`, and `get_symbols_overview` over grep.
-- Use grep/ripgrep for raw string matches: configs, comments, log lines, literal values.
-- At the start of a coding task in a Serena-enabled repo, call `initial_instructions` once.
 
 ## Comments
 
-- Default to no comment. Names and types should carry the meaning.
-- Do not restate what the code does, and do not record implementation-session context ("this was added to address X", "fixes the bug from earlier"). That belongs in the commit or PR.
-- Write a comment only when it explains something a reader cannot recover from the code: a non-obvious invariant, a hidden constraint, a workaround for a specific external bug, or surprising behavior.
+- Default to zero comments. Code should explain itself through naming and structure.
+- Only add a comment to explain *why*, never *what*. If a comment restates what the code does, delete it.
+- A comment is justified only when it documents one of: a non-obvious workaround, a counterintuitive constraint,
+  a deliberate edge-case decision, or a link to an issue/spec. If it's none of these, don't write it.
+- Never narrate the change you just made or record implementation-session context.
+- Never add section-divider comments, restate a function/variable name, or describe obvious control flow.
+
+Bad (delete these):
+
+```ts
+// Loop over the users and update each one
+for (const user of users) { ... }
+
+// Set the flag to true
+isReady = true;
+```
+
+Good (keep):
+
+```ts
+// Stripe rounds half-up; we floor here to match the invoice total (BILL-1423)
+const cents = Math.floor(amount * 100);
+```
+
+## Code search
+
+- For symbol-level work (definitions, callers, rename) prefer Serena's `find_symbol`, `find_referencing_symbols`, and `get_symbols_overview` over grep
+- Use grep/ripgrep for raw string matches: configs, comments, log lines, literal values
 """
 
 _SERENA_HOOK = r"""#!/usr/bin/env bash

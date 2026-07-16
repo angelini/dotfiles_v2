@@ -18,7 +18,7 @@ to your own shell, not to anything you created.
 
 For new tabs, surface ID = tab ID.
 
-### Correct:
+### Correct
 
 ```sh
 TAB_ID=$(supacode tab new -i "npm start")
@@ -27,7 +27,7 @@ supacode surface close -t "$TAB_ID" -s "$SPLIT_ID"
 supacode tab close -t "$TAB_ID"
 ```
 
-### WRONG:
+### WRONG
 
 ```sh
 supacode tab new -i "npm start"           # BAD: not captured
@@ -39,7 +39,7 @@ supacode surface split -d v -i "test"     # BAD: missing -t/-s, targets your she
 - `supacode worktree [list [-f]|focus|run [-c]|stop [-c]|script list|archive|unarchive|delete|pin|unpin] [-w <id>]`
 - `supacode tab [list [-w] [-f]|focus|new|close] [-w <id>] [-t <id>] [-i <cmd>] [-n <uuid>]`
 - `supacode surface [list [-w] [-t] [-f]|focus|split|close] [-w <id>] [-t <id>] [-s <id>] [-i <cmd>] [-d h|v] [-n <uuid>]`
-- `supacode repo [list | open <path> | worktree-new [-r <id>] [--branch] [--base] [--fetch]]`
+- `supacode repo [list | open <path> | worktree-new [-r <id>] [--branch] [--base] [--fetch] [--name] [--location]]`
 - `supacode settings [<section>]`
 - `supacode socket`
 
