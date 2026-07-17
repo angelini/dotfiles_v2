@@ -131,6 +131,13 @@ def test_node_and_npm_installed(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd("command -v node && command -v npm", login=True)
 
 
+def test_pi_launches_through_sandbox(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name == "debian-docker":
+        pytest.skip("Docker does not allow the unprivileged user namespace required by bubblewrap")
+    handle.assert_cmd('cd "$HOME/repos" && pi --version', login=True)
+
+
 def test_full_addons(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":

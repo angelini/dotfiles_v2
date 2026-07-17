@@ -7,7 +7,7 @@ from dotgen.types import OS
 _KUBE_VERSION = "v1.35.4"
 _HELM_VERSION = "v3.20.2"
 _KUBECTX_VERSION = "v0.11.0"
-_KUBIE_VERSION = "v0.25.0"
+_KUBIE_VERSION = "v0.27.0"
 
 _LINUX_HELPERS = (
     r"""_kube_arch() {

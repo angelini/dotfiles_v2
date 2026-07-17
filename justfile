@@ -10,13 +10,18 @@ build-all:
     @just package-all
 
 package env:
-    tar -C dist -czf dist/{{env}}.tar.gz {{env}}
+    COPYFILE_DISABLE=1 tar --no-xattrs -C dist -czf dist/{{env}}.tar.gz {{env}}
 
 package-all:
     for e in $(uv run python -m dotgen list-envs); do just package "$e"; done
 
 install env:
     bash dist/{{env}}/setup.sh deploy
+
+deploy env target:
+    just build "{{env}}"
+    scp -- "dist/{{env}}.tar.gz" "{{target}}:"
+    ssh -t -- "{{target}}" 'set -e; rm -rf -- "{{env}}"; tar xzf "{{env}}.tar.gz"; bash "{{env}}/setup.sh" deploy; rm -f -- "{{env}}.tar.gz"'
 
 list:
     uv run python -m dotgen list-envs

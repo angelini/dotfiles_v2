@@ -248,7 +248,7 @@ _run_macos() {
 }
 
 _run_linux() {
-  local pi_bin="$1"
+  local pi_bin="$1" runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   shift
   command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
   exec env -i \
@@ -268,6 +268,9 @@ _run_linux() {
     --proc /proc \
     --dev-bind /dev /dev \
     --tmpfs /tmp \
+    --dir /run \
+    --dir /run/user \
+    --dir "$runtime_dir" \
     --dir "$HOME" \
     --dir "$HOME/.pi" \
     --dir "$HOME/.local" \
@@ -277,12 +280,14 @@ _run_linux() {
     --bind "$HOME/.pi/agent" "$HOME/.pi/agent" \
     --ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm" \
     --ro-bind-try "$HOME/.local/state/fnm_multishells" "$HOME/.local/state/fnm_multishells" \
+    --ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells" \
     --ro-bind /usr /usr \
     --ro-bind /bin /bin \
     --ro-bind-try /lib /lib \
     --ro-bind-try /lib64 /lib64 \
     --ro-bind /etc /etc \
     --setenv HOME "$HOME" \
+    --setenv XDG_RUNTIME_DIR "$runtime_dir" \
     --chdir "$PWD" \
     "$pi_bin" "$@"
 }

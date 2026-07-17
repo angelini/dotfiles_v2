@@ -69,3 +69,24 @@ def test_deploy_requires_sudo(tmp_path: Path, built_macos: Path) -> None:
 def test_just_install_passes_deploy() -> None:
     justfile = Path(__file__).parents[1] / "justfile"
     assert "bash dist/{{env}}/setup.sh deploy" in justfile.read_text()
+
+
+def test_just_package_excludes_macos_extended_attributes() -> None:
+    justfile = Path(__file__).parents[1] / "justfile"
+    assert "COPYFILE_DISABLE=1 tar --no-xattrs" in justfile.read_text()
+
+
+def test_just_deploy_builds_transfers_and_runs_with_tty() -> None:
+    justfile = (Path(__file__).parents[1] / "justfile").read_text()
+    assert "deploy env target:" in justfile
+    assert 'just build "{{env}}"' in justfile
+    assert 'scp -- "dist/{{env}}.tar.gz" "{{target}}:"' in justfile
+    assert 'ssh -t -- "{{target}}"' in justfile
+    assert 'tar xzf "{{env}}.tar.gz"' in justfile
+    assert 'bash "{{env}}/setup.sh" deploy' in justfile
+
+
+def test_just_deploy_removes_stale_bundle_and_archive() -> None:
+    justfile = (Path(__file__).parents[1] / "justfile").read_text()
+    assert 'rm -rf -- "{{env}}"' in justfile
+    assert 'rm -f -- "{{env}}.tar.gz"' in justfile

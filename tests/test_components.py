@@ -175,6 +175,8 @@ def test_kubectl_per_os_branching() -> None:
     assert "helm-v3.20.2-linux-" in debian
     assert "kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_" in debian
     assert "kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_" in debian
+    assert "kubie/releases/download/v0.27.0/kubie-linux-" in debian
+    assert "kubie generate-completion" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
 
 
 def test_claude_code_settings() -> None:
@@ -448,6 +450,9 @@ def test_pi_agent_sandbox_configs() -> None:
     assert script.mode == 0o755
     assert '--bind "$HOME/.pi/agent" "$HOME/.pi/agent"' in script.content
     assert '--ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm"' in script.content
+    assert 'runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' in script.content
+    assert '--ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells"' in script.content
+    assert '--setenv XDG_RUNTIME_DIR "$runtime_dir"' in script.content
     assert "--unshare-net" not in script.content
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content

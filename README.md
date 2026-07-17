@@ -62,6 +62,14 @@ uv run python -m dotgen send-secrets debian <user>@<host> --from-env
 
 Values used by `--from-env` must be exported. Only keys declared by components in the selected environment are sent. The command uses the caller's normal OpenSSH configuration and host-key verification, and atomically installs a mode-`0600` `~/.config/dotgen/secrets.env` under a mode-`0700` directory.
 
+Once secrets exist on the target, rebuild, transfer, extract, and deploy in one command:
+
+```bash
+just deploy debian <user>@<host>
+```
+
+The command replaces any previously extracted `debian/` bundle, allocates a remote TTY for `sudo -v`, and removes the transferred archive after a successful deployment.
+
 Real values never enter `dist/<env>/` or `dist/<env>.tar.gz`. To provision manually or from a password manager instead, extract the bundle and prepare the target file from its sanitized template:
 
 ```bash

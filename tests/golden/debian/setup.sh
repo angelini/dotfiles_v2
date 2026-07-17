@@ -174,7 +174,7 @@ if (
   _install_kubie_linux() {
     local arch
     arch="$(_kubie_arch)"
-    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.25.0/kubie-linux-${arch}"
+    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}"
   }
   _install_kubectl_linux
   _install_helm_linux

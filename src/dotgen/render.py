@@ -55,6 +55,11 @@ ALIAS_HEADER = "# alias.sh — sourced by ~/.bashrc\n"
 
 BASHRC_HEADER = """\
 # .bashrc
+case $- in
+  *i*) ;;
+  *) return ;;
+esac
+
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 bin_exists() { command -v "$1" >/dev/null 2>&1; }
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
