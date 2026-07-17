@@ -55,11 +55,6 @@ fi
 # --- python_tools ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
 
-# --- claude_code ---
-if bin_exists claude; then
-  source <(claude completion bash 2>/dev/null) 2>/dev/null || true
-fi
-
 # --- rust ---
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 

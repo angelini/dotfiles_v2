@@ -122,13 +122,6 @@ if [ "$DOTGEN_MODE" = deploy ]; then
 fi
 """
 
-_BASHRC = """\
-if bin_exists claude; then
-  source <(claude completion bash 2>/dev/null) 2>/dev/null || true
-fi
-"""
-
-
 @dataclass(frozen=True)
 class ClaudeCode:
     name: str = "claude_code"
@@ -139,7 +132,6 @@ class ClaudeCode:
     def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP,
-            bashrc=_BASHRC,
             configs=(
                 ConfigFile(dest="claude/settings.json", content=_SETTINGS_JSON),
                 ConfigFile(dest="claude/CLAUDE.md", content=_CLAUDE_MD),
