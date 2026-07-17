@@ -1,5 +1,5 @@
 default:
-    @just build-all
+    @just --list
 
 build env:
     uv run python -m dotgen build {{env}}

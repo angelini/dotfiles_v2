@@ -16,7 +16,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
-from dotgen.components.pi_agent import PiAgent
+from dotgen.components.pi_agent import SANDBOX_HOME_POLICY, PiAgent
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
@@ -448,8 +448,57 @@ def test_pi_agent_sandbox_configs() -> None:
     profile = next(cf for cf in frag.configs if cf.dest == "pi/sandbox/pi-macos.sb")
     models = next(cf for cf in frag.configs if cf.dest == "pi/agent/models.json")
     assert script.mode == 0o755
-    assert '--bind "$HOME/.pi/agent" "$HOME/.pi/agent"' in script.content
-    assert '--ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm"' in script.content
+    assert {
+        ".ssh",
+        ".gnupg",
+        ".aws",
+        ".azure",
+        ".config/dotgen",
+        ".config/gcloud",
+        ".kube",
+    } <= set(SANDBOX_HOME_POLICY.hidden_dirs)
+    assert {
+        ".docker/config.json",
+        ".config/gh/hosts.yml",
+        ".config/git/credentials",
+        ".config/helm/registry/config.json",
+        ".config/helm/repositories.yaml",
+        ".git-credentials",
+        ".netrc",
+        ".npmrc",
+        ".pypirc",
+        ".cargo/credentials",
+        ".cargo/credentials.toml",
+    } <= set(SANDBOX_HOME_POLICY.hidden_files)
+
+    for path in SANDBOX_HOME_POLICY.writable_dirs:
+        assert f'--bind "$HOME/{path}" "$HOME/{path}"' in script.content
+        sbpl = f'(subpath (string-append (param "HOME") "/{path}"))'
+        assert profile.content.count(sbpl) == 2
+    for path in SANDBOX_HOME_POLICY.readonly_dirs:
+        assert f'--ro-bind "$HOME/{path}" "$HOME/{path}"' in script.content
+        sbpl = f'(subpath (string-append (param "HOME") "/{path}"))'
+        assert profile.content.count(sbpl) == 2
+    for path in SANDBOX_HOME_POLICY.readonly_files:
+        assert f'--ro-bind-try "$HOME/{path}" "$HOME/{path}"' in script.content
+        sbpl = f'(literal (string-append (param "HOME") "/{path}"))'
+        assert profile.content.count(sbpl) == 2
+    for path in SANDBOX_HOME_POLICY.hidden_dirs:
+        assert f'--tmpfs "$HOME/{path}"' in script.content
+        sbpl = f'(subpath (string-append (param "HOME") "/{path}"))'
+        assert profile.content.count(sbpl) == 1
+    for path in SANDBOX_HOME_POLICY.hidden_files:
+        assert f'--ro-bind /dev/null "$HOME/{path}"' in script.content
+        sbpl = f'(literal (string-append (param "HOME") "/{path}"))'
+        assert profile.content.count(sbpl) == 1
+
+    assert 'transformers_cache="$memory_dir/transformers-cache"' in script.content
+    assert 'transformers_cache_target="$(npm root -g)/@samfp/pi-memory/' in script.content
+    fnm_bind = '--ro-bind "$HOME/.local/share/fnm" "$HOME/.local/share/fnm"'
+    cache_bind = '--bind "$transformers_cache" "$transformers_cache_target"'
+    assert script.content.index(fnm_bind) < script.content.index(cache_bind)
+    assert '-D "TRANSFORMERS_CACHE=$transformers_cache_target"' in script.content
+    assert '(subpath (param "TRANSFORMERS_CACHE"))' in profile.content
     assert 'runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' in script.content
     assert '--ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells"' in script.content
     assert '--setenv XDG_RUNTIME_DIR "$runtime_dir"' in script.content
@@ -459,8 +508,7 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "GEMINI_API_KEY=${GEMINI_API_KEY:-}" in script.content
     assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
     assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
-    assert '(allow file-read* file-write* (subpath (param "PI_AGENT")))' in profile.content
-    assert "$HOME/.ssh" not in script.content
-    assert '/.ssh"' in profile.content
+    assert "__SANDBOX_" not in script.content
+    assert "__MACOS_" not in profile.content
     assert '"apiKey": "GEMINI_API_KEY"' in models.content
     assert "${GEMINI_API_KEY}" not in models.content

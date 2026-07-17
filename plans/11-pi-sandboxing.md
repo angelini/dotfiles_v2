@@ -60,96 +60,39 @@ These paths should be denied on macOS and not mounted on Linux. Pi OAuth state i
 - `$HOME/.kube`
 - `$HOME/.docker/config.json`
 - `$HOME/.config/gh/hosts.yml`
+- `$HOME/.config/git/credentials`
+- `$HOME/.config/helm/registry/config.json`
+- `$HOME/.config/helm/repositories.yaml`
 - `$HOME/.git-credentials`
 - `$HOME/.netrc`
 - `$HOME/.npmrc`
 - `$HOME/.pypirc`
+- `$HOME/.cargo/credentials`
 - `$HOME/.cargo/credentials.toml`
 - `$HOME/.claude`
 - Shell history files such as `$HOME/.bash_history`, `$HOME/.zsh_history`, and `$HOME/.python_history`.
 
 If a provider requires a credential, the launcher should source `$HOME/.config/dotgen/secrets.env` before entering the sandbox and pass only whitelisted environment variables into the sandbox process. Do not expose the secrets file itself.
 
+## Shared Home Policy
+
+`SANDBOX_HOME_POLICY` in `src/dotgen/components/pi_agent.py` is the single source for writable directories, read-only directories and files, and hidden credential paths. Both the Linux bwrap arguments and macOS Seatbelt profile are rendered from those values. Platform-specific system and runtime paths remain separate.
+
+Writable developer state includes repositories, Pi state, caches, config, Cargo state, local share and state, npm state, and the Go workspace. Installed tools and Git configuration remain read-only. Credential roots and files listed above are hidden even when nested inside a writable parent.
+
 ## macOS Seatbelt Design
 
-Create an SBPL template at `config/pi/sandbox/pi-macos.sb`. The launcher should resolve the original `pi` binary before entering the sandbox because shell aliases/functions such as `pi-unsafe` are not available inside `exec`.
+Create an SBPL profile at `config/pi/sandbox/pi-macos.sb`. Shared writable paths receive read and write rules, shared read-only paths receive read rules plus trailing write denials, and shared hidden paths receive trailing read and write denials. The package-relative Transformers cache is a narrow write exception after the fnm write denial.
 
-```bash
-sandbox-exec \
-  -D HOME="$HOME" \
-  -D REPOS="$HOME/repos" \
-  -D PI_AGENT="$HOME/.pi/agent" \
-  -D TMPDIR="${TMPDIR:-/tmp}" \
-  -f "$HOME/.config/pi/sandbox/pi-macos.sb" \
-  "$pi_bin" "$@"
-```
-
-Policy shape:
-
-```scheme
-(version 1)
-(deny default)
-
-(allow process*)
-(allow signal)
-(allow sysctl*)
-(allow mach-lookup)
-
-(allow file-read* file-write* (subpath (param "REPOS")))
-(allow file-read* file-write* (subpath (param "PI_AGENT")))
-(allow file-read* file-write* (subpath (param "TMPDIR")))
-
-(allow file-read*
-  (subpath "/bin")
-  (subpath "/usr/bin")
-  (subpath "/usr/lib")
-  (subpath "/usr/share")
-  (subpath "/System/Library")
-  (subpath "/Library")
-  (subpath "/opt/homebrew")
-  (subpath "/usr/local"))
-
-(deny file* (with no-report)
-  (subpath (string-append (param "HOME") "/.ssh"))
-  (subpath (string-append (param "HOME") "/.aws"))
-  (subpath (string-append (param "HOME") "/.config/dotgen")))
-```
-
-The final SBPL may need additional read metadata rules for parent directories and macOS runtime files. Add those incrementally from denied-operation logs instead of broadly allowing `$HOME`.
+The launcher passes `HOME`, `TMPDIR`, and the resolved Transformers cache path as profile parameters. It resolves the original `pi` binary before entering the sandbox because shell aliases and functions are unavailable inside `exec`.
 
 ## Linux bwrap Design
 
-Install `bubblewrap` through the shim for Debian. Create a launcher that constructs the mount namespace rather than a static profile file.
+Install `bubblewrap` through the shim for Debian. Shared writable paths are bind-mounted, shared read-only paths are read-only bind mounts, hidden directories are replaced with temporary filesystems, and hidden files are replaced with `/dev/null`.
 
-Command shape:
+A dedicated `$HOME/.pi/memory/transformers-cache` directory is bind-mounted over pi-memory's package-relative Xenova cache path after the read-only fnm mount. This preserves model downloads without allowing sandboxed processes to modify installed npm packages.
 
-```bash
-bwrap \
-  --unshare-user-try \
-  --unshare-ipc \
-  --unshare-pid \
-  --die-with-parent \
-  --proc /proc \
-  --dev-bind /dev /dev \
-  --tmpfs /tmp \
-  --dir "$HOME" \
-  --bind "$HOME/repos" "$HOME/repos" \
-  --bind "$HOME/.pi/agent" "$HOME/.pi/agent" \
-  --ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm" \
-  --ro-bind-try "$HOME/.local/state/fnm_multishells" "$HOME/.local/state/fnm_multishells" \
-  --ro-bind /usr /usr \
-  --ro-bind /bin /bin \
-  --ro-bind-try /lib /lib \
-  --ro-bind-try /lib64 /lib64 \
-  --ro-bind /etc /etc \
-  --setenv HOME "$HOME" \
-  --chdir "$PWD" \
-  "$pi_bin" "$@"
-```
-
-Because bwrap exposes mounted paths, hidden secret paths are normally omitted. `$HOME/.pi/agent` is mounted writable for settings, sessions, package metadata, and OAuth state. The launcher should use `--ro-bind-try` for optional paths and should create empty parent directories for mounted files before invoking bwrap.
-
-Do not use `--unshare-net` in this phase.
+The sandbox keeps the host network namespace. `/tmp` and runtime-directory scaffolding are temporary.
 
 ## Secret Handling Changes
 

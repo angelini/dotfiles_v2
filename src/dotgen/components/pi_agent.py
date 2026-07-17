@@ -182,7 +182,96 @@ _PI_PACKAGES = (
     "@vanillagreen/pi-web-tools",
 )
 
-_PI_SANDBOX_SH = r"""#!/usr/bin/env bash
+
+@dataclass(frozen=True)
+class _SandboxHomePolicy:
+    writable_dirs: tuple[str, ...]
+    readonly_dirs: tuple[str, ...]
+    readonly_files: tuple[str, ...]
+    hidden_dirs: tuple[str, ...]
+    hidden_files: tuple[str, ...]
+
+
+SANDBOX_HOME_POLICY = _SandboxHomePolicy(
+    writable_dirs=(
+        "repos",
+        ".pi",
+        ".cache",
+        ".config",
+        ".cargo",
+        ".local/share",
+        ".local/state",
+        ".npm",
+        "go",
+    ),
+    readonly_dirs=(
+        "bin",
+        ".cargo/bin",
+        ".local/bin",
+        ".local/share/fnm",
+        ".local/share/go",
+        ".local/state/fnm_multishells",
+        ".rustup",
+    ),
+    readonly_files=(
+        ".gitconfig",
+        ".gitignore_global",
+        ".config/git/config",
+        ".config/pi/sandbox/pi-macos.sb",
+    ),
+    hidden_dirs=(
+        ".ssh",
+        ".gnupg",
+        ".aws",
+        ".azure",
+        ".config/dotgen",
+        ".config/gcloud",
+        ".kube",
+        ".claude",
+    ),
+    hidden_files=(
+        ".docker/config.json",
+        ".config/gh/hosts.yml",
+        ".config/git/credentials",
+        ".config/helm/registry/config.json",
+        ".config/helm/repositories.yaml",
+        ".git-credentials",
+        ".netrc",
+        ".npmrc",
+        ".pypirc",
+        ".cargo/credentials",
+        ".cargo/credentials.toml",
+        ".bash_history",
+        ".zsh_history",
+        ".python_history",
+    ),
+)
+
+
+def _bwrap_home_policy(policy: _SandboxHomePolicy) -> str:
+    args = [f'--bind "$HOME/{path}" "$HOME/{path}"' for path in policy.writable_dirs]
+    args.extend(f'--ro-bind "$HOME/{path}" "$HOME/{path}"' for path in policy.readonly_dirs)
+    args.extend(f'--ro-bind-try "$HOME/{path}" "$HOME/{path}"' for path in policy.readonly_files)
+    args.extend(f'--tmpfs "$HOME/{path}"' for path in policy.hidden_dirs)
+    args.extend(f'--ro-bind /dev/null "$HOME/{path}"' for path in policy.hidden_files)
+    return "\n".join(f"    {arg} \\" for arg in args)
+
+
+def _sandbox_home_dirs_sh(policy: _SandboxHomePolicy) -> str:
+    paths = dict.fromkeys((*policy.writable_dirs, *policy.readonly_dirs))
+    for path in policy.readonly_files:
+        parent, separator, _ = path.rpartition("/")
+        if separator:
+            paths.setdefault(parent, None)
+    return "\n".join(f'    "$HOME/{path}" \\' for path in paths)
+
+
+def _seatbelt_filters(paths: tuple[str, ...], *, literal: bool = False) -> str:
+    kind = "literal" if literal else "subpath"
+    return "\n".join(f'  ({kind} (string-append (param "HOME") "/{path}"))' for path in paths)
+
+
+_pi_sandbox_sh_template = r"""#!/usr/bin/env bash
 set -euo pipefail
 
 _die() {
@@ -204,8 +293,8 @@ _resolve_path() {
 }
 
 main() {
-  local repos="$HOME/repos"
-  local cwd real_repos pi_bin
+  local repos="$HOME/repos" memory_dir="$HOME/.pi/memory"
+  local cwd real_repos pi_bin transformers_cache transformers_cache_target
   cwd="$(_resolve_path "$PWD")" || _die "cannot resolve current directory: $PWD"
   real_repos="$(_resolve_path "$repos")" || _die "missing repos directory: $repos"
   case "$cwd" in
@@ -215,19 +304,27 @@ main() {
 
   pi_bin="$(command -v pi)" || _die "pi binary not found"
   [ -x "$pi_bin" ] || _die "pi binary is not executable: $pi_bin"
+  transformers_cache="$memory_dir/transformers-cache"
+  transformers_cache_target="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+  mkdir -p \
+__SANDBOX_HOME_DIRS__
+    "$transformers_cache" \
+    "$transformers_cache_target"
+  [ -e "$HOME/.config/git/config" ] || : > "$HOME/.config/git/config"
 
   _load_dotgen_secrets
 
   case "$(uname -s)" in
-    Darwin) _run_macos "$pi_bin" "$@" ;;
-    Linux) _run_linux "$pi_bin" "$@" ;;
+    Darwin) _run_macos "$pi_bin" "$transformers_cache_target" "$@" ;;
+    Linux) _run_linux "$pi_bin" "$transformers_cache" "$transformers_cache_target" "$@" ;;
     *) _die "unsupported OS: $(uname -s)" ;;
   esac
 }
 
 _run_macos() {
-  local pi_bin="$1" profile="$HOME/.config/pi/sandbox/pi-macos.sb"
-  shift
+  local pi_bin="$1" transformers_cache_target="$2"
+  local profile="$HOME/.config/pi/sandbox/pi-macos.sb"
+  shift 2
   [ -r "$profile" ] || _die "missing sandbox profile: $profile"
   exec env -i \
     "HOME=$HOME" \
@@ -240,16 +337,16 @@ _run_macos() {
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     sandbox-exec \
     -D "HOME=$HOME" \
-    -D "REPOS=$HOME/repos" \
-    -D "PI_AGENT=$HOME/.pi/agent" \
     -D "TMPDIR=${TMPDIR:-/tmp}" \
+    -D "TRANSFORMERS_CACHE=$transformers_cache_target" \
     -f "$profile" \
     "$pi_bin" "$@"
 }
 
 _run_linux() {
-  local pi_bin="$1" runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-  shift
+  local pi_bin="$1" transformers_cache="$2" transformers_cache_target="$3"
+  local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  shift 3
   command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
   exec env -i \
     "HOME=$HOME" \
@@ -272,14 +369,8 @@ _run_linux() {
     --dir /run/user \
     --dir "$runtime_dir" \
     --dir "$HOME" \
-    --dir "$HOME/.pi" \
-    --dir "$HOME/.local" \
-    --dir "$HOME/.local/share" \
-    --dir "$HOME/.local/state" \
-    --bind "$HOME/repos" "$HOME/repos" \
-    --bind "$HOME/.pi/agent" "$HOME/.pi/agent" \
-    --ro-bind-try "$HOME/.local/share/fnm" "$HOME/.local/share/fnm" \
-    --ro-bind-try "$HOME/.local/state/fnm_multishells" "$HOME/.local/state/fnm_multishells" \
+__BWRAP_HOME_POLICY__
+    --bind "$transformers_cache" "$transformers_cache_target" \
     --ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells" \
     --ro-bind /usr /usr \
     --ro-bind /bin /bin \
@@ -295,7 +386,7 @@ _run_linux() {
 main "$@"
 """
 
-_PI_MACOS_SB = r"""(version 1)
+_pi_macos_sb_template = r"""(version 1)
 (deny default)
 
 (allow process*)
@@ -303,8 +394,7 @@ _PI_MACOS_SB = r"""(version 1)
 (allow sysctl*)
 (allow mach-lookup)
 
-(allow file-read* file-write* (subpath (param "REPOS")))
-(allow file-read* file-write* (subpath (param "PI_AGENT")))
+(allow file-read-data (literal "/"))
 (allow file-read* file-write* (subpath (param "TMPDIR")))
 (allow file-read* file-write-data
   (literal "/dev/null")
@@ -321,41 +411,51 @@ _PI_MACOS_SB = r"""(version 1)
   (subpath "/Library")
   (subpath "/opt/homebrew")
   (subpath "/usr/local")
-  (subpath (string-append (param "HOME") "/.local/share/fnm"))
-  (subpath (string-append (param "HOME") "/.local/state/fnm_multishells")))
+  (subpath "/private/etc")
+  (subpath "/private/var/db/timezone")
+  (subpath "/private/var/db/dyld")
+  (subpath "/private/var/select")
+__MACOS_RW_DIRS__
+__MACOS_RO_DIRS__
+__MACOS_RO_FILES__)
+
+(allow file-write*
+__MACOS_RW_DIRS__)
 
 (allow file-read-metadata
   (literal "/")
   (literal (param "HOME"))
-  (literal (string-append (param "HOME") "/.pi"))
-  (literal (string-append (param "HOME") "/.local"))
-  (literal (string-append (param "HOME") "/.local/share"))
-  (literal (string-append (param "HOME") "/.local/state"))
   (literal "/private")
   (literal "/private/tmp")
   (literal "/private/var")
   (literal "/private/var/tmp"))
 
-(deny file* (with no-report)
-  (subpath (string-append (param "HOME") "/.ssh"))
-  (subpath (string-append (param "HOME") "/.gnupg"))
-  (subpath (string-append (param "HOME") "/.aws"))
-  (subpath (string-append (param "HOME") "/.azure"))
-  (subpath (string-append (param "HOME") "/.config/gcloud"))
-  (subpath (string-append (param "HOME") "/.config/dotgen"))
-  (subpath (string-append (param "HOME") "/.kube"))
-  (literal (string-append (param "HOME") "/.docker/config.json"))
-  (literal (string-append (param "HOME") "/.config/gh/hosts.yml"))
-  (literal (string-append (param "HOME") "/.git-credentials"))
-  (literal (string-append (param "HOME") "/.netrc"))
-  (literal (string-append (param "HOME") "/.npmrc"))
-  (literal (string-append (param "HOME") "/.pypirc"))
-  (literal (string-append (param "HOME") "/.cargo/credentials.toml"))
-  (subpath (string-append (param "HOME") "/.claude"))
-  (literal (string-append (param "HOME") "/.bash_history"))
-  (literal (string-append (param "HOME") "/.zsh_history"))
-  (literal (string-append (param "HOME") "/.python_history")))
+(deny file-write* (with no-report)
+__MACOS_RO_DIRS__
+__MACOS_RO_FILES__)
+
+(allow file-read* file-write*
+  (subpath (param "TRANSFORMERS_CACHE")))
+
+(deny file-read* file-write* (with no-report)
+__MACOS_HIDDEN_DIRS__
+__MACOS_HIDDEN_FILES__)
 """
+
+_PI_SANDBOX_SH = _pi_sandbox_sh_template.replace("__SANDBOX_HOME_DIRS__", _sandbox_home_dirs_sh(SANDBOX_HOME_POLICY)).replace("__BWRAP_HOME_POLICY__", _bwrap_home_policy(SANDBOX_HOME_POLICY))
+_PI_MACOS_SB = (
+    _pi_macos_sb_template.replace("__MACOS_RW_DIRS__", _seatbelt_filters(SANDBOX_HOME_POLICY.writable_dirs))
+    .replace("__MACOS_RO_DIRS__", _seatbelt_filters(SANDBOX_HOME_POLICY.readonly_dirs))
+    .replace(
+        "__MACOS_RO_FILES__",
+        _seatbelt_filters(SANDBOX_HOME_POLICY.readonly_files, literal=True),
+    )
+    .replace("__MACOS_HIDDEN_DIRS__", _seatbelt_filters(SANDBOX_HOME_POLICY.hidden_dirs))
+    .replace(
+        "__MACOS_HIDDEN_FILES__",
+        _seatbelt_filters(SANDBOX_HOME_POLICY.hidden_files, literal=True),
+    )
+)
 
 _ALIAS = """\
 pi() {

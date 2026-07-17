@@ -138,6 +138,81 @@ def test_pi_launches_through_sandbox(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd('cd "$HOME/repos" && pi --version', login=True)
 
 
+def test_pi_sandbox_exposes_developer_state_without_credentials(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name == "debian-docker":
+        pytest.skip("Docker does not allow the unprivileged user namespace required by bubblewrap")
+    cmd = r"""
+set -euo pipefail
+mkdir -p "$HOME/repos/sandbox-smoke" "$HOME/.config/git" "$HOME/.config/helm/registry"
+printf '[user]\n  name = Sandbox User\n' > "$HOME/.config/git/config"
+printf 'git-secret\n' > "$HOME/.config/git/credentials"
+printf 'helm-registry-secret\n' > "$HOME/.config/helm/registry/config.json"
+printf 'helm-repository-secret\n' > "$HOME/.config/helm/repositories.yaml"
+cat > "$HOME/repos/sandbox-smoke/pi" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+for dir in \
+  "$HOME/.pi" \
+  "$HOME/.cache" \
+  "$HOME/.config" \
+  "$HOME/.cargo" \
+  "$HOME/.local/share" \
+  "$HOME/.local/state" \
+  "$HOME/.npm" \
+  "$HOME/go"
+do
+  printf 'state\n' > "$dir/sandbox-smoke"
+done
+printf 'cache\n' > "$transformers_cache/sandbox-smoke"
+[ -r "$HOME/.gitconfig" ]
+grep -q 'Sandbox User' "$HOME/.config/git/config"
+[ ! -e "$HOME/.config/dotgen/secrets.env" ]
+[ ! -s "$HOME/.config/gh/hosts.yml" ]
+[ ! -s "$HOME/.config/git/credentials" ]
+[ ! -s "$HOME/.config/helm/registry/config.json" ]
+[ ! -s "$HOME/.config/helm/repositories.yaml" ]
+for path in \
+  "$HOME/.config/git/config" \
+  "$HOME/.cargo/credentials.toml" \
+  "$HOME/.cargo/bin/sandbox-smoke"
+do
+  if printf 'unexpected write\n' > "$path" 2>/dev/null; then
+    echo "read-only path unexpectedly writable: $path"
+    exit 1
+  fi
+done
+SH
+chmod +x "$HOME/repos/sandbox-smoke/pi"
+cd "$HOME/repos/sandbox-smoke"
+PATH="$PWD:$PATH" pi-sandbox
+for path in \
+  "$HOME/.pi/sandbox-smoke" \
+  "$HOME/.cache/sandbox-smoke" \
+  "$HOME/.config/sandbox-smoke" \
+  "$HOME/.cargo/sandbox-smoke" \
+  "$HOME/.local/share/sandbox-smoke" \
+  "$HOME/.local/state/sandbox-smoke" \
+  "$HOME/.npm/sandbox-smoke" \
+  "$HOME/go/sandbox-smoke"
+do
+  [ "$(cat "$path")" = state ]
+done
+transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+if [ -f "$HOME/.pi/memory/transformers-cache/sandbox-smoke" ]; then
+  [ "$(cat "$HOME/.pi/memory/transformers-cache/sandbox-smoke")" = cache ]
+else
+  [ "$(cat "$transformers_cache/sandbox-smoke")" = cache ]
+fi
+grep -q 'Sandbox User' "$HOME/.config/git/config"
+[ "$(cat "$HOME/.config/git/credentials")" = git-secret ]
+[ "$(cat "$HOME/.config/helm/registry/config.json")" = helm-registry-secret ]
+[ "$(cat "$HOME/.config/helm/repositories.yaml")" = helm-repository-secret ]
+"""
+    handle.assert_cmd(cmd, login=True)
+
+
 def test_full_addons(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":
