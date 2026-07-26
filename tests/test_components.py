@@ -19,7 +19,8 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
-from dotgen.components.pi_agent import SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root
+from dotgen.components.npm_config import NpmConfig
+from dotgen.components.pi_agent import SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
@@ -28,9 +29,9 @@ from dotgen.components.supacode import Supacode
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
-from dotgen.fragment import Fragment
+from dotgen.fragment import ConfigFile, Fragment
 from dotgen.registry import ENVIRONMENTS
-from dotgen.render import _vendor_dir
+from dotgen.render import _vendor_dir  # pyright: ignore[reportPrivateUsage]
 from dotgen.vendor import BUILD_ARTIFACTS, GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
 
 
@@ -53,6 +54,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
         PythonTools,
         Gh,
         GitSigning,
+        NpmConfig,
         PiAgent,
     ],
 )
@@ -112,6 +114,17 @@ def test_git_setup_uses_secret_placeholders() -> None:
     assert "${GIT_USER_EMAIL}" in cfg.content
     assert frag.secrets == frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL"})
     assert "install_config_template " in frag.setup
+
+
+def test_npm_config_is_secure_and_exact_in_every_environment() -> None:
+    expected = "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}\n@qawolf:registry=https://npm.pkg.github.com\n"
+    for env in ENVIRONMENTS.values():
+        component = NpmConfig()
+        assert component.applies_to(env)
+        frag = component.render(env)
+        assert frag.configs == (ConfigFile(dest="npm/npmrc", content=expected, mode=0o600),)
+        assert frag.setup == 'install_config_template "$DIR/config/npm/npmrc" "$HOME/.npmrc" \'NPM_TOKEN\' 0600\n'
+        assert frag.secrets == frozenset({"NPM_TOKEN"})
 
 
 def test_git_setup_signs_with_ssh_key() -> None:
@@ -259,6 +272,7 @@ def test_environment_component_distribution() -> None:
         "git_signing",
         "rust",
         "node_fnm",
+        "npm_config",
         "go_lang",
         "gcloud",
         "aws",
@@ -317,11 +331,11 @@ def test_docker_render_contract() -> None:
     assert "docker.sock" not in sandbox
 
 
-def test_node_precedes_pi_in_every_environment() -> None:
+def test_npm_config_is_ordered_between_node_and_pi_in_every_environment() -> None:
     for env in ENVIRONMENTS.values():
         names = [component.name for component in env.components]
         if "pi_agent" in names:
-            assert names.index("node_fnm") < names.index("pi_agent")
+            assert names.index("node_fnm") < names.index("npm_config") < names.index("pi_agent")
 
 
 def test_ghostty_macos_only_and_emits_config() -> None:

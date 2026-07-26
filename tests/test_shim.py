@@ -1,7 +1,10 @@
 import os as os_module
 import re
+import shlex
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -9,7 +12,7 @@ import pytest
 from dotgen.shim import SHIM_FUNCTIONS, OSShim
 from dotgen.types import OS
 
-_DEF_RE = re.compile(r"^([a-z_][a-z_0-9]*)\(\) \{", re.MULTILINE)
+_DEF_RE = re.compile(r"^([a-z_][a-z_0-9]*)\(\) [\{(]", re.MULTILINE)
 
 
 @pytest.fixture(params=list(OS), ids=[o.value for o in OS])
@@ -109,30 +112,82 @@ def _macos_shim() -> str:
 
 
 def _write_secrets(tmp_path: Path, body: str) -> None:
-    (tmp_path / "dotgen").mkdir()
+    (tmp_path / "dotgen").mkdir(exist_ok=True)
     (tmp_path / "dotgen" / "secrets.env").write_text(body)
 
 
-def _run_template(tmp_path: Path, mode: str, src: str, vars_list: str, *, secrets: str) -> subprocess.CompletedProcess[str]:
+def _write_executable(path: Path, body: str) -> None:
+    path.write_text(body)
+    path.chmod(0o755)
+
+
+def _run_template(
+    tmp_path: Path,
+    mode: str,
+    src: str,
+    vars_list: str,
+    *,
+    secrets: str,
+    requested_mode: str | None = None,
+    tmpdir: Path | None = None,
+    bin_dir: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     _write_secrets(tmp_path, secrets)
     src_path = tmp_path / "src"
     src_path.write_text(src)
     dst_path = tmp_path / "dst"
     script = tmp_path / "run.sh"
-    script.write_text(f"{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE={mode}\ninstall_config_template {src_path} {dst_path} '{vars_list}'\n")
+    exports = [
+        f"export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}",
+        f"export DOTGEN_MODE={shlex.quote(mode)}",
+    ]
+    if tmpdir is not None:
+        tmpdir.mkdir(exist_ok=True)
+        exports.append(f"export TMPDIR={shlex.quote(str(tmpdir))}")
+    if bin_dir is not None:
+        exports.append(f"export PATH={shlex.quote(str(bin_dir))}:$PATH")
+    mode_arg = f" {requested_mode}" if requested_mode is not None else ""
+    call = f"install_config_template {shlex.quote(str(src_path))} {shlex.quote(str(dst_path))} {shlex.quote(vars_list)}{mode_arg}"
+    script.write_text(f"{_macos_shim()}\n{'\n'.join(exports)}\n{call}\n")
     return subprocess.run(["bash", str(script)], capture_output=True, text=True)
 
 
-def test_install_config_template_renders(tmp_path: Path) -> None:
+def _template_artifacts(tmp_path: Path, tmpdir: Path) -> list[Path]:
+    return sorted((*tmp_path.glob(".dotgen-template.*"), *tmpdir.glob("dotgen-template.*")))
+
+
+def test_install_config_template_renders_with_default_mode_and_cleans_up(tmp_path: Path) -> None:
+    tmpdir = tmp_path / "tmp"
     res = _run_template(
         tmp_path,
         mode="deploy",
         src="name=${GIT_USER_NAME}\nemail=${GIT_USER_EMAIL}\n",
         vars_list="GIT_USER_NAME GIT_USER_EMAIL",
         secrets='GIT_USER_NAME="Alice"\nGIT_USER_EMAIL="a@example.com"\n',
+        tmpdir=tmpdir,
+    )
+    dst = tmp_path / "dst"
+    assert res.returncode == 0, res.stderr
+    assert dst.read_text() == "name=Alice\nemail=a@example.com\n"
+    assert dst.stat().st_mode & 0o777 == 0o644
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+def test_install_config_template_installs_explicit_mode_and_repairs_drift(tmp_path: Path) -> None:
+    dst = tmp_path / "dst"
+    dst.write_text("token=new-secret\n")
+    dst.chmod(0o644)
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="new-secret"\n',
+        requested_mode="0600",
     )
     assert res.returncode == 0, res.stderr
-    assert (tmp_path / "dst").read_text() == "name=Alice\nemail=a@example.com\n"
+    assert dst.read_text() == "token=new-secret\n"
+    assert dst.stat().st_mode & 0o777 == 0o600
 
 
 def test_install_config_template_missing_secrets(tmp_path: Path) -> None:
@@ -162,17 +217,268 @@ def test_install_config_template_whitelist_preserves_unrelated(tmp_path: Path) -
     assert "$PATH" in out
 
 
-def test_install_config_template_diff_mode_does_not_write(tmp_path: Path) -> None:
+def test_install_config_template_diff_reports_absent_target_and_cleans_up(tmp_path: Path) -> None:
+    tmpdir = tmp_path / "tmp"
     res = _run_template(
         tmp_path,
         mode="diff",
         src="name=${GIT_USER_NAME}\n",
         vars_list="GIT_USER_NAME",
         secrets='GIT_USER_NAME="Alice"\n',
+        requested_mode="0600",
+        tmpdir=tmpdir,
     )
     assert res.returncode == 0, res.stderr
-    assert "(templated)" in res.stdout
+    assert res.stdout == f"+ NEW    {tmp_path / 'dst'} (templated)\n"
     assert not (tmp_path / "dst").exists()
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+def test_install_config_template_diff_detects_mode_only_drift_without_writing(tmp_path: Path) -> None:
+    dst = tmp_path / "dst"
+    dst.write_text("token=new-secret\n")
+    dst.chmod(0o644)
+    res = _run_template(
+        tmp_path,
+        mode="diff",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="new-secret"\n',
+        requested_mode="0600",
+    )
+    assert res.returncode == 0, res.stderr
+    assert res.stdout == f"~ CHANGE {dst} (templated)\n"
+    assert dst.read_text() == "token=new-secret\n"
+    assert dst.stat().st_mode & 0o777 == 0o644
+
+
+def test_install_config_template_diff_redacts_content_drift(tmp_path: Path) -> None:
+    dst = tmp_path / "dst"
+    dst.write_text("token=old-secret-sentinel\n")
+    dst.chmod(0o600)
+    res = _run_template(
+        tmp_path,
+        mode="diff",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="new-secret-sentinel"\n',
+        requested_mode="0600",
+    )
+    assert res.returncode == 0, res.stderr
+    assert res.stdout == f"~ CHANGE {dst} (templated)\n"
+    assert "old-secret-sentinel" not in res.stdout + res.stderr
+    assert "new-secret-sentinel" not in res.stdout + res.stderr
+    assert dst.read_text() == "token=old-secret-sentinel\n"
+
+
+def test_install_config_template_rejects_invalid_mode_before_creating_temps(tmp_path: Path) -> None:
+    tmpdir = tmp_path / "tmp"
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="secret"\n',
+        requested_mode="600",
+        tmpdir=tmpdir,
+    )
+    assert res.returncode != 0
+    assert "invalid mode" in res.stderr
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+@pytest.mark.parametrize("directory_symlink", [False, True], ids=["directory", "directory-symlink"])
+def test_install_config_template_rejects_directory_targets_without_leaking(tmp_path: Path, directory_symlink: bool) -> None:
+    dst = tmp_path / "dst"
+    target_dir = tmp_path / "target-dir"
+    if directory_symlink:
+        target_dir.mkdir()
+        dst.symlink_to(target_dir, target_is_directory=True)
+    else:
+        dst.mkdir()
+        target_dir = dst
+    tmpdir = tmp_path / "tmp"
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="directory-secret-sentinel"\n',
+        requested_mode="0600",
+        tmpdir=tmpdir,
+    )
+    assert res.returncode != 0
+    assert "destination is not a regular file" in res.stderr
+    assert "directory-secret-sentinel" not in res.stdout + res.stderr
+    assert list(target_dir.iterdir()) == []
+    assert dst.is_symlink() is directory_symlink
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+@pytest.mark.parametrize("directory_symlink", [False, True], ids=["directory", "directory-symlink"])
+def test_install_config_template_rechecks_directory_target_after_staging(tmp_path: Path, directory_symlink: bool) -> None:
+    dst = tmp_path / "dst"
+    target_dir = tmp_path / "target-dir" if directory_symlink else dst
+    tmpdir = tmp_path / "tmp"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mutation = {
+        False: f"mkdir {shlex.quote(str(dst))}",
+        True: f"mkdir {shlex.quote(str(target_dir))}\nln -s {shlex.quote(str(target_dir))} {shlex.quote(str(dst))}",
+    }[directory_symlink]
+    _write_executable(
+        bin_dir / "install",
+        f'#!/usr/bin/env bash\ncp "$3" "$4"\nchmod "$2" "$4"\n{mutation}\n',
+    )
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="staged-secret-sentinel"\n',
+        requested_mode="0600",
+        tmpdir=tmpdir,
+        bin_dir=bin_dir,
+    )
+    assert res.returncode != 0
+    assert "destination is not a regular file" in res.stderr
+    assert "staged-secret-sentinel" not in res.stdout + res.stderr
+    assert list(target_dir.iterdir()) == []
+    assert dst.is_symlink() is directory_symlink
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+def test_install_config_template_cleans_up_after_envsubst_failure(tmp_path: Path) -> None:
+    tmpdir = tmp_path / "tmp"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_executable(bin_dir / "envsubst", "#!/usr/bin/env bash\nexit 41\n")
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="secret"\n',
+        tmpdir=tmpdir,
+        bin_dir=bin_dir,
+    )
+    assert res.returncode != 0
+    assert not (tmp_path / "dst").exists()
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+def test_install_config_template_install_failure_is_atomic_and_cleans_up(tmp_path: Path) -> None:
+    dst = tmp_path / "dst"
+    dst.write_text("old-secret\n")
+    dst.chmod(0o640)
+    tmpdir = tmp_path / "tmp"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_executable(bin_dir / "install", '#!/usr/bin/env bash\nprintf partial > "${@: -1}"\nexit 42\n')
+    res = _run_template(
+        tmp_path,
+        mode="deploy",
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="new-secret"\n',
+        requested_mode="0600",
+        tmpdir=tmpdir,
+        bin_dir=bin_dir,
+    )
+    assert res.returncode != 0
+    assert dst.read_text() == "old-secret\n"
+    assert dst.stat().st_mode & 0o777 == 0o640
+    assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+@pytest.mark.parametrize("envsubst_fails", [False, True], ids=["success", "failure"])
+def test_install_config_template_preserves_caller_traps(tmp_path: Path, envsubst_fails: bool) -> None:
+    _write_secrets(tmp_path, 'TOKEN="secret"\n')
+    src = tmp_path / "src"
+    src.write_text("token=${TOKEN}\n")
+    bin_dir = tmp_path / "bin"
+    path_export = ""
+    if envsubst_fails:
+        bin_dir.mkdir()
+        _write_executable(bin_dir / "envsubst", "#!/usr/bin/env bash\nexit 41\n")
+        path_export = f"export PATH={shlex.quote(str(bin_dir))}:$PATH\n"
+    status_file = tmp_path / "status"
+    script = tmp_path / "run-traps.sh"
+    script.write_text(
+        f"""{_macos_shim()}
+export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}
+export DOTGEN_MODE=deploy
+{path_export}trap ':' EXIT
+trap ':' HUP
+trap ':' INT
+trap ':' TERM
+before="$(trap -p EXIT HUP INT TERM)"
+install_config_template {shlex.quote(str(src))} {shlex.quote(str(tmp_path / "dst"))} 'TOKEN' 0600
+status=$?
+after="$(trap -p EXIT HUP INT TERM)"
+[ "$before" = "$after" ] || exit 90
+printf '%s' "$status" > {shlex.quote(str(status_file))}
+"""
+    )
+    res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    status = int(status_file.read_text())
+    assert (status != 0) is envsubst_fails
+
+
+@pytest.mark.parametrize(
+    ("sig", "expected_status"),
+    [(signal.SIGHUP, 129), (signal.SIGINT, 130), (signal.SIGTERM, 143)],
+    ids=["hup", "int", "term"],
+)
+def test_install_config_template_signals_clean_up_and_preserve_caller_traps(tmp_path: Path, sig: signal.Signals, expected_status: int) -> None:
+    _write_secrets(tmp_path, 'TOKEN="signal-secret"\n')
+    src = tmp_path / "src"
+    src.write_text("token=${TOKEN}\n")
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ready = tmp_path / "ready"
+    status_file = tmp_path / "status"
+    _write_executable(
+        bin_dir / "envsubst",
+        '#!/usr/bin/env bash\nprintf ready > "$READY_MARKER"\nwhile :; do sleep 1; done\n',
+    )
+    script = tmp_path / "run-signal.sh"
+    script.write_text(
+        f"""{_macos_shim()}
+export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}
+export DOTGEN_MODE=deploy
+export TMPDIR={shlex.quote(str(tmpdir))}
+export PATH={shlex.quote(str(bin_dir))}:$PATH
+export READY_MARKER={shlex.quote(str(ready))}
+trap ':' EXIT
+trap ':' HUP
+trap ':' INT
+trap ':' TERM
+before="$(trap -p EXIT HUP INT TERM)"
+install_config_template {shlex.quote(str(src))} {shlex.quote(str(tmp_path / "dst"))} 'TOKEN' 0600
+status=$?
+after="$(trap -p EXIT HUP INT TERM)"
+[ "$before" = "$after" ] || exit 90
+printf '%s' "$status" > {shlex.quote(str(status_file))}
+"""
+    )
+    proc = subprocess.Popen(["bash", str(script)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    deadline = time.monotonic() + 5
+    while not ready.exists() and proc.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if not ready.exists():
+        os_module.killpg(proc.pid, signal.SIGKILL)
+        stdout, stderr = proc.communicate()
+        pytest.fail(f"blocking envsubst did not become ready: stdout={stdout!r} stderr={stderr!r}")
+    os_module.killpg(proc.pid, sig)
+    stdout, stderr = proc.communicate(timeout=5)
+    assert proc.returncode == 0, stderr
+    assert int(status_file.read_text()) == expected_status
+    assert "signal-secret" not in stdout + stderr
+    assert _template_artifacts(tmp_path, tmpdir) == []
 
 
 def test_install_config_template_missing_secrets_file(tmp_path: Path) -> None:

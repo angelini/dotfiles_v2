@@ -1,4 +1,5 @@
 0600  259b1d64c137a1eeea3d20576b9ac13fd0579a992a2833adbe67efe47384dd90  pi/agent/models.json
+0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0644  075464a1faa9bbd972348144d4688eb92c8d05f2c3d9cc590e4f0003d72cb6ed  pi/agent/settings.json
 0644  0cf839e1e74c3b5cd4f5852ebcacacc5f2627230d17fc3ea1567ebe7dcc5fbdf  pi/agent/agents/claude-pipeline/architect.md
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json

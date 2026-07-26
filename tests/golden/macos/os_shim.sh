@@ -172,10 +172,25 @@ load_secrets() {
   _DOTGEN_SECRETS_LOADED=1
 }
 
-install_config_template() {
-  local src="$1" dst="$2" vars="$3"
-  load_secrets || return 1
-  local missing=() v subst_spec=""
+install_config_template() (
+  local src="$1" dst="$2" vars="$3" mode="${4:-0644}"
+  local missing=() v subst_spec="" rendered="" staging="" status
+  case "$mode" in
+    0[0-7][0-7][0-7]) ;;
+    *)
+      error "install_config_template: invalid mode: $mode"
+      exit 1
+      ;;
+  esac
+  if [ -e "$dst" ] && [ ! -f "$dst" ]; then
+    error "install_config_template: destination is not a regular file: $dst"
+    exit 1
+  fi
+  trap 'status=$?; trap - EXIT HUP INT TERM; [ -z "$rendered" ] || rm -f "$rendered"; [ -z "$staging" ] || rm -f "$staging"; exit "$status"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  load_secrets || exit 1
   for v in $vars; do
     if [ -z "${!v:-}" ]; then
       missing+=("$v")
@@ -184,29 +199,37 @@ install_config_template() {
   done
   if [ ${#missing[@]} -gt 0 ]; then
     error "secrets.env missing values: ${missing[*]}"
-    return 1
+    exit 1
   fi
   if ! bin_exists envsubst; then
     error "envsubst not installed (gettext)"
-    return 1
+    exit 1
   fi
-  local rendered
-  rendered="$(mktemp)"
-  envsubst "$subst_spec" < "$src" > "$rendered"
+  umask 077
+  rendered="$(mktemp "${TMPDIR:-/tmp}/dotgen-template.XXXXXX")"
+  chmod 0600 "$rendered"
+  if ! envsubst "$subst_spec" < "$src" > "$rendered"; then
+    exit 1
+  fi
   if [ "$DOTGEN_MODE" = diff ]; then
     if [ ! -e "$dst" ]; then
       printf '+ NEW    %s (templated)\n' "$dst"
-    elif ! cmp -s "$rendered" "$dst"; then
+    elif ! cmp -s "$rendered" "$dst" || [ "$(find "$dst" -prune -perm "$mode" -exec printf x \; 2>/dev/null)" != x ]; then
       printf '~ CHANGE %s (templated)\n' "$dst"
-      diff -u "$dst" "$rendered" || true
     fi
-    rm -f "$rendered"
-    return 0
+    exit 0
   fi
   ensure_dir "$(dirname "$dst")"
-  install -m 0644 "$rendered" "$dst"
-  rm -f "$rendered"
-}
+  staging="$(mktemp "$(dirname "$dst")/.dotgen-template.XXXXXX")"
+  if ! install -m "$mode" "$rendered" "$staging"; then
+    exit 1
+  fi
+  if [ -e "$dst" ] && [ ! -f "$dst" ]; then
+    error "install_config_template: destination is not a regular file: $dst"
+    exit 1
+  fi
+  mv -f "$staging" "$dst"
+)
 
 install_script() {
   local name="$1" url="$2" tmp

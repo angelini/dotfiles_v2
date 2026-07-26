@@ -1,3 +1,4 @@
+import re
 import subprocess
 from pathlib import Path
 
@@ -45,7 +46,7 @@ def test_shim_contains_all_contract_functions(tmp_path: Path) -> None:
     build_env(ENVIRONMENTS["macos"], tmp_path)
     text = (tmp_path / "os_shim.sh").read_text()
     for fn in SHIM_FUNCTIONS:
-        assert f"{fn}() {{" in text, f"missing shim function: {fn}"
+        assert re.search(rf"^{re.escape(fn)}\(\) [{{(]", text, re.MULTILINE), f"missing shim function: {fn}"
 
 
 def test_build_env_emits_dockerfile_only_for_docker_env(tmp_path: Path) -> None:

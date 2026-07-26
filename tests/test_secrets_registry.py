@@ -54,6 +54,16 @@ def test_template_lists_every_referenced_key(built_root: Path, env_name: str) ->
 
 
 @pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
+def test_npm_token_is_registered_but_not_rendered(built_root: Path, env_name: str) -> None:
+    template = (built_root / env_name / "config" / "dotgen" / "secrets.env.template").read_text()
+    assert 'NPM_TOKEN=""' in template.splitlines()
+
+    npmrc = built_root / env_name / "config" / "npm" / "npmrc"
+    assert npmrc.read_text() == "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}\n@qawolf:registry=https://npm.pkg.github.com\n"
+    assert npmrc.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
 def test_no_unregistered_keys(env_name: str) -> None:
     declared = required_secrets(ENVIRONMENTS[env_name])
     unknown = declared - set(all_keys())

@@ -212,6 +212,17 @@ else
   _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
 fi
 
+# --- npm_config ---
+component_begin "npm_config"
+if (
+  set -e
+  install_config_template "$DIR/config/npm/npmrc" "$HOME/.npmrc" 'NPM_TOKEN' 0600
+); then
+  component_end "npm_config" 0
+else
+  _rc=$?; component_end "npm_config" "$_rc"; exit "$_rc"
+fi
+
 # --- pi_agent ---
 component_begin "pi_agent"
 if (

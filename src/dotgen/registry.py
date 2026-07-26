@@ -15,6 +15,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
+from dotgen.components.npm_config import NpmConfig
 from dotgen.components.pi_agent import PiAgent
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
@@ -41,6 +42,7 @@ _SHARED: tuple[Component, ...] = (
     GitSigning(),
     Rust(),
     NodeFnm(),
+    NpmConfig(),
     PiAgent(),
     Postgres(),
     GoLang(),
