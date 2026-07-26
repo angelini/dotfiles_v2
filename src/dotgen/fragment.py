@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from dotgen.vendor import VendorDir
+
 
 @dataclass(frozen=True)
 class ConfigFile:
@@ -14,6 +16,7 @@ class Fragment:
     alias: str = ""
     bashrc: str = ""
     configs: tuple[ConfigFile, ...] = ()
+    vendors: tuple[VendorDir, ...] = ()
     secrets: frozenset[str] = frozenset()
 
     def merge(self, other: "Fragment") -> "Fragment":
@@ -22,6 +25,7 @@ class Fragment:
             alias=_join(self.alias, other.alias),
             bashrc=_join(self.bashrc, other.bashrc),
             configs=self.configs + other.configs,
+            vendors=self.vendors + other.vendors,
             secrets=self.secrets | other.secrets,
         )
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from dotgen.registry import ENVIRONMENTS
-from dotgen.render import build_env
+from dotgen.render import build_env, config_manifest
 
 GOLDEN_ROOT = Path(__file__).parent / "golden"
 SNAPSHOT_FILES = ("setup.sh", "alias.sh", ".bashrc", "os_shim.sh")
@@ -34,6 +34,21 @@ def test_snapshot_matches_golden(built_root: Path, env_name: str, fname: str) ->
         return
 
     assert actual == golden.read_text(), f"snapshot drift for {env_name}/{fname}; re-run with UPDATE_GOLDEN=1 if intended"
+
+
+@pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
+def test_config_manifest_matches_golden(env_name: str) -> None:
+    actual = config_manifest(ENVIRONMENTS[env_name])
+    golden = GOLDEN_ROOT / env_name / "config-manifest.txt"
+
+    if UPDATE or not golden.exists():
+        golden.parent.mkdir(parents=True, exist_ok=True)
+        golden.write_text(actual)
+        if not UPDATE:
+            pytest.skip(f"created missing golden {golden.relative_to(GOLDEN_ROOT.parent)}")
+        return
+
+    assert actual == golden.read_text(), f"config manifest drift for {env_name}; re-run with UPDATE_GOLDEN=1 if intended"
 
 
 _HEADER_RE = re.compile(r"^# --- ([a-z_][a-z_0-9]*) ---$", re.MULTILINE)

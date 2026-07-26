@@ -107,6 +107,48 @@ install_config() {
   install -m 0644 "$src" "$dst"
 }
 
+install_config_dir() {
+  local src="$1" dst="$2" rel drift=0 conflict=0
+  if [ ! -d "$src" ]; then
+    error "install_config_dir: missing source directory: $src"
+    return 1
+  fi
+  if [ -e "$dst" ] && [ ! -d "$dst" ]; then
+    error "install_config_dir: $dst exists but is not a directory"
+    conflict=1
+  elif [ -d "$dst" ]; then
+    while IFS= read -r -d '' rel; do
+      rel="${rel#./}"
+      if [ -e "$dst/$rel" ] && [ ! -d "$dst/$rel" ]; then
+        error "install_config_dir: $dst/$rel exists but is not a directory"
+        conflict=1
+      fi
+    done < <(cd "$src" && find . -mindepth 1 -type d -print0)
+    while IFS= read -r -d '' rel; do
+      rel="${rel#./}"
+      if [ -e "$dst/$rel" ] && [ ! -f "$dst/$rel" ]; then
+        error "install_config_dir: $dst/$rel exists but is not a regular file"
+        conflict=1
+      elif [ ! -f "$dst/$rel" ] || ! cmp -s "$src/$rel" "$dst/$rel"; then
+        drift=1
+      fi
+    done < <(cd "$src" && find . -type f -print0)
+  fi
+  if [ "$DOTGEN_MODE" = diff ]; then
+    if [ ! -d "$dst" ]; then
+      printf '+ COPY   %s\n' "$dst"
+    elif [ "$conflict" = 1 ] || [ "$drift" = 1 ]; then
+      printf '~ SYNC   %s\n' "$dst"
+    fi
+    return 0
+  fi
+  if [ "$conflict" = 1 ]; then
+    return 1
+  fi
+  ensure_dir "$dst"
+  cp -Rp "$src"/. "$dst"/
+}
+
 load_secrets() {
   [ "${_DOTGEN_SECRETS_LOADED:-0}" = 1 ] && return 0
   local f="${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"

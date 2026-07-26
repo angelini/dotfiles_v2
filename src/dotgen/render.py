@@ -1,11 +1,16 @@
+import hashlib
+import os
+import shutil
 import textwrap
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import NoReturn
 
 from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.registry import ENVIRONMENTS
 from dotgen.secrets import DESCRIPTIONS
 from dotgen.shim import OSShim
+from dotgen.vendor import VendorDir
 
 SETUP_HEADER = """\
 #!/usr/bin/env bash
@@ -99,9 +104,11 @@ def build_env(env: Environment, out_dir: Path) -> None:
     bashrc_text = BASHRC_HEADER + (fragment.bashrc + "\n" if fragment.bashrc else "")
     (out_dir / ".bashrc").write_text(bashrc_text)
 
-    if fragment.configs:
+    if fragment.configs or fragment.vendors:
         config_dir = out_dir / "config"
         config_dir.mkdir(parents=True, exist_ok=True)
+        for v in fragment.vendors:
+            _vendor_dir(v, config_dir / v.dest)
         for cf in fragment.configs:
             dest = config_dir / cf.dest
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -113,6 +120,29 @@ def build_env(env: Environment, out_dir: Path) -> None:
 
     if env.name == "debian-docker":
         (out_dir / "Dockerfile").write_text(DOCKERFILE_TEMPLATE)
+
+
+def _raise(err: OSError) -> NoReturn:
+    raise err
+
+
+def _vendor_dir(v: VendorDir, dest_dir: Path) -> None:
+    if not v.source.is_dir():
+        raise FileNotFoundError(f"vendor source not found: {v.source}")
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for parent, dirs, files in os.walk(v.source, onerror=_raise):
+        dirs[:] = sorted(d for d in dirs if not v.prunes_dir(d))
+        parent_path = Path(parent)
+        for name in sorted(files):
+            src = parent_path / name
+            rel = PurePosixPath(src.relative_to(v.source).as_posix())
+            if not v.vendors_path(rel):
+                continue
+            dest = dest_dir / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dest)
+            dest.chmod(0o755 if v.preserve_modes and src.stat().st_mode & 0o111 else 0o644)
 
 
 def _write_secrets_template(out_dir: Path, secrets: frozenset[str]) -> None:
@@ -160,7 +190,7 @@ fi
 
     alias = f"{header}{frag.alias}" if frag.alias else ""
     bashrc = f"{header}{frag.bashrc}" if frag.bashrc else ""
-    return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs, secrets=frag.secrets)
+    return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs, vendors=frag.vendors, secrets=frag.secrets)
 
 
 def _merge_fragments(env: Environment) -> Fragment:
@@ -169,3 +199,10 @@ def _merge_fragments(env: Environment) -> Fragment:
         if component.applies_to(env):
             result = result.merge(_decorate(component.name, component.render(env)))
     return result
+
+
+def config_manifest(env: Environment) -> str:
+    fragment = _merge_fragments(env)
+    lines = [f"{cf.mode:04o}  {hashlib.sha256(cf.content.encode()).hexdigest()}  {cf.dest}" for cf in fragment.configs]
+    lines += [f"dir  {v.dest}" for v in fragment.vendors]
+    return "".join(f"{line}\n" for line in sorted(lines))

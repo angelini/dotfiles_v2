@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from dotgen.component import Component
@@ -16,7 +18,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.node_fnm import NodeFnm
-from dotgen.components.pi_agent import SANDBOX_HOME_POLICY, PiAgent
+from dotgen.components.pi_agent import SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
@@ -27,6 +29,8 @@ from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.registry import ENVIRONMENTS
+from dotgen.render import _vendor_dir
+from dotgen.vendor import BUILD_ARTIFACTS, GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
 
 
 @pytest.fixture(params=list(ENVIRONMENTS.values()), ids=list(ENVIRONMENTS))
@@ -397,7 +401,7 @@ def test_pi_agent_setup() -> None:
     assert "npm:pi-web-access" not in settings.content
     assert '"~/repos/pi-angelini"' in settings.content
     assert "install_npm_global ~/repos/pi-angelini" not in frag.setup
-    assert "_install_pi_angelini" in frag.setup
+    assert 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"' in frag.setup
     dests = {cf.dest for cf in frag.configs}
     assert {
         "pi/agent/settings.json",
@@ -416,12 +420,13 @@ def test_pi_agent_setup() -> None:
         "pi/agent/prompts/pipeline.md",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
-        "pi-angelini/package.json",
-        "pi-angelini/packages/editor-file-links/index.ts",
     }.issubset(dests)
-    assert "pi-angelini/node_modules/package.json" not in dests
-    assert "pi-angelini/packages/editor-file-links/.pi-lens/cache/review-graph.json" not in dests
-    assert "pi-angelini/package-lock.json" not in dests
+    assert not [d for d in dests if d.startswith("pi-angelini/")]
+    (vendor,) = frag.vendors
+    assert vendor.source == _pi_angelini_root()
+    assert vendor.dest == "pi-angelini"
+    assert vendor.exclude_dirs == GIT_ARTIFACTS | NODE_ARTIFACTS | PY_ARTIFACTS | frozenset({".pi-lens", ".pi-subagents", ".serena", "dist"})
+    assert vendor.exclude_globs == ("package-lock.json", "pi-system-audit-plan.md", "*.test.ts")
     agents_config = next(cf for cf in frag.configs if cf.dest == "pi/agent/AGENTS.md")
     assert "Do not use first-person phrasing in reasoning summaries or final responses." in agents_config.content
     assert "/simplify --staged" not in agents_config.content
@@ -512,3 +517,158 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "__MACOS_" not in profile.content
     assert '"apiKey": "GEMINI_API_KEY"' in models.content
     assert "${GEMINI_API_KEY}" not in models.content
+
+
+_VENDOR_SRC = Path(__file__).parent / "fixtures" / "vendor_src"
+
+
+def _vendored(v: VendorDir, out: Path) -> dict[str, bytes]:
+    _vendor_dir(v, out)
+    return {p.relative_to(out).as_posix(): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()}
+
+
+def test_vendor_deny_list_prunes_artifacts(tmp_path: Path) -> None:
+    v = VendorDir(
+        source=_VENDOR_SRC,
+        dest="fx",
+        exclude_dirs=GIT_ARTIFACTS | NODE_ARTIFACTS | PY_ARTIFACTS | BUILD_ARTIFACTS,
+    )
+
+    assert set(_vendored(v, tmp_path / "out")) == {
+        "README.md",
+        "logo.bin",
+        "run.sh",
+        "secrets.env",
+        "pkg/index.ts",
+        "pkg/foo.test.ts",
+    }
+
+
+def test_vendor_prunes_dir_names_by_glob() -> None:
+    v = VendorDir(source=_VENDOR_SRC, dest="fx", exclude_dirs=PY_ARTIFACTS)
+
+    assert v.prunes_dir("thing.egg-info")
+    assert v.prunes_dir("__pycache__")
+    assert not v.prunes_dir("thing")
+
+
+def test_vendor_exclude_globs_match_basename_and_path(tmp_path: Path) -> None:
+    v = VendorDir(
+        source=_VENDOR_SRC,
+        dest="fx",
+        exclude_globs=("*.test.ts", "package-lock.json", "build/**"),
+    )
+
+    assert set(_vendored(v, tmp_path / "out")) == {
+        ".gitignore",
+        "README.md",
+        "logo.bin",
+        "run.sh",
+        "secrets.env",
+        "pkg/index.ts",
+        "pkg/thing.egg-info",
+        "pkg/build/inner.js",
+        "pkg/node_modules/dep.js",
+    }
+
+
+def test_vendor_allow_list_mode_applies_deny_rules_on_top(tmp_path: Path) -> None:
+    v = VendorDir(
+        source=_VENDOR_SRC,
+        dest="fx",
+        exclude_globs=("*.test.ts",),
+        include_globs=("pkg/**", "README.md"),
+    )
+
+    kept = set(_vendored(v, tmp_path / "out"))
+
+    assert kept == {
+        "README.md",
+        "pkg/index.ts",
+        "pkg/package-lock.json",
+        "pkg/thing.egg-info",
+        "pkg/build/inner.js",
+        "pkg/node_modules/dep.js",
+    }
+    assert "secrets.env" not in kept
+
+
+def test_vendor_preserves_exec_bit(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+
+    _vendor_dir(VendorDir(source=_VENDOR_SRC, dest="fx"), out)
+
+    assert (out / "run.sh").stat().st_mode & 0o777 == 0o755
+    assert (out / "README.md").stat().st_mode & 0o777 == 0o644
+
+
+def test_vendor_forces_mode_when_not_preserving(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+
+    _vendor_dir(VendorDir(source=_VENDOR_SRC, dest="fx", preserve_modes=False), out)
+
+    assert (out / "run.sh").stat().st_mode & 0o777 == 0o644
+
+
+def test_vendor_copies_binary_bytes(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+
+    _vendor_dir(VendorDir(source=_VENDOR_SRC, dest="fx"), out)
+
+    copied = (out / "logo.bin").read_bytes()
+    assert copied == (_VENDOR_SRC / "logo.bin").read_bytes()
+    assert b"\x00" in copied
+
+
+def test_vendor_missing_source_raises(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        _vendor_dir(VendorDir(source=tmp_path / "nope", dest="fx"), tmp_path / "out")
+
+
+def test_vendor_prunes_excluded_dirs_before_descent(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    (src / "node_modules" / "deep").mkdir(parents=True)
+    (src / "node_modules" / "deep" / "dep.js").write_text("dep\n")
+    (src / "keep.txt").write_text("keep\n")
+    blocked = src / "node_modules"
+    blocked.chmod(0o000)
+    out = tmp_path / "out"
+    try:
+        _vendor_dir(VendorDir(source=src, dest="fx", exclude_dirs=NODE_ARTIFACTS), out)
+    finally:
+        blocked.chmod(0o755)
+
+    assert {p.name for p in out.rglob("*")} == {"keep.txt"}
+
+
+def test_vendor_unreadable_source_dir_raises(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    (src / "realdir").mkdir(parents=True)
+    (src / "realdir" / "important.ts").write_text("important\n")
+    (src / "keep.txt").write_text("keep\n")
+    blocked = src / "realdir"
+    blocked.chmod(0o000)
+    try:
+        with pytest.raises(PermissionError):
+            _vendor_dir(VendorDir(source=src, dest="fx"), tmp_path / "out")
+    finally:
+        blocked.chmod(0o755)
+
+
+def test_vendor_creates_dest_dir_when_filter_selects_nothing(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+
+    _vendor_dir(VendorDir(source=_VENDOR_SRC, dest="fx", include_globs=("no-such-path/**",)), out)
+
+    assert out.is_dir()
+    assert list(out.iterdir()) == []
+
+
+def test_fragment_merge_concatenates_vendors() -> None:
+    a = VendorDir(source=_VENDOR_SRC, dest="a")
+    b = VendorDir(source=_VENDOR_SRC, dest="b")
+
+    assert Fragment().merge(Fragment()).vendors == ()
+    assert Fragment(vendors=(a,)).merge(Fragment()).vendors == (a,)
+    assert Fragment().merge(Fragment(vendors=(b,))).vendors == (b,)
+    assert Fragment(vendors=(a,)).merge(Fragment(vendors=(b,))).vendors == (a, b)

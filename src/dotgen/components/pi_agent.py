@@ -6,6 +6,7 @@ from pathlib import Path
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
+from dotgen.vendor import GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
 
 _SETTINGS_JSON = (
     json.dumps(
@@ -87,44 +88,12 @@ _PIPELINE_SCOUT_MD = _resource_text("agents/claude-pipeline/scout.md")
 _PIPELINE_CHAIN_MD = _resource_text("chains/pipeline.chain.md")
 _PIPELINE_PROMPT_MD = _resource_text("prompts/pipeline.md")
 
-_PI_ANGELINI_EXCLUDED_DIRS = frozenset(
-    {
-        ".git",
-        ".pi-lens",
-        ".pi-subagents",
-        "node_modules",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".serena",
-        "dist",
-    }
-)
-_PI_ANGELINI_EXCLUDED_NAMES = frozenset({"package-lock.json", "pi-system-audit-plan.md"})
-
 
 def _pi_angelini_root() -> Path:
     configured = os.environ.get("DOTGEN_PI_ANGELINI_ROOT")
     if configured:
         return Path(configured)
     return Path(__file__).resolve().parents[4] / "pi-angelini"
-
-
-def _pi_angelini_configs() -> tuple[ConfigFile, ...]:
-    root = _pi_angelini_root()
-    if not root.is_dir():
-        raise FileNotFoundError(f"pi-angelini source not found: {root}")
-
-    configs: list[ConfigFile] = []
-    for path in sorted(root.rglob("*")):
-        rel = path.relative_to(root)
-        if any(part in _PI_ANGELINI_EXCLUDED_DIRS for part in rel.parts):
-            continue
-        if path.is_dir():
-            continue
-        if path.name in _PI_ANGELINI_EXCLUDED_NAMES or path.name.endswith(".test.ts"):
-            continue
-        configs.append(ConfigFile(dest=f"pi-angelini/{rel.as_posix()}", content=path.read_text()))
-    return tuple(configs)
 
 
 _AGENTS_MD = """\
@@ -490,28 +459,7 @@ install_config "$DIR/config/pi/agent/prompts/pipeline.md" "$HOME/.pi/agent/promp
 install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
 install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
-_install_pi_angelini() {
-  local src="$DIR/config/pi-angelini" dst="$HOME/repos/pi-angelini"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -d "$dst" ]; then
-      printf '+ COPY   %s\n' "$dst"
-    elif ! diff -qr -x .git -x node_modules -x .pytest_cache "$src" "$dst" >/dev/null 2>&1; then
-      printf '~ SYNC   %s\n' "$dst"
-    fi
-    return 0
-  fi
-
-  ensure_dir "$HOME/repos"
-  if [ -d "$dst/.git" ]; then
-    cp -R "$src"/. "$dst"/
-    return 0
-  fi
-
-  rm -rf "$dst"
-  ensure_dir "$dst"
-  cp -R "$src"/. "$dst"/
-}
-_install_pi_angelini
+install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
 """
 )
 
@@ -552,7 +500,14 @@ class PiAgent:
                 ConfigFile(dest="pi/agent/prompts/pipeline.md", content=_PIPELINE_PROMPT_MD),
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
-            )
-            + _pi_angelini_configs(),
+            ),
+            vendors=(
+                VendorDir(
+                    source=_pi_angelini_root(),
+                    dest="pi-angelini",
+                    exclude_dirs=GIT_ARTIFACTS | NODE_ARTIFACTS | PY_ARTIFACTS | frozenset({".pi-lens", ".pi-subagents", ".serena", "dist"}),
+                    exclude_globs=("package-lock.json", "pi-system-audit-plan.md", "*.test.ts"),
+                ),
+            ),
             secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GEMINI_API_KEY"}),
         )

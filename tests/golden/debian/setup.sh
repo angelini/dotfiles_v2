@@ -352,28 +352,7 @@ if (
   install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
-  _install_pi_angelini() {
-    local src="$DIR/config/pi-angelini" dst="$HOME/repos/pi-angelini"
-    if [ "$DOTGEN_MODE" = diff ]; then
-      if [ ! -d "$dst" ]; then
-        printf '+ COPY   %s\n' "$dst"
-      elif ! diff -qr -x .git -x node_modules -x .pytest_cache "$src" "$dst" >/dev/null 2>&1; then
-        printf '~ SYNC   %s\n' "$dst"
-      fi
-      return 0
-    fi
-
-    ensure_dir "$HOME/repos"
-    if [ -d "$dst/.git" ]; then
-      cp -R "$src"/. "$dst"/
-      return 0
-    fi
-
-    rm -rf "$dst"
-    ensure_dir "$dst"
-    cp -R "$src"/. "$dst"/
-  }
-  _install_pi_angelini
+  install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
 ); then
   component_end "pi_agent" 0
 else

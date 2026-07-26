@@ -35,6 +35,7 @@ def test_function_set_identical_across_oses() -> None:
 
 _MODE_AWARE = (
     "install_config",
+    "install_config_dir",
     "link_file",
     "install_script",
     "install_package",
@@ -220,3 +221,193 @@ def test_npm_install_activates_fnm_in_its_component_subshell() -> None:
     assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in body
     assert 'eval "$("$fnm_bin" env --shell bash)"' in body
     assert 'error "npm unavailable; node_fnm must run before npm installs"' in body
+
+
+def _vendor_src(root: Path) -> Path:
+    src = root / "src"
+    (src / "nested dir").mkdir(parents=True)
+    (src / "a.txt").write_text("a\n")
+    (src / "nested dir" / "b file.txt").write_text("b\n")
+    script = src / "run.sh"
+    script.write_text("#!/bin/sh\n")
+    script.chmod(0o755)
+    return src
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def _call(src: Path, dst: Path) -> str:
+    return f'install_config_dir "{src}" "{dst}"'
+
+
+def test_install_config_dir_deploy_overlays_contents(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    (dst / "git-like").mkdir(parents=True)
+    (dst / "git-like" / "HEAD").write_text("ref\n")
+    (dst / "unmanaged.txt").write_text("keep\n")
+
+    out = _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+
+    assert out == ""
+    assert (dst / "a.txt").read_text() == "a\n"
+    assert (dst / "nested dir" / "b file.txt").read_text() == "b\n"
+    assert (dst / "run.sh").stat().st_mode & 0o111
+    assert (dst / "git-like" / "HEAD").read_text() == "ref\n"
+    assert (dst / "unmanaged.txt").read_text() == "keep\n"
+    assert not (dst / "src").exists()
+
+
+def test_install_config_dir_deploy_rerun_is_noop(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    first = _tree(dst)
+
+    out = _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+
+    assert out == ""
+    assert _tree(dst) == first
+
+
+def test_install_config_dir_diff_reports_copy_when_absent(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+
+    out = _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst))
+
+    assert out == f"+ COPY   {dst}\n"
+    assert not dst.exists()
+
+
+def test_install_config_dir_diff_silent_when_bytes_equal(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+
+    assert _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst)) == ""
+
+
+def test_install_config_dir_diff_reports_sync_and_leaves_target_alone(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    (dst / "nested dir" / "b file.txt").write_text("drifted\n")
+    before = _tree(dst)
+
+    out = _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst))
+
+    assert out == f"~ SYNC   {dst}\n"
+    assert _tree(dst) == before
+
+
+def test_install_config_dir_diff_ignores_mode_only_difference(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    (dst / "run.sh").chmod(0o644)
+
+    assert _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst)) == ""
+    assert not (dst / "run.sh").stat().st_mode & 0o111
+
+
+def test_install_config_dir_diff_ignores_unmanaged_target_files(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    (dst / "extra.txt").write_text("extra\n")
+    (dst / "git-like").mkdir()
+    (dst / "git-like" / "HEAD").write_text("ref\n")
+
+    assert _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst)) == ""
+
+
+def test_install_config_dir_diff_reports_sync_when_shipped_file_missing(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    (dst / "a.txt").unlink()
+
+    out = _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst))
+
+    assert out == f"~ SYNC   {dst}\n"
+    assert not (dst / "a.txt").exists()
+
+
+def _run_shim_checked(tmp_path: Path, shim_text: str, mode: str, call: str) -> subprocess.CompletedProcess[str]:
+    script = tmp_path / "run.sh"
+    script.write_text(f"set -euo pipefail\n{shim_text}\nDOTGEN_MODE={mode}\n{call}\n")
+    return subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+
+def test_install_config_dir_deploy_refuses_file_over_target_directory(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    (dst / "a.txt").mkdir(parents=True)
+    (dst / "a.txt" / "unmanaged.txt").write_text("keep\n")
+
+    res = _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst))
+
+    assert res.returncode != 0
+    assert f"{dst}/a.txt" in res.stderr
+    assert (dst / "a.txt").is_dir()
+    assert (dst / "a.txt" / "unmanaged.txt").read_text() == "keep\n"
+    assert not (dst / "a.txt" / "a.txt").exists()
+    assert not (dst / "run.sh").exists()
+
+
+def test_install_config_dir_deploy_refuses_directory_over_target_file(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    (dst / "nested dir").write_text("i am a file\n")
+
+    res = _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst))
+
+    assert res.returncode != 0
+    assert f"{dst}/nested dir" in res.stderr
+    assert (dst / "nested dir").read_text() == "i am a file\n"
+    assert not (dst / "a.txt").exists()
+
+
+def test_install_config_dir_diff_reports_sync_on_type_mismatch(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    (dst / "a.txt").mkdir(parents=True)
+    before = _tree(dst)
+
+    res = _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst))
+
+    assert res.returncode == 0
+    assert res.stdout == f"~ SYNC   {dst}\n"
+    assert f"{dst}/a.txt" in res.stderr
+    assert _tree(dst) == before
+
+
+def test_install_config_dir_fails_on_missing_source(tmp_path: Path, shim_text: str) -> None:
+    src = tmp_path / "nope"
+    dst = tmp_path / "dst"
+
+    for mode in ("deploy", "diff"):
+        res = _run_shim_checked(tmp_path, shim_text, mode, _call(src, dst))
+        assert res.returncode != 0, mode
+        assert "missing source directory" in res.stderr
+        assert not dst.exists()
+
+
+def test_install_config_dir_handles_empty_source(tmp_path: Path, shim_text: str) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    dst = tmp_path / "dst"
+
+    assert _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst)).stdout == f"+ COPY   {dst}\n"
+    assert not dst.exists()
+
+    deployed = _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst))
+    assert deployed.returncode == 0, deployed.stderr
+    assert dst.is_dir()
+
+    assert _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst)).stdout == ""
+    assert _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst)).stdout == ""
