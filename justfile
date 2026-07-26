@@ -38,9 +38,9 @@ typecheck:
 test:
     uv run pytest
 
-# env: debian | macos
+# env: debian | debian-docker | macos
 test-vm env="debian":
-    uv run pytest tests/test_vm_integration.py -v -m vm -k {{env}}
+    case "{{env}}" in debian) selector=debian ;; debian-docker) selector=docker ;; macos) selector=macos ;; *) echo "unknown VM environment: {{env}}" >&2; exit 2 ;; esac; uv run pytest tests/test_vm_integration.py -v -m vm -k "$selector"
 
 test-vm-all:
     uv run pytest tests/test_vm_integration.py -v -m vm

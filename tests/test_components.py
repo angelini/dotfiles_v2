@@ -7,6 +7,7 @@ from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
+from dotgen.components.docker import Docker
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
 from dotgen.components.fonts import Fonts
 from dotgen.components.gcloud import Gcloud
@@ -267,6 +268,53 @@ def test_environment_component_distribution() -> None:
     assert {"ghostty", "zed", "supacode"}.isdisjoint(debian_names)
     assert {"ghostty", "zed", "supacode"}.issubset(macos_names)
     assert "node_fnm" in {c.name for c in ENVIRONMENTS["debian-docker"].components}
+
+
+def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None:
+    assert Docker().applies_to(ENVIRONMENTS["debian"])
+    assert not Docker().applies_to(ENVIRONMENTS["debian-docker"])
+    assert not Docker().applies_to(ENVIRONMENTS["macos"])
+    for name in ("debian-docker", "macos"):
+        assert "docker" not in [component.name for component in ENVIRONMENTS[name].components]
+    names = [component.name for component in ENVIRONMENTS["debian"].components]
+    assert names.count("docker") == 1
+    assert names[-4:] == ["fonts", "docker", "git_setup", "dotfiles_deploy"]
+
+
+def test_docker_render_contract() -> None:
+    frag = Docker().render(ENVIRONMENTS["debian"])
+    assert frag.setup and not frag.alias and not frag.bashrc and not frag.configs and not frag.vendors and not frag.secrets
+    setup = frag.setup
+    for token in (
+        "https://download.docker.com/linux/debian/gpg",
+        "Types: deb",
+        "URIs: https://download.docker.com/linux/debian",
+        "Suites: trixie",
+        "Components: stable",
+        "Signed-By: /etc/apt/keyrings/docker.asc",
+        "install_package uidmap",
+        "add_repo apt-deb822 docker",
+        "remove_packages docker.io docker-compose docker-doc podman-docker containerd runc",
+        "service_mask docker.service docker.socket",
+        "update_pkg_index",
+        "install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras",
+    ):
+        assert token in setup
+    for forbidden in (
+        "apt-get",
+        "brew install",
+        "service_enable docker",
+        "--force",
+        "usermod",
+        "groupadd",
+        "docker group",
+        "rm -rf /var/lib/docker",
+        "rm -rf /var/lib/containerd",
+        "export DOCKER_HOST",
+    ):
+        assert forbidden not in setup
+    sandbox = next(c for c in PiAgent().render(ENVIRONMENTS["debian"]).configs if c.dest == "pi/sandbox/pi-sandbox.sh").content
+    assert "docker.sock" not in sandbox
 
 
 def test_node_precedes_pi_in_every_environment() -> None:

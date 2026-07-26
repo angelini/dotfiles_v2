@@ -94,6 +94,51 @@ exec bash -l
 
 The setup preflights non-root execution and sudo authentication before making changes. To install a locally built bundle on the Mac, run `just install macos`.
 
+## Rootless Docker on full Debian
+
+Rootless Docker is enabled only by the full `debian` environment, not `debian-docker` or macOS. It requires exact Debian 13 Trixie, the official Docker stable repository, unpinned CE, CLI, containerd, buildx, Compose, and rootless packages, cgroup v2, systemd, logind, and a regular deployment user with sudo used only for host administration.
+
+Before deployment, an administrator must inspect the account and every allocated subordinate-ID interval:
+
+```bash
+id <user>
+cat /etc/subuid
+cat /etc/subgid
+getsubids <user>
+```
+
+Choose non-overlapping contiguous UID and GID intervals of at least 65536 IDs, then allocate them explicitly as administrator actions:
+
+```bash
+usermod --add-subuids START-END <user>
+usermod --add-subgids START-END <user>
+```
+
+Setup validates these ranges but never allocates production ranges. It permanently masks the rootful Docker unit and socket before CE installation, does not grant the `docker` group, and removes conflict packages with `apt remove` semantics only: no purge or data deletion. It does not migrate `/var/lib/docker`, `/var/lib/containerd`, or Podman storage into `~/.local/share/docker`. It enables linger and the user `docker.service`, persists the `rootless` context at `/run/user/<uid>/docker.sock`, and does not set a global `DOCKER_HOST`. Pi sandbox runtime isolation intentionally excludes the Docker socket.
+
+Run user-side checks as the deployment account, without sudo:
+
+```bash
+systemctl is-enabled docker.service
+systemctl is-active docker.service
+systemctl is-enabled docker.socket
+systemctl is-active docker.socket
+systemctl --user is-enabled docker.service
+systemctl --user is-active docker.service
+docker context show
+docker context inspect rootless
+docker info
+docker run --rm hello-world
+```
+
+Manual remediation is required before rerunning when setup reports state conflicts:
+
+- Reconcile or remove same-ID `/etc/apt/sources.list.d/docker.list` and `/etc/apt/keyrings/docker.gpg`.
+- Stop rootful Docker and have an administrator remove a live or stale `/var/run/docker.sock`.
+- Manually repair or remove exactly one of the user unit or rootless context.
+
+Setup does not delete these administrator-owned or partial states.
+
 ## Pi system
 
 The Pi component installs the Pi CLI/packages, writes managed config under `~/.pi/agent`, and installs the sandbox wrapper. It also bundles a sanitized copy of the sibling `pi-angelini` repository into the artifact and syncs it to `~/repos/pi-angelini` during deploy. The bundle excludes `.git`, `node_modules`, lockfiles, caches, tests, and plan artifacts; Pi then loads it as the local package source `~/repos/pi-angelini`.

@@ -22,6 +22,11 @@ install_packages() {
   done
 }
 
+remove_packages() {
+  error "remove_packages: debian only"
+  return 1
+}
+
 install_cask() {
   if [ "$DOTGEN_MODE" = diff ]; then
     brew list --cask --versions "$1" >/dev/null 2>&1 || printf '+ INSTALL cask %s\n' "$1"
@@ -34,16 +39,13 @@ install_cask() {
 }
 
 add_repo() {
-  local kind="$1" id="$2" url="${3:-}"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    case "$kind" in
-      tap) brew tap | grep -qx "$id" || printf '+ ADD REPO %s (tap)\n' "$id" ;;
-      *)   printf '+ ADD REPO %s (%s)\n' "$id" "$kind" ;;
-    esac
-    return 0
-  fi
+  local kind="${1:-}" id="${2:-}" url="${3:-}"
   case "$kind" in
     tap)
+      if [ "$DOTGEN_MODE" = diff ]; then
+        brew tap | grep -qx "$id" || printf '+ ADD REPO %s (tap)\n' "$id"
+        return 0
+      fi
       if [ -n "$url" ]; then
         brew tap "$id" "$url"
       else
@@ -57,6 +59,7 @@ add_repo() {
   esac
 }
 
+
 update_pkg_index() {
   [ "$DOTGEN_MODE" = diff ] && return 0
   brew update
@@ -64,6 +67,11 @@ update_pkg_index() {
 
 service_enable() {
   return 0
+}
+
+service_mask() {
+  error "service_mask: debian only"
+  return 1
 }
 
 detect_arch() {

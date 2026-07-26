@@ -25,19 +25,41 @@ install_packages() {
   done
 }
 
+remove_packages() {
+  if [ "$#" -eq 0 ]; then
+    error "remove_packages: require at least one package"
+    return 1
+  fi
+  local p installed=()
+  for p in "$@"; do
+    if pkg_installed "$p"; then
+      installed+=("$p")
+    fi
+  done
+  if [ "$DOTGEN_MODE" = diff ]; then
+    for p in "${installed[@]}"; do
+      printf '%s\n' "- REMOVE pkg $p"
+    done
+    return 0
+  fi
+  [ "${#installed[@]}" -eq 0 ] && return 0
+  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y "${installed[@]}"
+}
+
 install_cask() {
   error "install_cask: macOS only"
   return 1
 }
 
 add_repo() {
-  local kind="$1" id="$2" src="$3" key="${4:-}"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    [ -f "/etc/apt/sources.list.d/$id.list" ] || printf '+ ADD REPO %s (%s)\n' "$id" "$kind"
-    return 0
-  fi
+  local kind="${1:-}"
   case "$kind" in
     apt)
+      local id="${2:-}" src="${3:-}" key="${4:-}"
+      if [ "$DOTGEN_MODE" = diff ]; then
+        [ -f "/etc/apt/sources.list.d/$id.list" ] || printf '+ ADD REPO %s (%s)\n' "$id" "$kind"
+        return 0
+      fi
       sudo install -d -m 0755 /etc/apt/keyrings
       if [ -n "$key" ]; then
         curl -fsSL "$key" | sudo gpg --dearmor --yes -o "/etc/apt/keyrings/$id.gpg"
@@ -47,6 +69,105 @@ add_repo() {
       else
         echo "$src" | sed "s|\[signed-by=[^]]*\]|\[signed-by=/etc/apt/keyrings/$id.gpg\]|" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
       fi
+      ;;
+    apt-deb822)
+      (
+        if [ "$#" -ne 4 ]; then
+          error "add_repo apt-deb822: require id, source content, and armored key URL"
+          return 1
+        fi
+        local id="$2" source="$3" key_url="$4" key_target source_target legacy_key legacy_source
+        local key_tmp source_tmp gpg_home key_stage="" source_stage="" validation status
+        if ! [[ "$id" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
+          error "add_repo apt-deb822: invalid repository id '$id'"
+          return 1
+        fi
+        key_target="/etc/apt/keyrings/$id.asc"
+        source_target="/etc/apt/sources.list.d/$id.sources"
+        legacy_key="/etc/apt/keyrings/$id.gpg"
+        legacy_source="/etc/apt/sources.list.d/$id.list"
+        while [[ "$source" == *$'\n' ]]; do source="${source%$'\n'}"; done
+        if [ -z "$source" ] || [[ "$source" == *$'\r'* ]]; then
+          error "add_repo apt-deb822: invalid source content; remediate the repository stanza"
+          return 1
+        fi
+        validation="$(printf '%s\n' "$source" | awk -v signed_by="$key_target" '
+          /^[[:space:]]*$/ { fail="blank line"; exit 1 }
+          /^[[:space:]]/ { fail="continuation line"; exit 1 }
+          !/^[A-Za-z][A-Za-z0-9-]*: [^[:space:]].*$/ { fail="malformed field line"; exit 1 }
+          {
+            split($0, pair, ": "); field=pair[1]; value=substr($0, length(field) + 3)
+            if (seen[field]++) { fail="duplicate field " field; exit 1 }
+            values[field]=value
+          }
+          END {
+            if (fail) { print fail > "/dev/stderr"; exit 1 }
+            split("Types URIs Suites Components Architectures Signed-By", required, " ")
+            for (i in required) if (!(required[i] in values)) { print "missing " required[i] > "/dev/stderr"; exit 1 }
+            if (values["Signed-By"] != signed_by) { print "Signed-By must be " signed_by > "/dev/stderr"; exit 1 }
+          }
+        ' 2>&1)" || { error "add_repo apt-deb822: $validation; remediate the repository stanza"; return 1; }
+        for target in "$key_target" "$source_target"; do
+          if [ -e "$target" ] || [ -L "$target" ]; then
+            if [ -L "$target" ] || [ ! -f "$target" ]; then
+              error "add_repo apt-deb822: unsafe target $target; remediate it manually"
+              return 1
+            fi
+          fi
+        done
+        for target in "$legacy_key" "$legacy_source"; do
+          if [ -e "$target" ] || [ -L "$target" ]; then
+            error "add_repo apt-deb822: legacy collision at $target; remediate it manually"
+            return 1
+          fi
+        done
+        key_tmp=""; source_tmp=""; gpg_home=""
+        trap 'status=$?
+set +e
+[ -z "$key_tmp" ] || rm -rf "$key_tmp"
+[ -z "$source_tmp" ] || rm -rf "$source_tmp"
+[ -z "$gpg_home" ] || rm -rf "$gpg_home"
+[ -z "$key_stage" ] || sudo rm -f "$key_stage"
+[ -z "$source_stage" ] || sudo rm -f "$source_stage"
+exit "$status"' EXIT
+        key_tmp="$(mktemp)" || return 1
+        source_tmp="$(mktemp)" || return 1
+        gpg_home="$(mktemp -d)" || return 1
+        chmod 0700 "$gpg_home" || return 1
+        printf '%s\n' "$source" > "$source_tmp"
+        if ! curl -fsSL "$key_url" -o "$key_tmp"; then
+          error "add_repo apt-deb822: failed to download key; remediate the key URL"
+          return 1
+        fi
+        if ! grep -q -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' "$key_tmp" || ! GNUPGHOME="$gpg_home" gpg --batch --show-keys "$key_tmp" >/dev/null; then
+          error "add_repo apt-deb822: invalid armored key; remediate the key URL"
+          return 1
+        fi
+        local key_changed=1 source_changed=1
+        [ -f "$key_target" ] && cmp -s "$key_tmp" "$key_target" && key_changed=0
+        [ -f "$source_target" ] && cmp -s "$source_tmp" "$source_target" && source_changed=0
+        if [ "$DOTGEN_MODE" = diff ]; then
+          if [ "$key_changed" -eq 1 ]; then
+            [ -f "$key_target" ] && printf '~ CHANGE REPO KEY %s\n' "$key_target" || printf '+ ADD REPO KEY %s\n' "$key_target"
+          fi
+          if [ "$source_changed" -eq 1 ]; then
+            [ -f "$source_target" ] && printf '~ CHANGE REPO SOURCE %s\n' "$source_target" || printf '+ ADD REPO SOURCE %s\n' "$source_target"
+          fi
+          return 0
+        fi
+        [ "$key_changed" -eq 0 ] && [ "$source_changed" -eq 0 ] && return 0
+        sudo install -d -m 0755 /etc/apt/keyrings /etc/apt/sources.list.d || return 1
+        if [ "$key_changed" -eq 1 ]; then
+          key_stage="$(sudo mktemp "/etc/apt/keyrings/.${id}.asc.XXXXXX")" || return 1
+          sudo install -m 0644 "$key_tmp" "$key_stage" && sudo mv -f "$key_stage" "$key_target" || return 1
+          key_stage=""
+        fi
+        if [ "$source_changed" -eq 1 ]; then
+          source_stage="$(sudo mktemp "/etc/apt/sources.list.d/.${id}.sources.XXXXXX")" || return 1
+          sudo install -m 0644 "$source_tmp" "$source_stage" && sudo mv -f "$source_stage" "$source_target" || return 1
+          source_stage=""
+        fi
+      )
       ;;
     *)
       error "add_repo: unsupported kind '$kind' on debian"
@@ -66,6 +187,29 @@ service_enable() {
     return 0
   fi
   sudo systemctl enable --now "$1"
+}
+
+service_mask() {
+  if [ "$#" -eq 0 ]; then
+    error "service_mask: require at least one unit"
+    return 1
+  fi
+  local unit state
+  if [ "$DOTGEN_MODE" = diff ]; then
+    for unit in "$@"; do
+      state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+      [ "$state" = masked ] || printf '~ MASK service %s\n' "$unit"
+    done
+    return 0
+  fi
+  sudo systemctl mask --now "$@" || return 1
+  for unit in "$@"; do
+    state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+    if [ "$state" != masked ] || systemctl is-active --quiet "$unit"; then
+      error "service_mask: failed to mask and stop $unit"
+      return 1
+    fi
+  done
 }
 
 detect_arch() {

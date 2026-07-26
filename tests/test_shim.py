@@ -1,4 +1,6 @@
+import os as os_module
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -39,10 +41,12 @@ _MODE_AWARE = (
     "link_file",
     "install_script",
     "install_package",
+    "remove_packages",
     "install_cask",
     "add_repo",
     "update_pkg_index",
     "service_enable",
+    "service_mask",
     "download_bin",
     "download_tar_bin",
 )
@@ -214,6 +218,27 @@ def test_debian_privileged_helpers_require_sudo() -> None:
     assert "sudo install -d -m 0755 /etc/apt/keyrings" in _function_body(shim, "add_repo")
     assert "sudo DEBIAN_FRONTEND=noninteractive apt-get update -y" in _function_body(shim, "update_pkg_index")
     assert 'sudo systemctl enable --now "$1"' in _function_body(shim, "service_enable")
+    assert 'sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y "${installed[@]}"' in _function_body(shim, "remove_packages")
+    assert 'sudo systemctl mask --now "$@"' in _function_body(shim, "service_mask")
+
+
+def test_debian_remove_packages_and_macos_stubs(tmp_path: Path) -> None:
+    debian = OSShim(OS.DEBIAN).render()
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{debian}
+DOTGEN_MODE=diff
+pkg_installed() {{ [ "$1" = installed ]; }}
+remove_packages absent installed
+"""
+    )
+    res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    assert res.stdout == "- REMOVE pkg installed\n"
+    macos = OSShim(OS.MACOS).render()
+    assert "debian only" in _function_body(macos, "remove_packages")
+    assert "debian only" in _function_body(macos, "service_mask")
 
 
 def test_npm_install_activates_fnm_in_its_component_subshell() -> None:
@@ -411,3 +436,228 @@ def test_install_config_dir_handles_empty_source(tmp_path: Path, shim_text: str)
 
     assert _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst)).stdout == ""
     assert _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst)).stdout == ""
+
+
+def _debian_shim_at(tmp_path: Path) -> str:
+    shim = OSShim(OS.DEBIAN).render()
+    return shim.replace("/etc/apt/keyrings", str(tmp_path / "keyrings")).replace("/etc/apt/sources.list.d", str(tmp_path / "sources"))
+
+
+def _run_debian_harness(
+    tmp_path: Path,
+    mode: str,
+    call: str,
+    *,
+    installed: str = "",
+    gpg_ok: bool = True,
+    curl_ok: bool = True,
+    mask_bad: str = "",
+) -> subprocess.CompletedProcess[str]:
+    fake = tmp_path / "bin"
+    shutil.rmtree(fake, ignore_errors=True)
+    fake.mkdir()
+    (tmp_path / "key.txt").write_text("-----BEGIN PGP PUBLIC KEY BLOCK-----\nfixture\n")
+    dispatcher = fake / "command"
+    dispatcher.write_text(
+        """#!/usr/bin/env bash
+set -u
+case "$(basename "$0")" in
+sudo)
+  printf 'sudo' >> "$STATE/commands"; for arg in "$@"; do printf ' <%s>' "$arg" >> "$STATE/commands"; done; printf '\\n' >> "$STATE/commands"
+  while [[ "${1:-}" = *=* ]]; do shift; done; "$@" ;;
+curl)
+  printf 'curl %s\\n' "$*" >> "$STATE/commands"
+  [ "$CURL_OK" = 1 ] || exit 127
+  while [ "$#" -gt 0 ]; do [ "$1" = -o ] && { cp "$KEY_FIXTURE" "$2"; exit 0; }; shift; done; exit 1 ;;
+gpg) printf 'gpg %s\\n' "$*" >> "$STATE/commands"; [ "$GPG_OK" = 1 ] ;;
+apt-get) printf "%s\n" "$*" >> "$STATE/apt" ;;
+systemctl)
+  case "$1" in
+  is-enabled) cat "$STATE/$2.enabled" 2>/dev/null || echo enabled ;;
+  is-active) unit="${@: -1}"; [ "$(cat "$STATE/$unit.active" 2>/dev/null || echo inactive)" = active ] ;;
+  mask)
+    shift 2
+    for unit in "$@"; do echo masked > "$STATE/$unit.enabled"; echo inactive > "$STATE/$unit.active"; done
+    if [ "$MASK_BAD" = enabled ]; then echo enabled > "$STATE/${@: -1}.enabled"; fi
+    if [ "$MASK_BAD" = active ]; then echo active > "$STATE/${@: -1}.active"; fi
+    ;;
+  esac ;;
+esac
+"""
+    )
+    dispatcher.chmod(0o755)
+    for name in ("sudo", "curl", "gpg", "systemctl", "apt-get"):
+        (fake / name).symlink_to("command")
+    script = tmp_path / "run.sh"
+    script.write_text("set -euo pipefail\n" + _debian_shim_at(tmp_path) + "\nDOTGEN_MODE=" + mode + '\npkg_installed() { [[ " $INSTALLED " == *" $1 "* ]]; }\n' + call + "\n")
+    env = {
+        **os_module.environ,
+        "PATH": f"{fake}:{os_module.environ['PATH']}",
+        "TMPDIR": str(tmp_path / "temps"),
+        "KEY_FIXTURE": str(tmp_path / "key.txt"),
+        "GPG_OK": "1" if gpg_ok else "0",
+        "CURL_OK": "1" if curl_ok else "0",
+        "MASK_BAD": mask_bad,
+        "STATE": str(tmp_path / "state"),
+        "INSTALLED": installed,
+    }
+    (tmp_path / "temps").mkdir(exist_ok=True)
+    (tmp_path / "state").mkdir(exist_ok=True)
+    return subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+
+
+_DEB822 = "Types: deb\nURIs: https://example.test\nSuites: trixie\nComponents: stable\nArchitectures: amd64\nSigned-By: {key}\n"
+
+
+@pytest.mark.parametrize("mode", ["diff", "deploy"])
+@pytest.mark.parametrize("key_state, source_state", [("absent", "absent"), ("drift", "equal"), ("equal", "drift"), ("drift", "drift"), ("equal", "equal")])
+def test_deb822_repository_status_matrix_is_independent_and_atomic(tmp_path: Path, mode: str, key_state: str, source_state: str) -> None:
+    key = tmp_path / "keyrings/docker.asc"
+    source = tmp_path / "sources/docker.sources"
+    key.parent.mkdir()
+    source.parent.mkdir()
+    stanza = _DEB822.format(key=key)
+    fixture = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nfixture\n"
+    for path, state, content in ((key, key_state, fixture), (source, source_state, stanza)):
+        if state != "absent":
+            path.write_text(content if state == "equal" else "drift\n")
+            os_module.utime(path, ns=(1_000_000_000, 1_000_000_000))
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (key, source) if path.exists()}
+    result = _run_debian_harness(tmp_path, mode, f'add_repo apt-deb822 docker "{stanza}" https://key.test')
+    assert result.returncode == 0, result.stderr
+    if mode == "diff":
+        expected: list[str] = []
+        for label, path, state in (("KEY", key, key_state), ("SOURCE", source, source_state)):
+            if state != "equal":
+                verb = "ADD" if state == "absent" else "CHANGE"
+                expected.append(f"{'+' if verb == 'ADD' else '~'} {verb} REPO {label} {path}")
+        assert result.stdout.splitlines() == expected
+        assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (key, source) if path.exists()} == before
+        assert not (tmp_path / "state/commands").exists() or "sudo" not in (tmp_path / "state/commands").read_text()
+    else:
+        assert key.read_text() == fixture and source.read_text() == stanza
+        assert key.stat().st_mode & 0o777 == 0o644 and source.stat().st_mode & 0o777 == 0o644
+        commands = (tmp_path / "state/commands").read_text()
+        for path, state in ((key, key_state), (source, source_state)):
+            if state == "equal":
+                assert path.stat().st_mtime_ns == before[path][1]
+                assert f"<{path}>" not in commands
+            else:
+                assert f"mv> <-f> <{path.parent}/.docker.{path.suffix[1:]}." in commands
+    assert not list((tmp_path / "temps").iterdir())
+
+
+@pytest.mark.parametrize(
+    "identifier, stanza",
+    [
+        ("docker", ""),
+        ("docker", "Types: deb\n"),
+        ("docker", "Types: deb\n\nURIs: x"),
+        ("docker", "Types: deb\n Signed-By: x"),
+        ("docker", "Types: deb\r\nURIs: x"),
+        ("Docker/unsafe", "Types: deb"),
+    ],
+)
+def test_deb822_rejects_malformed_source_and_cleans_temps(tmp_path: Path, identifier: str, stanza: str) -> None:
+    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 {identifier} "{stanza}" https://key.test')
+    assert result.returncode != 0
+    assert not list((tmp_path / "temps").iterdir())
+    assert not (tmp_path / "keyrings/docker.asc").exists()
+    assert not (tmp_path / "sources/docker.sources").exists()
+
+
+@pytest.mark.parametrize("legacy_name", ["docker.list", "docker.gpg"])
+def test_deb822_rejects_legacy_collisions_before_privileged_writes(tmp_path: Path, legacy_name: str) -> None:
+    parent = tmp_path / ("sources" if legacy_name.endswith(".list") else "keyrings")
+    parent.mkdir()
+    legacy = parent / legacy_name
+    legacy.write_text("administrator owned")
+    stanza = _DEB822.format(key=tmp_path / "keyrings/docker.asc")
+    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 docker "{stanza}" https://key.test')
+    assert result.returncode != 0 and legacy.read_text() == "administrator owned"
+    assert not (tmp_path / "state/commands").exists()
+
+
+@pytest.mark.parametrize(
+    "stanza",
+    [
+        "Types: deb\nTypes: deb\nURIs: https://example.test\nSuites: trixie\nComponents: stable\nArchitectures: amd64\nSigned-By: {key}\n",
+        "Types: deb\nURIs: https://example.test\nSuites: trixie\nComponents: stable\nArchitectures: amd64\nSigned-By: /wrong.asc\n",
+    ],
+)
+def test_deb822_rejects_duplicate_and_wrong_signed_by_without_writes(tmp_path: Path, stanza: str) -> None:
+    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 docker "{stanza.format(key=tmp_path / "keyrings/docker.asc")}" https://key.test')
+    assert result.returncode != 0
+    assert not (tmp_path / "state/commands").exists()
+
+
+def test_deb822_rejects_unsafe_target_without_writes(tmp_path: Path) -> None:
+    target = tmp_path / "keyrings/docker.asc"
+    target.parent.mkdir()
+    target.symlink_to(tmp_path / "outside")
+    stanza = _DEB822.format(key=target)
+    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 docker "{stanza}" https://key.test')
+    assert result.returncode != 0
+    assert target.is_symlink() and not (tmp_path / "state/commands").exists()
+
+
+@pytest.mark.parametrize("gpg_ok, curl_ok", [(False, True), (True, False)])
+def test_deb822_bad_or_unavailable_key_cleans_temps(tmp_path: Path, gpg_ok: bool, curl_ok: bool) -> None:
+    stanza = _DEB822.format(key=tmp_path / "keyrings/docker.asc")
+    result = _run_debian_harness(tmp_path, "diff", f'add_repo apt-deb822 docker "{stanza}" https://key.test', gpg_ok=gpg_ok, curl_ok=curl_ok)
+    assert result.returncode != 0
+    assert not list((tmp_path / "temps").iterdir())
+
+
+def test_remove_packages_uses_one_exact_batched_deploy_transaction(tmp_path: Path) -> None:
+    result = _run_debian_harness(tmp_path, "diff", "remove_packages absent second present", installed="present second")
+    assert result.returncode == 0 and result.stdout.splitlines() == ["- REMOVE pkg second", "- REMOVE pkg present"]
+    assert not (tmp_path / "state/commands").exists()
+    result = _run_debian_harness(tmp_path, "deploy", "remove_packages absent second present", installed="present second")
+    assert result.returncode == 0, result.stderr
+    commands = (tmp_path / "state/commands").read_text()
+    assert commands.splitlines() == ["sudo <DEBIAN_FRONTEND=noninteractive> <apt-get> <remove> <-y> <second> <present>"]
+    assert "purge" not in commands and "/var/lib" not in commands
+    before = commands
+    result = _run_debian_harness(tmp_path, "deploy", "remove_packages absent", installed="present")
+    assert result.returncode == 0 and (tmp_path / "state/commands").read_text() == before
+
+
+def test_service_mask_logs_state_verifies_and_diff_is_immutable(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "docker.socket.enabled").write_text("masked\n")
+    (state / "docker.socket.active").write_text("inactive\n")
+    result = _run_debian_harness(tmp_path, "diff", "service_mask docker.service docker.socket")
+    assert result.returncode == 0 and result.stdout == "~ MASK service docker.service\n"
+    assert (state / "docker.socket.enabled").read_text() == "masked\n"
+    assert not (state / "commands").exists()
+    result = _run_debian_harness(tmp_path, "deploy", "service_mask docker.service docker.socket")
+    assert result.returncode == 0, result.stderr
+    assert (state / "docker.service.enabled").read_text().strip() == "masked"
+    assert (state / "docker.service.active").read_text().strip() == "inactive"
+    assert (state / "commands").read_text().splitlines() == ["sudo <systemctl> <mask> <--now> <docker.service> <docker.socket>"]
+
+
+@pytest.mark.parametrize("bad", ["enabled", "active"])
+def test_service_mask_rejects_failed_post_mask_verification(tmp_path: Path, bad: str) -> None:
+    result = _run_debian_harness(tmp_path, "deploy", "service_mask docker.service docker.socket", mask_bad=bad)
+    assert result.returncode != 0
+    assert "docker.socket" in result.stderr
+
+
+def test_macos_rejects_new_debian_helpers_and_legacy_paths_regressions(tmp_path: Path) -> None:
+    macos = OSShim(OS.MACOS).render()
+    calls = (
+        ("diff", "add_repo apt-deb822 docker source key"),
+        ("deploy", "add_repo apt-deb822 docker source key"),
+        ("deploy", "remove_packages docker.io"),
+        ("deploy", "service_mask docker.service"),
+    )
+    for mode, call in calls:
+        script = tmp_path / "run.sh"
+        script.write_text(f"set -euo pipefail\n{macos}\nDOTGEN_MODE={mode}\n{call}\n")
+        assert subprocess.run(["bash", str(script)], capture_output=True, text=True).returncode != 0
+    assert _run_shim_fn(tmp_path, macos, "diff", "add_repo tap homebrew/core") == "+ ADD REPO homebrew/core (tap)\n"
+    debian = OSShim(OS.DEBIAN).render()
+    assert _run_shim_fn(tmp_path, debian, "diff", "add_repo apt example 'deb https://example.test stable main' https://key.test") == "+ ADD REPO example (apt)\n"

@@ -36,7 +36,7 @@ def _stub_secrets_env(template_path: Path) -> str:
     return template_path.read_text().replace('=""', '="test"')
 
 
-@pytest.fixture(scope="module", params=list(IMAGES))
+@pytest.fixture(scope="module", params=list(IMAGES), ids=["debian", "docker", "macos"])
 def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, VmHandle]]:
     env_name: str = request.param
     work = tmp_path_factory.mktemp(f"vm-{env_name}")
@@ -52,6 +52,9 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
 
     try:
         with vm_session(env_name, image_spec) as handle:
+            if env_name == "debian":
+                handle.assert_cmd("sudo -n true")
+                handle.prepare_rootless_container_subids()
             handle.push(Path(tar), "/tmp/dotgen.tar.gz")
             handle.push(secrets_local, "/tmp/secrets.env")
             handle.run("mkdir -p /tmp/dotgen && tar xzf /tmp/dotgen.tar.gz -C /tmp/dotgen")
@@ -60,6 +63,47 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
             yield env_name, handle
     except VmBackendUnavailable as e:
         pytest.skip(str(e))
+
+
+def _assert_debian_rootless_docker(handle: VmHandle) -> None:
+    handle.assert_cmd(
+        r"""
+set -euo pipefail
+user="$(id -un)" uid="$(id -u)"
+awk -F: -v user="$user" -v uid="$uid" '$1 == user || $1 == uid { if ($3 ~ /^[0-9]+$/ && $3 >= 65536 && $2 + $3 - 1 <= 4294967295) found=1 } END { exit !found }' /etc/subuid
+awk -F: -v user="$user" -v gid="$(id -g)" '$1 == user || $1 == gid { if ($3 ~ /^[0-9]+$/ && $3 >= 65536 && $2 + $3 - 1 <= 4294967295) found=1 } END { exit !found }' /etc/subgid
+[ "$(systemctl is-enabled docker.service)" = masked ]
+[ "$(systemctl is-enabled docker.socket)" = masked ]
+! systemctl is-active --quiet docker.service
+! systemctl is-active --quiet docker.socket
+[ ! -e /var/run/docker.sock ]
+[ "$(docker context show)" = rootless ]
+[ "$(docker context inspect rootless --format '{{.Endpoints.docker.Host}}')" = "unix:///run/user/$uid/docker.sock" ]
+[ -S "/run/user/$uid/docker.sock" ] && [ "$(stat -c %u "/run/user/$uid/docker.sock")" = "$uid" ]
+systemctl --user is-enabled docker.service
+systemctl --user is-active docker.service
+docker info --format '{{json .SecurityOptions}}' | grep -q rootless
+[ "$(docker info --format '{{.CgroupVersion}}')" = 2 ]
+! id -nG | tr ' ' '\n' | grep -qx docker
+docker run --rm hello-world
+repo="$HOME/repos/docker-sandbox-smoke"; mkdir -p "$repo"
+cat > "$repo/pi" <<'SH'
+#!/usr/bin/env bash
+[ ! -e "$XDG_RUNTIME_DIR/docker.sock" ]
+SH
+chmod +x "$repo/pi"
+(cd "$repo" && PATH="$PWD:$PATH" pi-sandbox)
+rm -rf "$repo"
+""",
+        login=True,
+    )
+
+
+def test_rootless_engine(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name != "debian":
+        pytest.skip("rootless Docker is only full Debian")
+    _assert_debian_rootless_docker(handle)
 
 
 def test_core_utils_installed(vm: tuple[str, VmHandle]) -> None:
@@ -239,3 +283,5 @@ def test_setup_is_idempotent(vm: tuple[str, VmHandle]) -> None:
     handle.run(_deploy_cmd(env_name), timeout=_REDEPLOY_TIMEOUT[env_name])
     after = handle.run(f"{sum_cmd} $HOME/.bashrc $HOME/.aliases $HOME/.gitconfig").stdout
     assert before == after, f"second setup.sh run mutated dotfiles\nbefore:\n{before}\nafter:\n{after}"
+    if env_name == "debian":
+        _assert_debian_rootless_docker(handle)

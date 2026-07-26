@@ -3,6 +3,7 @@ from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
+from dotgen.components.docker import Docker
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
 from dotgen.components.fonts import Fonts
 from dotgen.components.gcloud import Gcloud
@@ -48,6 +49,8 @@ _SHARED: tuple[Component, ...] = (
     Fonts(),
 )
 
+_DEBIAN_FULL: tuple[Component, ...] = (Docker(),)
+
 _MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), Supacode())
 
 _DOCKER_SKIP = {
@@ -70,7 +73,7 @@ ENVIRONMENTS: dict[str, Environment] = {
         "debian",
         OS.DEBIAN,
         PkgMgr.APT,
-        components=_SHARED + _LAST,
+        components=_SHARED + _DEBIAN_FULL + _LAST,
     ),
     "debian-docker": Environment(
         "debian-docker",
