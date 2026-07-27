@@ -96,7 +96,7 @@ The setup preflights non-root execution and sudo authentication before making ch
 
 ## Rootless Docker on full Debian
 
-Rootless Docker is enabled only by the full `debian` environment, not `debian-docker` or macOS. It requires exact Debian 13 Trixie, the official Docker stable repository, unpinned CE, CLI, containerd, buildx, Compose, and rootless packages, cgroup v2, systemd, logind, and a regular deployment user with sudo used only for host administration.
+Rootless Docker is enabled only by the full `debian` environment, not `debian-docker` or macOS. It requires exact Debian 13 Trixie, the official Docker stable repository, unpinned CE, CLI, containerd, buildx, Compose, and rootless packages, cgroup v2, systemd, logind, and a regular deployment user with sudo used only for host administration. Setup loads the kernel module required by the active iptables backend (`nf_tables` by default or `ip_tables` for legacy iptables) before rootless configuration.
 
 Before deployment, an administrator must inspect the account and every allocated subordinate-ID interval:
 

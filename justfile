@@ -23,6 +23,9 @@ deploy env target:
     scp -- "dist/{{env}}.tar.gz" "{{target}}:"
     ssh -t -- "{{target}}" 'set -e; rm -rf -- "{{env}}"; tar xzf "{{env}}.tar.gz"; bash "{{env}}/setup.sh" deploy; rm -f -- "{{env}}.tar.gz"'
 
+send-secrets env target:
+    uv run python -m dotgen send-secrets "{{env}}" "{{target}}" --from-env
+
 list:
     uv run python -m dotgen list-envs
 

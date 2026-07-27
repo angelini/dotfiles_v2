@@ -35,6 +35,9 @@ Official references:
 - Install `docker-ce`, `docker-ce-cli`, `containerd.io`,
   `docker-buildx-plugin`, `docker-compose-plugin`,
   `docker-ce-rootless-extras`, and `uidmap`.
+- Before rootless configuration, load the kernel module selected by the installed
+  iptables backend: `nf_tables` for nft-backed iptables or `ip_tables` for
+  legacy iptables. Do not disable Docker's iptables checks.
 - Remove Docker's documented conflicts with `apt remove`, never `purge`:
   `docker.io`, `docker-compose`, `docker-doc`, `podman-docker`, `containerd`,
   and `runc`. Never delete engine data directories.
@@ -193,6 +196,10 @@ After preflight passes and before removing/installing engine packages:
    Compose, and rootless-extras package set through shim helpers.
 7. Reassert that the rootful units remain masked/inactive and no rootful socket
    exists before invoking rootless setup.
+8. Match Docker's backend detection through `iptables --version` and load
+   `nf_tables` for nft-backed iptables or `ip_tables` for legacy iptables before
+   invoking the rootless setup tool. Fail with kernel remediation rather than
+   passing `--skip-iptables` when the selected module cannot be loaded.
 
 Keeping the units masked is intentional. It closes the rootful startup window
 when apt installs packages one at a time and remains fail-safe if a later package
@@ -474,6 +481,8 @@ git status --short
   setup fails safely and requires manual remediation.
 - Rootless operation requires a healthy logind/systemd user manager. Do not fall
   back to a manually launched daemon.
+- The host kernel must provide the module required by its iptables backend;
+  package installation cannot remediate a kernel that lacks it.
 - Cgroup v2 is required, but complete CPU/IO/cpuset delegation is not configured
   or claimed.
 - Privileged ports below 1024 are not enabled.
@@ -484,7 +493,8 @@ git status --short
 ## End state
 
 The full Debian bundle installs unpinned Docker CE, containerd, buildx, Compose,
-and rootless tooling from Docker's official stable deb822 repository. Rootful
+and rootless tooling from Docker's official stable deb822 repository, then loads
+its iptables backend's kernel module before rootless setup. Rootful
 Docker units are masked before package installation and remain inactive.
 Conflicting distro packages are removed without purging data. The regular user
 has administrator-provisioned subordinate IDs, a canonical lingering systemd

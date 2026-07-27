@@ -301,6 +301,7 @@ def test_docker_render_contract() -> None:
         "add_repo apt-deb822 docker",
         "remove_packages docker.io docker-compose docker-doc podman-docker containerd runc",
         "service_mask docker.service docker.socket",
+        'sudo modprobe "$module"',
         "update_pkg_index",
         "install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras",
     ):

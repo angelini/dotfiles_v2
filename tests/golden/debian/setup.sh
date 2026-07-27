@@ -514,6 +514,26 @@ if (
     fi
   }
 
+  _docker_load_iptables_module() {
+    local iptables_command version module=nf_tables candidate
+    iptables_command="$(command -v iptables 2>/dev/null || true)"
+    if [ -z "$iptables_command" ]; then
+      for candidate in /usr/sbin/iptables /sbin/iptables; do
+        if [ -x "$candidate" ]; then iptables_command="$candidate"; break; fi
+      done
+    fi
+    [ -n "$iptables_command" ] || {
+      _docker_fail "iptables is missing after Docker installation; remediate the Docker packages"; return 1
+    }
+    version="$("$iptables_command" --version 2>/dev/null)" || {
+      _docker_fail "could not determine the iptables backend; remediate iptables"; return 1
+    }
+    case "$version" in *legacy*) module=ip_tables ;; esac
+    sudo modprobe "$module" || {
+      _docker_fail "failed to load the $module kernel module required by rootless Docker"; return 1
+    }
+  }
+
   _docker_wait_user_manager() {
     local user="$1" uid="$2" runtime="$3" i
     for ((i = 0; i < 30; i++)); do
@@ -585,6 +605,7 @@ if (
     [ "$DOTGEN_MODE" = diff ] && return 0
     service_mask docker.service docker.socket || return 1
     _docker_verify_rootful || return 1
+    _docker_load_iptables_module || return 1
 
     sudo loginctl enable-linger "$user" || return 1
     runtime="$(loginctl show-user "$user" --property=RuntimePath --value)"

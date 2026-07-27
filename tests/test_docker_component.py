@@ -43,6 +43,8 @@ class DockerHarness:
         subgid: str = _VALID_SUBIDS,
         marker_state: str = "none",
         package_failure: str | None = None,
+        iptables_backend: str = "nf_tables",
+        module_failure: bool = False,
         root_socket: str = "absent",
         runtime_path: str = "canonical",
         runtime_mode: str = "700",
@@ -145,6 +147,8 @@ class DockerHarness:
               elif [ "${1:-}" = start ]; then echo active > "$STATE/user.active"
               elif [ "${1:-}" = status ]; then echo user-unit-diagnostic >&2
               fi ;;
+            iptables) echo "iptables v1.8.11 ($IPTABLES_BACKEND)" ;;
+            modprobe) log "MODPROBE $*"; [ "$MODULE_FAILURE" = 0 ] ;;
             dockerd-rootless-setuptool.sh)
   log "SETUP DOCKER_HOST=${DOCKER_HOST-unset} DOCKER_CONTEXT=${DOCKER_CONTEXT-unset} XDG_CONFIG_HOME=${XDG_CONFIG_HOME-unset} DOCKER_CONFIG=${DOCKER_CONFIG-unset}"
   mkdir -p "$HOME/.config/systemd/user" "$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f"
@@ -162,7 +166,24 @@ class DockerHarness:
         command = fake / "command"
         command.write_text(dispatcher)
         command.chmod(0o755)
-        for name in ("ps", "dpkg", "id", "getent", "stat", "ss", "sleep", "loginctl", "systemctl", "docker", "dockerd-rootless-setuptool.sh", "newuidmap", "newgidmap", "getsubids"):
+        for name in (
+            "ps",
+            "dpkg",
+            "id",
+            "getent",
+            "stat",
+            "ss",
+            "sleep",
+            "loginctl",
+            "systemctl",
+            "iptables",
+            "modprobe",
+            "docker",
+            "dockerd-rootless-setuptool.sh",
+            "newuidmap",
+            "newgidmap",
+            "getsubids",
+        ):
             link = fake / name
             if not link.exists():
                 link.symlink_to(command.name)
@@ -201,6 +222,8 @@ class DockerHarness:
             "RUNTIME_OWNER": runtime_owner,
             "READY_AFTER": str(ready_after),
             "PACKAGE_FAILURE": package_failure or "",
+            "IPTABLES_BACKEND": iptables_backend,
+            "MODULE_FAILURE": "1" if module_failure else "0",
             "SYSTEMD": "1" if systemd else "0",
             "LOGIND": "1" if logind else "0",
             "SYSTEM_STATE": "running",
@@ -299,6 +322,24 @@ def test_package_safety_root_socket_and_idempotency(docker_harness: DockerHarnes
 
     result = docker_harness.run(marker_state="both")
     assert result.returncode == 0, result.stderr
+    assert not any(event.startswith("SETUP") for event in docker_harness.events())
+
+
+@pytest.mark.parametrize(("backend", "module"), [("nf_tables", "nf_tables"), ("legacy", "ip_tables")])
+def test_iptables_module_is_loaded_before_rootless_setup(docker_harness: DockerHarness, backend: str, module: str) -> None:
+    result = docker_harness.run(iptables_backend=backend)
+    assert result.returncode == 0, result.stderr
+    events = docker_harness.events()
+    install_index = next(i for i, event in enumerate(events) if event.startswith("INSTALLS docker-ce"))
+    module_index = events.index(f"MODPROBE {module}")
+    setup_index = next(i for i, event in enumerate(events) if event.startswith("SETUP"))
+    assert install_index < module_index < setup_index
+
+
+def test_iptables_module_failure_stops_before_rootless_setup(docker_harness: DockerHarness) -> None:
+    result = docker_harness.run(module_failure=True)
+    assert result.returncode != 0
+    assert "failed to load the nf_tables kernel module" in result.stderr
     assert not any(event.startswith("SETUP") for event in docker_harness.events())
 
 
