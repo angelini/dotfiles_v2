@@ -19,6 +19,18 @@ just clean              # rm -rf dist
 
 `just ci` runs the full chain: `lint typecheck test build-all shellcheck`.
 
+### Stinkpot shell history
+
+Bundles cross-build [Stinkpot](https://tangled.org/oppi.li/stinkpot) from pinned commit `cdf87ffcd36e96f3d49316d57fa17cc6ea8371df` on the build host. The effective compiler must be exactly Go `1.26.4`; `GOTOOLCHAIN=go1.26.4+auto` allows a sufficiently recent Go launcher to fetch that toolchain and module dependencies on a cold build. Target machines do not need Go or network access for Stinkpot.
+
+The supported bundle matrix is Linux amd64 and arm64 in `debian` and `debian-docker`, and Darwin arm64 in `macos`. Darwin amd64 is deliberately unsupported and deployment fails rather than using Rosetta, another artifact, or a destination-side build. Binaries and checksums are packaged under `artifacts/stinkpot/`; setup verifies the selected artifact and atomically installs it as `~/bin/stinkpot`.
+
+On first deployment, setup initializes `${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db`, imports a non-empty regular `~/.bash_history`, and atomically records completion at `${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1`. The legacy history file remains unchanged. Bash then keeps only in-memory history, while Stinkpot provides cross-session persistence and `Ctrl-R` search.
+
+Stinkpot stores plaintext command text, cwd, exit status, timestamps, and session IDs in SQLite/WAL files. Commands are unique by text: repeating one replaces its metadata, and search considers the newest 10,000 unique commands. There is no per-command ignore/redaction, retention, encryption, sync, exporter, or automatic schema recovery. Do not delete and re-import the database automatically: after migration, SQLite may contain commands absent from the preserved Bash file, and upstream has no exporter.
+
+Upstream is new, untagged, untested, and has no license file. Generated binaries and bundles are approved only for private deployment to machines under the owner's control. Do not commit the binaries or publish/redistribute bundles until licensing or explicit permission permits it.
+
 ## Prepare fresh Debian
 
 The generated setup must run as a regular user with sudo, never as root. From the initial administrative shell, create that user if the Debian installer did not already create one:

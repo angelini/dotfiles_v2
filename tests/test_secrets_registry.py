@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from dotgen.artifact import FakeArtifactBuilder
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import build_env, required_secrets
 from dotgen.secrets import all_keys
@@ -16,8 +17,9 @@ _TEMPLATE_KEY_RE = re.compile(r'^([A-Z][A-Z0-9_]*)="', re.MULTILINE)
 @pytest.fixture(scope="module")
 def built_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
     root = tmp_path_factory.mktemp("dist_secrets")
+    builder = FakeArtifactBuilder()
     for name, env in ENVIRONMENTS.items():
-        build_env(env, root / name)
+        build_env(env, root / name, artifact_builder=builder)
     return root
 
 

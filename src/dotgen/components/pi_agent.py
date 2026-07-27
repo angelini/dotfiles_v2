@@ -149,6 +149,7 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
         ".config/gcloud",
         ".kube",
         ".claude",
+        ".local/share/stinkpot",
     ),
     hidden_files=(
         ".docker/config.json",

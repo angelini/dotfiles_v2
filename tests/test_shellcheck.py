@@ -4,13 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from dotgen.artifact import FakeArtifactBuilder
 from dotgen.render import build_all
 
 
 @pytest.fixture(scope="module")
 def built_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
     root = tmp_path_factory.mktemp("shellcheck")
-    build_all(root)
+    build_all(root, artifact_builder=FakeArtifactBuilder())
     return root
 
 

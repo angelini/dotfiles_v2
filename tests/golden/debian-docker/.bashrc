@@ -8,16 +8,15 @@ export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 bin_exists() { command -v "$1" >/dev/null 2>&1; }
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
 # --- bash_base ---
-HISTSIZE=1000000
-HISTFILESIZE=1000000
-HISTCONTROL=ignoredups:erasedups
-shopt -s histappend
 ulimit -n 65536
 
 set_win_title() {
   printf '\033]0;%s@%s:%s\007' "${USER:-?}" "${HOSTNAME%%.*}" "${PWD/#$HOME/~}"
 }
-PROMPT_COMMAND="history -a;set_win_title;${PROMPT_COMMAND:-}"
+case ";${PROMPT_COMMAND:-};" in
+  *";set_win_title;"*|*"; set_win_title;"*) ;;
+  *) PROMPT_COMMAND="set_win_title${PROMPT_COMMAND:+;${PROMPT_COMMAND}}" ;;
+esac
 
 epoch() {
   python3 - "$1" <<'PYEOF'
@@ -25,6 +24,14 @@ import sys, datetime as d
 print(d.datetime.fromtimestamp(int(sys.argv[1])).isoformat())
 PYEOF
 }
+
+# --- stinkpot ---
+if bin_exists stinkpot; then
+  export HISTFILE=/dev/null
+  eval "$(stinkpot init)"
+else
+  printf 'warning: stinkpot is unavailable; using Bash history defaults\n' >&2
+fi
 
 # --- helix ---
 export EDITOR=hx

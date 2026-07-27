@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from dotgen.artifact import FakeArtifactBuilder
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import build_all, build_env
 from dotgen.shim import SHIM_FUNCTIONS
@@ -12,7 +13,7 @@ from dotgen.shim import SHIM_FUNCTIONS
 @pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
 def test_build_env_emits_four_files(tmp_path: Path, env_name: str) -> None:
     out = tmp_path / env_name
-    build_env(ENVIRONMENTS[env_name], out)
+    build_env(ENVIRONMENTS[env_name], out, artifact_builder=FakeArtifactBuilder())
 
     for fname in ("setup.sh", "alias.sh", ".bashrc", "os_shim.sh"):
         path = out / fname
@@ -21,7 +22,7 @@ def test_build_env_emits_four_files(tmp_path: Path, env_name: str) -> None:
 
 
 def test_bashrc_returns_before_non_interactive_setup(tmp_path: Path) -> None:
-    build_env(ENVIRONMENTS["debian"], tmp_path)
+    build_env(ENVIRONMENTS["debian"], tmp_path, artifact_builder=FakeArtifactBuilder())
 
     subprocess.run(
         [
@@ -36,14 +37,14 @@ def test_bashrc_returns_before_non_interactive_setup(tmp_path: Path) -> None:
 
 
 def test_build_all_emits_one_dir_per_env(tmp_path: Path) -> None:
-    build_all(tmp_path)
+    build_all(tmp_path, artifact_builder=FakeArtifactBuilder())
     for name in ENVIRONMENTS:
         assert (tmp_path / name).is_dir()
         assert (tmp_path / name / "setup.sh").is_file()
 
 
 def test_shim_contains_all_contract_functions(tmp_path: Path) -> None:
-    build_env(ENVIRONMENTS["macos"], tmp_path)
+    build_env(ENVIRONMENTS["macos"], tmp_path, artifact_builder=FakeArtifactBuilder())
     text = (tmp_path / "os_shim.sh").read_text()
     for fn in SHIM_FUNCTIONS:
         assert re.search(rf"^{re.escape(fn)}\(\) [{{(]", text, re.MULTILINE), f"missing shim function: {fn}"
@@ -52,10 +53,10 @@ def test_shim_contains_all_contract_functions(tmp_path: Path) -> None:
 def test_build_env_emits_dockerfile_only_for_docker_env(tmp_path: Path) -> None:
     # Docker env should have Dockerfile
     out_docker = tmp_path / "debian-docker"
-    build_env(ENVIRONMENTS["debian-docker"], out_docker)
+    build_env(ENVIRONMENTS["debian-docker"], out_docker, artifact_builder=FakeArtifactBuilder())
     assert (out_docker / "Dockerfile").is_file()
 
     # Non-docker env should NOT have Dockerfile
     out_macos = tmp_path / "macos"
-    build_env(ENVIRONMENTS["macos"], out_macos)
+    build_env(ENVIRONMENTS["macos"], out_macos, artifact_builder=FakeArtifactBuilder())
     assert not (out_macos / "Dockerfile").exists()

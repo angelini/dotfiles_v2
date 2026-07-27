@@ -4,16 +4,15 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
-_BASHRC = r"""HISTSIZE=1000000
-HISTFILESIZE=1000000
-HISTCONTROL=ignoredups:erasedups
-shopt -s histappend
-ulimit -n 65536
+_BASHRC = r"""ulimit -n 65536
 
 set_win_title() {
   printf '\033]0;%s@%s:%s\007' "${USER:-?}" "${HOSTNAME%%.*}" "${PWD/#$HOME/~}"
 }
-PROMPT_COMMAND="history -a;set_win_title;${PROMPT_COMMAND:-}"
+case ";${PROMPT_COMMAND:-};" in
+  *";set_win_title;"*|*"; set_win_title;"*) ;;
+  *) PROMPT_COMMAND="set_win_title${PROMPT_COMMAND:+;${PROMPT_COMMAND}}" ;;
+esac
 
 epoch() {
   python3 - "$1" <<'PYEOF'

@@ -27,6 +27,7 @@ from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
+from dotgen.components.stinkpot import Stinkpot
 from dotgen.components.supacode import Supacode
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
@@ -47,6 +48,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
     [
         BashBase,
         CoreUtils,
+        Stinkpot,
         GitSetup,
         Helix,
         Starship,
@@ -86,9 +88,12 @@ def test_bash_base_macos_changes_shell_with_sudo() -> None:
     assert 'sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"' in setup
 
 
-def test_bash_base_flushes_history_and_updates_title() -> None:
+def test_bash_base_uses_only_in_memory_history_and_updates_title() -> None:
     bashrc = BashBase().render(ENVIRONMENTS["macos"]).bashrc
-    assert 'PROMPT_COMMAND="history -a;set_win_title;' in bashrc
+    for forbidden in ("HISTSIZE", "HISTFILESIZE", "HISTCONTROL", "histappend", "history -a"):
+        assert forbidden not in bashrc
+    assert "set_win_title" in bashrc
+    assert "PROMPT_COMMAND" in bashrc
 
 
 def test_core_utils_per_os_fd_token() -> None:
@@ -253,6 +258,7 @@ def test_environment_component_distribution() -> None:
     shared_names = {
         "bash_base",
         "core_utils",
+        "stinkpot",
         "helix",
         "starship",
         "zoxide",
@@ -511,6 +517,9 @@ def test_pi_agent_sandbox_configs() -> None:
         ".config/gcloud",
         ".kube",
     } <= set(SANDBOX_HOME_POLICY.hidden_dirs)
+    assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
+    assert ".local/share/stinkpot" not in SANDBOX_HOME_POLICY.hidden_files
+    assert ".local/share" in SANDBOX_HOME_POLICY.writable_dirs
     assert {
         ".docker/config.json",
         ".config/gh/hosts.yml",

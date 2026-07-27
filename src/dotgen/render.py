@@ -5,6 +5,7 @@ import textwrap
 from pathlib import Path, PurePosixPath
 from typing import NoReturn
 
+from dotgen.artifact import ArtifactBuilder, ProductionArtifactBuilder
 from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.registry import ENVIRONMENTS
@@ -84,13 +85,20 @@ CMD ["/bin/bash"]
 """
 
 
-def build_env(env: Environment, out_dir: Path) -> None:
+def build_env(env: Environment, out_dir: Path, *, artifact_builder: ArtifactBuilder | None = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     shim_text = OSShim(env.os).render()
     (out_dir / "os_shim.sh").write_text(shim_text)
 
     fragment = _merge_fragments(env)
+
+    if fragment.artifacts:
+        if artifact_builder is None:
+            with ProductionArtifactBuilder() as production_builder:
+                production_builder.materialize(fragment.artifacts, out_dir)
+        else:
+            artifact_builder.materialize(fragment.artifacts, out_dir)
 
     setup = SETUP_HEADER
     if fragment.setup:
@@ -158,9 +166,14 @@ def _write_secrets_template(out_dir: Path, secrets: frozenset[str]) -> None:
     (dest_dir / "secrets.env.template").write_text("".join(lines))
 
 
-def build_all(out_root: Path) -> None:
-    for name, env in ENVIRONMENTS.items():
-        build_env(env, out_root / name)
+def build_all(out_root: Path, *, artifact_builder: ArtifactBuilder | None = None) -> None:
+    if artifact_builder is not None:
+        for name, env in ENVIRONMENTS.items():
+            build_env(env, out_root / name, artifact_builder=artifact_builder)
+        return
+    with ProductionArtifactBuilder() as production_builder:
+        for name, env in ENVIRONMENTS.items():
+            build_env(env, out_root / name, artifact_builder=production_builder)
 
 
 def required_secrets(env: Environment) -> frozenset[str]:
@@ -190,7 +203,15 @@ fi
 
     alias = f"{header}{frag.alias}" if frag.alias else ""
     bashrc = f"{header}{frag.bashrc}" if frag.bashrc else ""
-    return Fragment(setup=setup, alias=alias, bashrc=bashrc, configs=frag.configs, vendors=frag.vendors, secrets=frag.secrets)
+    return Fragment(
+        setup=setup,
+        alias=alias,
+        bashrc=bashrc,
+        configs=frag.configs,
+        vendors=frag.vendors,
+        artifacts=frag.artifacts,
+        secrets=frag.secrets,
+    )
 
 
 def _merge_fragments(env: Environment) -> Fragment:

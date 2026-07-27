@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from dotgen.artifact import FakeArtifactBuilder
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import build_env
 
@@ -10,7 +11,7 @@ from dotgen.render import build_env
 @pytest.fixture(scope="module")
 def built_macos(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("dispatch") / "macos"
-    build_env(ENVIRONMENTS["macos"], out)
+    build_env(ENVIRONMENTS["macos"], out, artifact_builder=FakeArtifactBuilder())
     return out
 
 
