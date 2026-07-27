@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 
 from dotgen.component import Component
+from dotgen.components import agent_config as agent_config_module
+from dotgen.components.agent_config import _agent_config_root  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
@@ -205,24 +207,13 @@ def test_claude_code_settings() -> None:
     assert "~/.claude/hooks/serena-reminder.sh" in cfg.content
 
 
-def test_claude_code_emits_global_claude_md() -> None:
-    frag = ClaudeCode().render(ENVIRONMENTS["macos"])
-    cfg = next(c for c in frag.configs if c.dest == "claude/CLAUDE.md")
-    assert "Always keep output concise" in cfg.content
-    assert "Default to zero comments" in cfg.content
-    assert "Serena" in cfg.content
-
-
-def test_claude_code_emits_serena_hook_executable() -> None:
-    frag = ClaudeCode().render(ENVIRONMENTS["macos"])
-    hook = next(c for c in frag.configs if c.dest == "claude/hooks/serena-reminder.sh")
-    assert hook.mode == 0o755
-    assert hook.content.startswith("#!/usr/bin/env bash")
-    assert "mcp__serena__initial_instructions" in hook.content
-
-
 def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     setup = ClaudeCode().render(ENVIRONMENTS["macos"]).setup
+    assert 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude"' in setup
+    assert 'install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"' in setup
+    assert 'install_config "$DIR/config/claude/CLAUDE.md"' not in setup
+    assert 'install_config "$DIR/config/claude/hooks/serena-reminder.sh"' not in setup
+    assert "chmod" not in setup
     assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
     assert "claude mcp add serena" in setup
 
@@ -445,7 +436,7 @@ def test_pi_agent_setup() -> None:
     assert "install_npm_global @juicesharp/rpiv-btw" in frag.setup
     assert "install_npm_global @vanillagreen/pi-web-tools" in frag.setup
     assert "install_npm_global pi-web-access" not in frag.setup
-    assert 'install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"' in frag.setup
+    assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GEMINI_API_KEY" in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
@@ -465,37 +456,32 @@ def test_pi_agent_setup() -> None:
     assert "install_npm_global ~/repos/pi-angelini" not in frag.setup
     assert 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"' in frag.setup
     dests = {cf.dest for cf in frag.configs}
-    assert {
+    assert dests == {
         "pi/agent/settings.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
-        "pi/agent/AGENTS.md",
         "pi/agent/plannotator.json",
-        "pi/agent/extensions/supacode/index.ts",
-        "pi/agent/skills/supacode-cli/SKILL.md",
-        "pi/agent/agents/claude-pipeline/architect.md",
-        "pi/agent/agents/claude-pipeline/editor.md",
-        "pi/agent/agents/claude-pipeline/planner.md",
-        "pi/agent/agents/claude-pipeline/reviewer.md",
-        "pi/agent/agents/claude-pipeline/scout.md",
-        "pi/agent/chains/pipeline.chain.md",
-        "pi/agent/prompts/pipeline.md",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
-    }.issubset(dests)
+    }
     assert not [d for d in dests if d.startswith("pi-angelini/")]
-    (vendor,) = frag.vendors
-    assert vendor.source == _pi_angelini_root()
-    assert vendor.dest == "pi-angelini"
-    assert vendor.exclude_dirs == GIT_ARTIFACTS | NODE_ARTIFACTS | PY_ARTIFACTS | frozenset({".pi-lens", ".pi-subagents", ".serena", "dist"})
-    assert vendor.exclude_globs == ("package-lock.json", "pi-system-audit-plan.md", "*.test.ts")
-    agents_config = next(cf for cf in frag.configs if cf.dest == "pi/agent/AGENTS.md")
-    assert "Do not use first-person phrasing in reasoning summaries or final responses." in agents_config.content
-    assert "/simplify --staged" not in agents_config.content
-    assert "Use subagents for reviewing, researching, planning and scouting code bases." in agents_config.content
-    supacode = next(cf for cf in frag.configs if cf.dest == "pi/agent/extensions/supacode/index.ts")
-    assert "OSC 3008" in supacode.content
-    assert 'openSync("/dev/tty", "w")' in supacode.content
+    agent_vendor, angelini_vendor = frag.vendors
+    assert agent_vendor.source == _agent_config_root() / "pi" / "agent"
+    assert agent_vendor.dest == "pi/agent"
+    assert agent_vendor.include_globs == (
+        "AGENTS.md",
+        "APPEND_SYSTEM.md",
+        "agents/claude-pipeline/*.md",
+        "chains/pipeline.chain.md",
+        "extensions/supacode/index.ts",
+        "prompts/pipeline.md",
+        "skills/pipeline/**",
+        "skills/supacode-cli/**",
+    )
+    assert angelini_vendor.source == _pi_angelini_root()
+    assert angelini_vendor.dest == "pi-angelini"
+    assert angelini_vendor.exclude_dirs == GIT_ARTIFACTS | NODE_ARTIFACTS | PY_ARTIFACTS | frozenset({".pi-lens", ".pi-subagents", ".serena", "dist"})
+    assert angelini_vendor.exclude_globs == ("package-lock.json", "pi-system-audit-plan.md", "*.test.ts")
 
 
 def test_pi_agent_sandbox_aliases() -> None:
@@ -582,11 +568,82 @@ def test_pi_agent_sandbox_configs() -> None:
 
 
 _VENDOR_SRC = Path(__file__).parent / "fixtures" / "vendor_src"
+_AGENT_CONFIG_SRC = _VENDOR_SRC / "build" / "agent-config"
 
 
 def _vendored(v: VendorDir, out: Path) -> dict[str, bytes]:
     _vendor_dir(v, out)
     return {p.relative_to(out).as_posix(): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()}
+
+
+def test_agent_config_root_override_and_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", "/fixture/agent-config")
+    assert _agent_config_root() == Path("/fixture/agent-config")
+    monkeypatch.delenv("DOTGEN_AGENT_CONFIG_ROOT")
+    assert _agent_config_root() == Path(agent_config_module.__file__).resolve().parents[4] / "agent-config"
+
+
+def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(_AGENT_CONFIG_SRC))
+    claude = ClaudeCode().render(ENVIRONMENTS["macos"])
+    pi = PiAgent().render(ENVIRONMENTS["macos"])
+    (claude_vendor,) = claude.vendors
+    pi_vendor = next(vendor for vendor in pi.vendors if vendor.dest == "pi/agent")
+
+    assert claude_vendor.source == _AGENT_CONFIG_SRC / "claude"
+    assert claude_vendor.dest == "claude"
+    assert claude_vendor.include_globs == ("CLAUDE.md", "agents/*.md", "commands/review.md", "hooks/*", "skills/**")
+    assert pi_vendor.source == _AGENT_CONFIG_SRC / "pi" / "agent"
+    assert pi_vendor.dest == "pi/agent"
+    assert pi_vendor.include_globs == (
+        "AGENTS.md",
+        "APPEND_SYSTEM.md",
+        "agents/claude-pipeline/*.md",
+        "chains/pipeline.chain.md",
+        "extensions/supacode/index.ts",
+        "prompts/pipeline.md",
+        "skills/pipeline/**",
+        "skills/supacode-cli/**",
+    )
+    assert set(_vendored(claude_vendor, tmp_path / "claude")) == {
+        "CLAUDE.md",
+        "agents/reviewer.md",
+        "commands/review.md",
+        "hooks/fixture-hook.sh",
+        "skills/fixture/SKILL.md",
+    }
+    assert set(_vendored(pi_vendor, tmp_path / "pi")) == {
+        "AGENTS.md",
+        "APPEND_SYSTEM.md",
+        "agents/claude-pipeline/reviewer.md",
+        "chains/pipeline.chain.md",
+        "extensions/supacode/index.ts",
+        "prompts/pipeline.md",
+        "skills/pipeline/SKILL.md",
+        "skills/supacode-cli/SKILL.md",
+    }
+    assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
+    assert "extensions/context7/cache/generated.json" not in _vendored(pi_vendor, tmp_path / "pi-again")
+    assert {config.dest for config in claude.configs} == {"claude/settings.json"}
+    assert {config.dest for config in pi.configs if config.dest.startswith("pi/agent/")} == {
+        "pi/agent/settings.json",
+        "pi/agent/models.json",
+        "pi/agent/web-search.json",
+        "pi/agent/plannotator.json",
+    }
+    angelini = next(vendor for vendor in pi.vendors if vendor.dest == "pi-angelini")
+    assert angelini.source == _pi_angelini_root()
+    assert len(pi.vendors) == 2
+
+
+def test_agent_config_components_fail_clearly_for_missing_namespaces(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "missing-agent-config"
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
+    claude_vendor = ClaudeCode().render(ENVIRONMENTS["macos"]).vendors[0]
+    pi_vendor = next(vendor for vendor in PiAgent().render(ENVIRONMENTS["macos"]).vendors if vendor.dest == "pi/agent")
+    for vendor in (claude_vendor, pi_vendor):
+        with pytest.raises(FileNotFoundError, match=f"vendor source not found: {vendor.source}"):
+            _vendor_dir(vendor, tmp_path / vendor.dest)
 
 
 def test_vendor_deny_list_prunes_artifacts(tmp_path: Path) -> None:
@@ -638,7 +695,7 @@ def test_vendor_allow_list_mode_applies_deny_rules_on_top(tmp_path: Path) -> Non
     v = VendorDir(
         source=_VENDOR_SRC,
         dest="fx",
-        exclude_globs=("*.test.ts",),
+        exclude_globs=("*.test.ts", "build/**"),
         include_globs=("pkg/**", "README.md"),
     )
 

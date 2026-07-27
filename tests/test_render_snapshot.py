@@ -51,6 +51,72 @@ def test_config_manifest_matches_golden(env_name: str) -> None:
     assert actual == golden.read_text(), f"config manifest drift for {env_name}; re-run with UPDATE_GOLDEN=1 if intended"
 
 
+def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
+    pi_call = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"'
+    angelini_call = 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"'
+    claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude"'
+    pi_mutable = ("settings.json", "models.json", "web-search.json", "plannotator.json")
+
+    for env_name in ENVIRONMENTS:
+        root = built_root / env_name
+        setup = (root / "setup.sh").read_text()
+        manifest = config_manifest(ENVIRONMENTS[env_name])
+        config = root / "config"
+
+        assert setup.count(pi_call) == 1
+        assert setup.count(angelini_call) == 1
+        assert 'install_config "$DIR/config/pi/agent/' not in setup
+        for name in pi_mutable:
+            assert (config / "pi" / "agent" / name).is_file()
+            assert f"  pi/agent/{name}" in manifest
+        assert (config / "pi" / "agent" / "AGENTS.md").is_file()
+        assert (config / "pi" / "agent" / "APPEND_SYSTEM.md").is_file()
+        assert (config / "pi" / "sandbox" / "pi-sandbox.sh").is_file()
+        assert (config / "pi" / "sandbox" / "pi-macos.sb").is_file()
+        for path in ("auth.json", "sessions", "mcp-oauth", "extensions/context7/cache"):
+            assert not (config / "pi" / "agent" / path).exists()
+        assert manifest.count("dir  pi/agent") == 1
+        assert manifest.count("dir  pi-angelini") == 1
+        for path in (
+            "AGENTS.md",
+            "agents/claude-pipeline/reviewer.md",
+            "chains/pipeline.chain.md",
+            "prompts/pipeline.md",
+            "extensions/supacode/index.ts",
+            "skills/pipeline/SKILL.md",
+            "skills/supacode-cli/SKILL.md",
+        ):
+            assert f"  pi/agent/{path}" not in manifest
+
+        if env_name in ("debian", "macos"):
+            assert setup.count(claude_call) == 1
+            assert 'install_config "$DIR/config/claude/CLAUDE.md"' not in setup
+            assert 'install_config "$DIR/config/claude/hooks/' not in setup
+            assert 'chmod +x "$HOME/.claude/hooks/' not in setup
+            assert "install_script claude https://claude.ai/install.sh" in setup
+            assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
+            assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
+            assert 'install_config "$DIR/config/claude/settings.json"' in setup
+            assert (config / "claude" / "settings.json").is_file()
+            assert (config / "claude" / "CLAUDE.md").is_file()
+            for path in ("agents", "commands", "hooks", "skills"):
+                assert (config / "claude" / path).is_dir()
+            for path in (".credentials.json", "history.jsonl", "projects"):
+                assert not (config / "claude" / path).exists()
+            assert manifest.count("dir  claude") == 1
+            assert "  claude/settings.json" in manifest
+            assert "  claude/CLAUDE.md" not in manifest
+            assert "  claude/hooks/" not in manifest
+        else:
+            assert claude_call not in setup
+            assert "dir  claude" not in manifest
+
+    assert "claude" != "pi-agent"
+    for env_name in ENVIRONMENTS:
+        setup = (built_root / env_name / "setup.sh").read_text()
+        assert 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini" "' not in setup
+
+
 _HEADER_RE = re.compile(r"^# --- ([a-z_][a-z_0-9]*) ---$", re.MULTILINE)
 
 

@@ -228,10 +228,8 @@ if (
     claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
   }
   install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"
-  install_config "$DIR/config/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
-  install_config "$DIR/config/claude/hooks/serena-reminder.sh" "$HOME/.claude/hooks/serena-reminder.sh"
+  install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude"
   if [ "$DOTGEN_MODE" = deploy ]; then
-    chmod +x "$HOME/.claude/hooks/serena-reminder.sh"
     _install_serena
     _register_serena_mcp
   fi
@@ -346,20 +344,7 @@ if (
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
-  install_config "$DIR/config/pi/agent/settings.json" "$HOME/.pi/agent/settings.json"
-  install_config "$DIR/config/pi/agent/models.json" "$HOME/.pi/agent/models.json"
-  install_config "$DIR/config/pi/agent/web-search.json" "$HOME/.pi/agent/web-search.json"
-  install_config "$DIR/config/pi/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
-  install_config "$DIR/config/pi/agent/plannotator.json" "$HOME/.pi/agent/plannotator.json"
-  install_config "$DIR/config/pi/agent/extensions/supacode/index.ts" "$HOME/.pi/agent/extensions/supacode/index.ts"
-  install_config "$DIR/config/pi/agent/skills/supacode-cli/SKILL.md" "$HOME/.pi/agent/skills/supacode-cli/SKILL.md"
-  install_config "$DIR/config/pi/agent/agents/claude-pipeline/architect.md" "$HOME/.pi/agent/agents/claude-pipeline/architect.md"
-  install_config "$DIR/config/pi/agent/agents/claude-pipeline/editor.md" "$HOME/.pi/agent/agents/claude-pipeline/editor.md"
-  install_config "$DIR/config/pi/agent/agents/claude-pipeline/planner.md" "$HOME/.pi/agent/agents/claude-pipeline/planner.md"
-  install_config "$DIR/config/pi/agent/agents/claude-pipeline/reviewer.md" "$HOME/.pi/agent/agents/claude-pipeline/reviewer.md"
-  install_config "$DIR/config/pi/agent/agents/claude-pipeline/scout.md" "$HOME/.pi/agent/agents/claude-pipeline/scout.md"
-  install_config "$DIR/config/pi/agent/chains/pipeline.chain.md" "$HOME/.pi/agent/chains/pipeline.chain.md"
-  install_config "$DIR/config/pi/agent/prompts/pipeline.md" "$HOME/.pi/agent/prompts/pipeline.md"
+  install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"
   install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 

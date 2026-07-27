@@ -77,45 +77,196 @@ install_config() {
 }
 
 install_config_dir() {
-  local src="$1" dst="$2" rel drift=0 conflict=0
-  if [ ! -d "$src" ]; then
-    error "install_config_dir: missing source directory: $src"
-    return 1
-  fi
-  if [ -e "$dst" ] && [ ! -d "$dst" ]; then
-    error "install_config_dir: $dst exists but is not a directory"
-    conflict=1
-  elif [ -d "$dst" ]; then
-    while IFS= read -r -d '' rel; do
-      rel="${rel#./}"
-      if [ -e "$dst/$rel" ] && [ ! -d "$dst/$rel" ]; then
-        error "install_config_dir: $dst/$rel exists but is not a directory"
-        conflict=1
-      fi
-    done < <(cd "$src" && find . -mindepth 1 -type d -print0)
-    while IFS= read -r -d '' rel; do
-      rel="${rel#./}"
-      if [ -e "$dst/$rel" ] && [ ! -f "$dst/$rel" ]; then
-        error "install_config_dir: $dst/$rel exists but is not a regular file"
-        conflict=1
-      elif [ ! -f "$dst/$rel" ] || ! cmp -s "$src/$rel" "$dst/$rel"; then
-        drift=1
-      fi
-    done < <(cd "$src" && find . -type f -print0)
-  fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -d "$dst" ]; then
-      printf '+ COPY   %s\n' "$dst"
-    elif [ "$conflict" = 1 ] || [ "$drift" = 1 ]; then
-      printf '~ SYNC   %s\n' "$dst"
+  if [ "$#" -eq 2 ]; then
+    local src="$1" dst="$2" rel drift=0 conflict=0
+    if [ ! -d "$src" ]; then
+      error "install_config_dir: missing source directory: $src"
+      return 1
     fi
-    return 0
+    if [ -e "$dst" ] && [ ! -d "$dst" ]; then
+      error "install_config_dir: $dst exists but is not a directory"
+      conflict=1
+    elif [ -d "$dst" ]; then
+      while IFS= read -r -d '' rel; do
+        rel="${rel#./}"
+        if [ -e "$dst/$rel" ] && [ ! -d "$dst/$rel" ]; then
+          error "install_config_dir: $dst/$rel exists but is not a directory"
+          conflict=1
+        fi
+      done < <(cd "$src" && find . -mindepth 1 -type d -print0)
+      while IFS= read -r -d '' rel; do
+        rel="${rel#./}"
+        if [ -e "$dst/$rel" ] && [ ! -f "$dst/$rel" ]; then
+          error "install_config_dir: $dst/$rel exists but is not a regular file"
+          conflict=1
+        elif [ ! -f "$dst/$rel" ] || ! cmp -s "$src/$rel" "$dst/$rel"; then
+          drift=1
+        fi
+      done < <(cd "$src" && find . -type f -print0)
+    fi
+    if [ "$DOTGEN_MODE" = diff ]; then
+      if [ ! -d "$dst" ]; then
+        printf '+ COPY   %s\n' "$dst"
+      elif [ "$conflict" = 1 ] || [ "$drift" = 1 ]; then
+        printf '~ SYNC   %s\n' "$dst"
+      fi
+      return 0
+    fi
+    if [ "$conflict" = 1 ]; then
+      return 1
+    fi
+    ensure_dir "$dst"
+    cp -Rp "$src"/. "$dst"/
+    return
   fi
-  if [ "$conflict" = 1 ]; then
+  if [ "$#" -ne 3 ]; then
+    error "install_config_dir: expected two or three arguments"
     return 1
   fi
-  ensure_dir "$dst"
-  cp -Rp "$src"/. "$dst"/
+  (
+    local src="$1" dst="$2" identity="$3" normalized part rel target state manifest
+    local inventory_dirs inventory_files inventory_other manifest_tmp publish_tmp record
+    local -a dst_parts=() files=() dirs=() old_files=() components=()
+    local drift=0 manifest_changed=0 i j seen
+    trap 'rm -f -- "${inventory_dirs:-}" "${inventory_files:-}" "${inventory_other:-}" "${manifest_tmp:-}" "${publish_tmp:-}"' EXIT
+
+    if [[ ! "$identity" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || [ "$identity" = . ] || [ "$identity" = .. ]; then
+      error "install_config_dir: invalid managed identity: $identity"
+      return 1
+    fi
+    if [[ "$dst" != /* ]]; then
+      dst="$PWD/$dst"
+    fi
+    IFS=/ read -r -a components <<< "$dst"
+    for part in "${components[@]}"; do
+      case "$part" in ''|.) ;; ..) [ "${#dst_parts[@]}" -gt 0 ] && unset 'dst_parts[${#dst_parts[@]}-1]' ;; *) dst_parts+=("$part") ;; esac
+    done
+    normalized=
+    for part in "${dst_parts[@]}"; do
+      normalized="$normalized/$part"
+    done
+    [ -n "$normalized" ] || normalized=/
+    dst="$normalized"
+    state="${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/install-config-dir"
+    manifest="$state/$identity.manifest"
+
+    if [ ! -d "$src" ] || [ -L "$src" ]; then
+      error "install_config_dir: missing source directory: $src"
+      return 1
+    fi
+    inventory_dirs="$(mktemp "${TMPDIR:-/tmp}/dotgen-config-dirs.XXXXXX")" || return 1
+    inventory_files="$(mktemp "${TMPDIR:-/tmp}/dotgen-config-files.XXXXXX")" || return 1
+    inventory_other="$(mktemp "${TMPDIR:-/tmp}/dotgen-config-other.XXXXXX")" || return 1
+    (cd "$src" && find . -mindepth 1 -type d -print0) >"$inventory_dirs" || { error "install_config_dir: source directory walk failed: $src"; return 1; }
+    (cd "$src" && find . -type f -print0) >"$inventory_files" || { error "install_config_dir: source file walk failed: $src"; return 1; }
+    (cd "$src" && find . -mindepth 1 ! -type f ! -type d -print0) >"$inventory_other" || { error "install_config_dir: source entry walk failed: $src"; return 1; }
+    if [ -s "$inventory_other" ]; then
+      error "install_config_dir: source contains non-file entry: $src"
+      return 1
+    fi
+    while IFS= read -r -d '' record; do dirs+=("${record#./}"); done <"$inventory_dirs"
+    while IFS= read -r -d '' record; do files+=("${record#./}"); done <"$inventory_files"
+    for rel in "${dirs[@]}" "${files[@]}"; do
+      [ -n "$rel" ] && [[ "$rel" != /* ]] || { error "install_config_dir: invalid source path"; return 1; }
+      IFS=/ read -r -a components <<< "$rel"
+      for part in "${components[@]}"; do
+        case "$part" in ''|.|..) error "install_config_dir: invalid source path: $rel"; return 1 ;; esac
+      done
+    done
+    for ((i=0; i<${#files[@]}; i++)); do
+      for ((j=i+1; j<${#files[@]}; j++)); do
+        [ "${files[i]}" != "${files[j]}" ] || { error "install_config_dir: duplicate source path: ${files[i]}"; return 1; }
+      done
+    done
+
+    if [ -e "$manifest" ] || [ -L "$manifest" ]; then
+      if [ -L "$manifest" ] || [ ! -f "$manifest" ]; then
+        error "install_config_dir: invalid manifest: $manifest"
+        return 1
+      fi
+      exec 9<"$manifest" || { error "install_config_dir: cannot read manifest: $manifest"; return 1; }
+      IFS= read -r -d '' record <&9 || { error "install_config_dir: invalid manifest schema: $manifest"; return 1; }
+      [ "$record" = dotgen-install-config-dir-v1 ] || { error "install_config_dir: invalid manifest schema: $manifest"; return 1; }
+      IFS= read -r -d '' record <&9 || { error "install_config_dir: invalid manifest schema: $manifest"; return 1; }
+      [ "$record" = "$dst" ] || { error "install_config_dir: manifest destination mismatch: $manifest"; return 1; }
+      while true; do
+        record=
+        if IFS= read -r -d '' record <&9; then
+          old_files+=("$record")
+        else
+          [ -z "$record" ] || { error "install_config_dir: invalid manifest schema: $manifest"; return 1; }
+          break
+        fi
+      done
+      exec 9<&-
+      for rel in "${old_files[@]}"; do
+        [ -n "$rel" ] && [[ "$rel" != /* ]] || { error "install_config_dir: invalid manifest path"; return 1; }
+        IFS=/ read -r -a components <<< "$rel"
+        for part in "${components[@]}"; do case "$part" in ''|.|..) error "install_config_dir: invalid manifest path: $rel"; return 1;; esac; done
+      done
+      for ((i=0; i<${#old_files[@]}; i++)); do
+        for ((j=i+1; j<${#old_files[@]}; j++)); do
+          [ "${old_files[i]}" != "${old_files[j]}" ] || { error "install_config_dir: duplicate manifest path: ${old_files[i]}"; return 1; }
+        done
+      done
+    else
+      manifest_changed=1
+    fi
+
+    target=/
+    for part in "${dst_parts[@]}"; do
+      target="$target$part"
+      [ -L "$target" ] && { error "install_config_dir: symlink destination ancestor: $target"; return 1; }
+      target="$target/"
+    done
+    [ -L "$dst" ] && { error "install_config_dir: symlink destination: $dst"; return 1; }
+    if [ -e "$dst" ] && [ ! -d "$dst" ]; then error "install_config_dir: $dst exists but is not a directory"; return 1; fi
+    for rel in "${dirs[@]}"; do
+      target="$dst/$rel"
+      [ -L "$target" ] && { error "install_config_dir: symlink destination path: $target"; return 1; }
+      [ ! -e "$target" ] || [ -d "$target" ] || { error "install_config_dir: $target exists but is not a directory"; return 1; }
+    done
+    for rel in "${files[@]}"; do
+      target="$dst/$rel"
+      [ -L "$target" ] && { error "install_config_dir: symlink destination path: $target"; return 1; }
+      [ ! -e "$target" ] || [ -f "$target" ] || { error "install_config_dir: $target exists but is not a regular file"; return 1; }
+      if [ ! -f "$target" ] || ! cmp -s "$src/$rel" "$target"; then drift=1; fi
+    done
+    for rel in "${old_files[@]}"; do
+      seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
+      [ "$seen" = 0 ] || continue
+      target="$dst/$rel"
+      [ ! -e "$target" ] && [ ! -L "$target" ] && continue
+      [ -f "$target" ] && [ ! -L "$target" ] || { error "install_config_dir: retired managed path is not a regular file: $target"; return 1; }
+      drift=1
+    done
+    if [ -f "$manifest" ]; then
+      manifest_tmp="$(mktemp "${TMPDIR:-/tmp}/dotgen-config-manifest.XXXXXX")" || return 1
+      printf '%s\0' dotgen-install-config-dir-v1 "$dst" "${files[@]}" >"$manifest_tmp" || return 1
+      cmp -s "$manifest" "$manifest_tmp" || manifest_changed=1
+      rm -f -- "$manifest_tmp"; manifest_tmp=""
+    fi
+    if [ "$DOTGEN_MODE" = diff ]; then
+      if [ ! -d "$dst" ]; then printf '+ COPY   %s\n' "$dst"
+      elif [ "$drift" = 1 ] || [ "$manifest_changed" = 1 ]; then printf '~ SYNC   %s\n' "$dst"; fi
+      for rel in "${old_files[@]}"; do
+        seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
+        [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && printf '%s\n' "- DELETE $dst/$rel"
+      done
+      return 0
+    fi
+    for rel in "${old_files[@]}"; do
+      seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
+      [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && rm -f -- "$dst/$rel"
+    done
+    ensure_dir "$dst" || return 1
+    cp -Rp "$src"/. "$dst"/ || return 1
+    ensure_dir "$state" || return 1
+    publish_tmp="$(mktemp "$state/$identity.manifest.XXXXXX")" || return 1
+    printf '%s\0' dotgen-install-config-dir-v1 "$dst" "${files[@]}" >"$publish_tmp" || return 1
+    mv -f -- "$publish_tmp" "$manifest" || return 1
+    publish_tmp=""
+  )
 }
 
 load_secrets() {

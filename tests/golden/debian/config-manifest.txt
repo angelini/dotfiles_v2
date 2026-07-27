@@ -3,26 +3,16 @@
 0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0644  0570dd21c0a29957c6823c9a6b4942ee37764472eef2d7632241413b5c666c69  claude/settings.json
 0644  075464a1faa9bbd972348144d4688eb92c8d05f2c3d9cc590e4f0003d72cb6ed  pi/agent/settings.json
-0644  0cf839e1e74c3b5cd4f5852ebcacacc5f2627230d17fc3ea1567ebe7dcc5fbdf  pi/agent/agents/claude-pipeline/architect.md
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
 0644  1658dce229f0219751e7dbacd3e1daaa569008d1e8518fef33d63d81c6fc7011  helix/config.toml
 0644  1cdb64e26726e2ae013446bfd250214f0ae9c9839aebf5bef995b4b98c608a1d  pi/sandbox/pi-macos.sb
 0644  20d4137626e9064eb784a8a69b128c374f9688d3126deab0f0c9a3d18ebefb23  starship/starship.toml
-0644  516b002c8d9f14a996939785aa2642f044a3af3313b8c48329e07600646009c6  pi/agent/prompts/pipeline.md
-0644  694eabecdf0bf17842456b83294cc0313f5ca6ae704767667ee13e8e51628cf6  pi/agent/agents/claude-pipeline/planner.md
-0644  7a939212534645b84da867fbda76919a8c695e7ede41ec52cb9c1ea5e0ea20bd  pi/agent/agents/claude-pipeline/scout.md
 0644  7b475f8084759694e3c04cb6c1f45da16dc652118abaab0e919210c627de1d90  pi/agent/plannotator.json
-0644  9363ccb34a9094516241d2d7fce1d102aa25d6dcd0a00ef2697594cf3ad015b5  pi/agent/extensions/supacode/index.ts
-0644  94fdf50d7d5a960ad3a6e9faa71e0b42494705321d665c4569e222e2c8dcdd59  pi/agent/chains/pipeline.chain.md
-0644  9834505dcc492024aead4c13b5de90d91fcab8ef929306a36c58550d72b6d96c  pi/agent/agents/claude-pipeline/reviewer.md
 0644  a62ded06e54c0bfce18ee0bf022b20efb6c05ee3e30d426da2cc9b9a00abeed2  bash/bash_profile
-0644  baec3e5f426306e0e155ab9fb1beffb8f0acfe399bbc81c225fce142e0623af3  pi/agent/agents/claude-pipeline/editor.md
 0644  bb3fd9de59f59ba79c5e89b37cd33e320fba9acb459fe3f01a299b78ff126f80  git/gitignore_global
 0644  c771f10f1b193ee8e49524324dd1a30e073afa1891f2f698ba85231607859d49  git/gitconfig
-0644  f5e28c927e0d6841cf43b61ec9b07fc8ab86140c49ecddecdab3c0a42ff6e4cd  pi/agent/AGENTS.md
-0644  f7fde1a7f8d543a896a71c528028073927c384c5764f1a34b93c1c212bf91111  pi/agent/skills/supacode-cli/SKILL.md
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
-0644  fbacb8442d1c18ad11ec69e68223b6676b9e38fba491a10a92569642d606b199  claude/CLAUDE.md
 0755  18da33daa9fc7c68f93595b8ddcb5e15df3ab8fb76b2cbc524a2b674131f5ef2  pi/sandbox/pi-sandbox.sh
-0755  8c00889e046682e004f6eb1e5ea9cb99ac0a9302d3a78bcd236521d604e8fa74  claude/hooks/serena-reminder.sh
+dir  claude
 dir  pi-angelini
+dir  pi/agent
