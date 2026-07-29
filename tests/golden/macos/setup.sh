@@ -328,8 +328,8 @@ if (
     fi
     claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
   }
-  install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"
-  install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude"
+  install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"
+  install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600
   if [ "$DOTGEN_MODE" = deploy ]; then
     _install_serena
     _register_serena_mcp
@@ -442,7 +442,8 @@ if (
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
-  install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"
+  install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"
+  install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600
   install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
@@ -510,6 +511,17 @@ if (
   component_end "aws" 0
 else
   _rc=$?; component_end "aws" "$_rc"; exit "$_rc"
+fi
+
+# --- doppler ---
+component_begin "doppler"
+if (
+  set -e
+  install_packages gnupg dopplerhq/cli/doppler
+); then
+  component_end "doppler" 0
+else
+  _rc=$?; component_end "doppler" "$_rc"; exit "$_rc"
 fi
 
 # --- fonts ---

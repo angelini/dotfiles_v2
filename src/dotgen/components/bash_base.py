@@ -22,23 +22,18 @@ PYEOF
 }
 """
 
-_GL_PRETTY = '"%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset"'
-_GL_ALIAS = f"alias gl='git log --color --graph --pretty=format:{_GL_PRETTY} --abbrev-commit'\n"
-
-_ALIASES_COMMON = (
-    r"""alias klear='clear && printf "\033[3J"'
+_ALIASES_COMMON = r"""alias klear='clear && printf "\033[3J"'
 alias rgc='rg -C 30'
 alias ip='curl -s ifconfig.me'
 
 # git
 alias gs='git status'
-alias ga='git add'
-alias gc='git commit'
-alias gpo='git push origin'
-alias gpfo='git push --force-with-lease origin'
+alias gc='git checkout'
+alias ga='git commit --amend --no-edit'
+alias gpo='git push origin $(git rev-parse --abbrev-ref HEAD)'
+alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'
+alias gl="git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25"
 """
-    + _GL_ALIAS
-)
 
 _ALIAS_LS_MACOS = "alias l='ls -hlAG'\n"
 _ALIAS_LS_LINUX = "alias l='ls -hlA --color=auto'\n"

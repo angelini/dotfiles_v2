@@ -86,7 +86,12 @@ CMD ["/bin/bash"]
 
 
 def build_env(env: Environment, out_dir: Path, *, artifact_builder: ArtifactBuilder | None = None) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if out_dir.exists():
+        try:
+            shutil.rmtree(out_dir)
+        except OSError as exc:
+            raise OSError(f"failed to clean build output {out_dir}: {exc}") from exc
+    out_dir.mkdir(parents=True)
 
     shim_text = OSShim(env.os).render()
     (out_dir / "os_shim.sh").write_text(shim_text)

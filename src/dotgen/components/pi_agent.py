@@ -3,45 +3,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotgen.components.agent_config import _agent_config_root  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.agent_config import _agent_config_root, managed_settings  # pyright: ignore[reportPrivateUsage]
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 from dotgen.vendor import GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
-
-_SETTINGS_JSON = (
-    json.dumps(
-        {
-            "defaultProvider": "openai-codex",
-            "defaultModel": "gpt-5.6-sol",
-            "defaultThinkingLevel": "high",
-            "enabledModels": [
-                "openai-codex/gpt-5.6-sol",
-                "openai-codex/gpt-5.6-luna",
-                "openai-codex/gpt-5.6-terra",
-            ],
-            "packages": [
-                "npm:pi-lens",
-                "npm:pi-mcp-adapter",
-                "npm:pi-subagents",
-                "npm:pi-simplify",
-                "npm:@plannotator/pi-extension",
-                "npm:@dreki-gg/pi-context7",
-                "npm:@juicesharp/rpiv-ask-user-question",
-                "npm:@juicesharp/rpiv-btw",
-                "npm:@juicesharp/rpiv-todo",
-                "npm:@samfp/pi-memory",
-                "npm:@vanillagreen/pi-web-tools",
-                "~/repos/pi-angelini",
-            ],
-            "quietStartup": False,
-            "collapseChangelog": True,
-            "theme": "light",
-        },
-        indent=2,
-    )
-    + "\n"
-)
 
 _MODELS_JSON = (
     json.dumps(
@@ -395,7 +361,8 @@ _SETUP_BASE = (
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"
 ensure_dir "$HOME/.local/bin"
-install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"
+install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"
+install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600
 install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
 install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
@@ -424,7 +391,7 @@ class PiAgent:
             setup=_setup_for(env),
             alias=_ALIAS,
             configs=(
-                ConfigFile(dest="pi/agent/settings.json", content=_SETTINGS_JSON),
+                ConfigFile(dest="managed-settings/pi.json", content=managed_settings("pi"), mode=0o600),
                 ConfigFile(dest="pi/agent/models.json", content=_MODELS_JSON, mode=0o600),
                 ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
                 ConfigFile(dest="pi/agent/plannotator.json", content=_PLANNOTATOR_JSON),

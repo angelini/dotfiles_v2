@@ -4,6 +4,7 @@ from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
 from dotgen.components.docker import Docker
+from dotgen.components.doppler import Doppler
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
 from dotgen.components.fonts import Fonts
 from dotgen.components.gcloud import Gcloud
@@ -50,6 +51,7 @@ _SHARED: tuple[Component, ...] = (
     GoLang(),
     Gcloud(),
     Aws(),
+    Doppler(),
     Fonts(),
 )
 
@@ -67,6 +69,7 @@ _DOCKER_SKIP = {
     "python_tools",
     "claude_code",
     "postgres",
+    "doppler",
 }
 
 # GitSetup depends on Gh

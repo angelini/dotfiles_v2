@@ -1,1 +1,27 @@
-{"sentinel":"pi managed"}
+{
+  "collapseChangelog": true,
+  "defaultModel": "gpt-5.6-sol",
+  "defaultProvider": "openai-codex",
+  "defaultThinkingLevel": "high",
+  "enabledModels": [
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra"
+  ],
+  "packages": [
+    "npm:pi-lens",
+    "npm:pi-mcp-adapter",
+    "npm:pi-subagents",
+    "npm:pi-simplify",
+    "npm:@plannotator/pi-extension",
+    "npm:@dreki-gg/pi-context7",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:@juicesharp/rpiv-btw",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:@samfp/pi-memory",
+    "npm:@vanillagreen/pi-web-tools",
+    "~/repos/pi-angelini"
+  ],
+  "quietStartup": false,
+  "theme": "light"
+}

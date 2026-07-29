@@ -1,5 +1,8 @@
+import json
 import os
 import re
+import shlex
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -54,10 +57,12 @@ def test_config_manifest_matches_golden(env_name: str) -> None:
 
 
 def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
-    pi_call = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"'
+    pi_call = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"'
+    pi_patch_call = 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600'
     angelini_call = 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"'
-    claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude"'
-    pi_mutable = ("settings.json", "models.json", "web-search.json", "plannotator.json")
+    claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"'
+    claude_patch_call = 'install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600'
+    pi_mutable = ("models.json", "web-search.json", "plannotator.json")
 
     for env_name in ENVIRONMENTS:
         root = built_root / env_name
@@ -66,11 +71,18 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         config = root / "config"
 
         assert setup.count(pi_call) == 1
+        assert setup.count(pi_patch_call) == 1
         assert setup.count(angelini_call) == 1
         assert 'install_config "$DIR/config/pi/agent/' not in setup
         for name in pi_mutable:
             assert (config / "pi" / "agent" / name).is_file()
             assert f"  pi/agent/{name}" in manifest
+        assert not (config / "pi" / "agent" / "settings.json").exists()
+        pi_managed_patch = config / "managed-settings" / "pi.json"
+        assert pi_managed_patch.is_file()
+        assert pi_managed_patch.stat().st_mode & 0o777 == 0o600
+        assert "  managed-settings/pi.json" in manifest
+        assert "  pi/agent/settings.json" not in manifest
         assert (config / "pi" / "agent" / "AGENTS.md").is_file()
         assert (config / "pi" / "agent" / "APPEND_SYSTEM.md").is_file()
         assert (config / "pi" / "sandbox" / "pi-sandbox.sh").is_file()
@@ -98,25 +110,141 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
             assert "install_script claude https://claude.ai/install.sh" in setup
             assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
             assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
-            assert 'install_config "$DIR/config/claude/settings.json"' in setup
-            assert (config / "claude" / "settings.json").is_file()
+            assert setup.count(claude_patch_call) == 1
+            assert 'install_config "$DIR/config/claude/settings.json"' not in setup
+            assert not (config / "claude" / "settings.json").exists()
+            managed_patch = config / "managed-settings" / "claude.json"
+            assert managed_patch.is_file()
+            assert managed_patch.stat().st_mode & 0o777 == 0o600
             assert (config / "claude" / "CLAUDE.md").is_file()
             for path in ("agents", "commands", "hooks", "skills"):
                 assert (config / "claude" / path).is_dir()
             for path in (".credentials.json", "history.jsonl", "projects"):
                 assert not (config / "claude" / path).exists()
             assert manifest.count("dir  claude") == 1
-            assert "  claude/settings.json" in manifest
+            assert "  managed-settings/claude.json" in manifest
+            assert "  claude/settings.json" not in manifest
             assert "  claude/CLAUDE.md" not in manifest
             assert "  claude/hooks/" not in manifest
         else:
             assert claude_call not in setup
+            assert claude_patch_call not in setup
+            assert not (config / "managed-settings" / "claude.json").exists()
+            assert "managed-settings/claude.json" not in manifest
             assert "dir  claude" not in manifest
 
     assert "claude" != "pi-agent"
     for env_name in ENVIRONMENTS:
         setup = (built_root / env_name / "setup.sh").read_text()
         assert 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini" "' not in setup
+
+
+def test_generated_bundle_migrates_legacy_claude_settings_ownership(tmp_path: Path, built_root: Path) -> None:
+    root = tmp_path.resolve()
+    bundle = built_root / "macos"
+    home = root / "home"
+    state = root / "state"
+    live = home / ".claude"
+    live.mkdir(parents=True)
+    settings = live / "settings.json"
+    settings.write_text('{"includeCoAuthoredBy":true,"theme":"dark","permissions":{"allow":["local"]},"unmanaged":"keep"}\n')
+    (live / "CLAUDE.md").write_text("legacy\n")
+    manifest = state / "dotgen" / "install-config-dir" / "claude.manifest"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_bytes(b"\0".join((b"dotgen-install-config-dir-v1", os.fsencode(str(live)), b"settings.json", b"CLAUDE.md")) + b"\0")
+    script = root / "deploy-claude.sh"
+    script.write_text(
+        f"""set -euo pipefail
+source {shlex.quote(str(bundle / "os_shim.sh"))}
+export HOME={shlex.quote(str(home))}
+export XDG_STATE_HOME={shlex.quote(str(state))}
+export DOTGEN_MODE=deploy
+install_config_dir {shlex.quote(str(bundle / "config" / "claude"))} "$HOME/.claude" claude settings.json
+install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "claude.json"))} "$HOME/.claude/settings.json" 0600
+"""
+    )
+
+    first = subprocess.run(["/bin/bash", str(script)], capture_output=True, text=True)
+
+    assert first.returncode == 0, first.stderr
+    merged = json.loads(settings.read_text())
+    assert merged["includeCoAuthoredBy"] is False
+    assert merged["theme"] == "light"
+    assert merged["tui"] == "fullscreen"
+    assert merged["skipAutoPermissionPrompt"] is True
+    assert merged["skipWorkflowUsageWarning"] is True
+    assert merged["permissions"] == {"allow": ["local"], "defaultMode": "auto"}
+    assert merged["unmanaged"] == "keep"
+    assert settings.stat().st_mode & 0o777 == 0o600
+    records = manifest.read_bytes().split(b"\0")[:-1]
+    assert b"settings.json" not in records[2:]
+    assert b"CLAUDE.md" in records[2:]
+    settings_inode = settings.stat().st_ino
+    settings_bytes = settings.read_bytes()
+    manifest_bytes = manifest.read_bytes()
+
+    second = subprocess.run(["/bin/bash", str(script)], capture_output=True, text=True)
+
+    assert second.returncode == 0, second.stderr
+    assert settings.read_bytes() == settings_bytes
+    assert settings.stat().st_ino == settings_inode
+    assert manifest.read_bytes() == manifest_bytes
+
+
+def test_generated_bundle_migrates_legacy_pi_settings_ownership(tmp_path: Path, built_root: Path) -> None:
+    root = tmp_path.resolve()
+    bundle = built_root / "macos"
+    home = root / "home"
+    state = root / "state"
+    live = home / ".pi" / "agent"
+    live.mkdir(parents=True)
+    settings = live / "settings.json"
+    settings.write_text(
+        '{"defaultModel":"legacy","lastChangelogVersion":"0.82.1",'
+        '"packages":["local"],"unmanaged":"keep"}\n'
+    )
+    (live / "AGENTS.md").write_text("legacy\n")
+    manifest = state / "dotgen" / "install-config-dir" / "pi-agent.manifest"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_bytes(
+        b"\0".join((b"dotgen-install-config-dir-v1", os.fsencode(str(live)), b"settings.json", b"AGENTS.md")) + b"\0"
+    )
+    script = root / "deploy-pi.sh"
+    script.write_text(
+        f"""set -euo pipefail
+source {shlex.quote(str(bundle / "os_shim.sh"))}
+export HOME={shlex.quote(str(home))}
+export XDG_STATE_HOME={shlex.quote(str(state))}
+export DOTGEN_MODE=deploy
+install_config_dir {shlex.quote(str(bundle / "config" / "pi" / "agent"))} "$HOME/.pi/agent" pi-agent settings.json
+install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "pi.json"))} "$HOME/.pi/agent/settings.json" 0600
+"""
+    )
+
+    first = subprocess.run(["/bin/bash", str(script)], capture_output=True, text=True)
+
+    assert first.returncode == 0, first.stderr
+    merged = json.loads(settings.read_text())
+    assert merged["defaultModel"] == "gpt-5.6-sol"
+    assert merged["defaultThinkingLevel"] == "high"
+    assert merged["packages"][-1] == "~/repos/pi-angelini"
+    assert merged["theme"] == "light"
+    assert merged["lastChangelogVersion"] == "0.82.1"
+    assert merged["unmanaged"] == "keep"
+    assert settings.stat().st_mode & 0o777 == 0o600
+    records = manifest.read_bytes().split(b"\0")[:-1]
+    assert b"settings.json" not in records[2:]
+    assert b"AGENTS.md" in records[2:]
+    settings_inode = settings.stat().st_ino
+    settings_bytes = settings.read_bytes()
+    manifest_bytes = manifest.read_bytes()
+
+    second = subprocess.run(["/bin/bash", str(script)], capture_output=True, text=True)
+
+    assert second.returncode == 0, second.stderr
+    assert settings.read_bytes() == settings_bytes
+    assert settings.stat().st_ino == settings_inode
+    assert manifest.read_bytes() == manifest_bytes
 
 
 _HEADER_RE = re.compile(r"^# --- ([a-z_][a-z_0-9]*) ---$", re.MULTILINE)

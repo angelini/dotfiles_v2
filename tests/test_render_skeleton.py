@@ -21,6 +21,17 @@ def test_build_env_emits_four_files(tmp_path: Path, env_name: str) -> None:
         subprocess.run(["bash", "-n", str(path)], check=True)
 
 
+def test_build_env_removes_stale_output(tmp_path: Path) -> None:
+    out = tmp_path / "macos"
+    stale = out / "config" / "pi" / "agent" / "settings.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("stale\n")
+
+    build_env(ENVIRONMENTS["macos"], out, artifact_builder=FakeArtifactBuilder())
+
+    assert not stale.exists()
+
+
 def test_bashrc_returns_before_non_interactive_setup(tmp_path: Path) -> None:
     build_env(ENVIRONMENTS["debian"], tmp_path, artifact_builder=FakeArtifactBuilder())
 

@@ -1,3 +1,4 @@
+import json
 import os as os_module
 import re
 import shlex
@@ -494,6 +495,365 @@ def test_install_config_template_missing_secrets_file(tmp_path: Path) -> None:
     assert not dst_path.exists()
 
 
+def _run_json_patch(
+    tmp_path: Path,
+    mode: str,
+    patch: Path,
+    dst: Path,
+    *,
+    requested_mode: str | None = None,
+    tmpdir: Path | None = None,
+    bin_dir: Path | None = None,
+    prelude: str = "",
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    script = tmp_path / "run-json-patch.sh"
+    mode_arg = f" {shlex.quote(requested_mode)}" if requested_mode is not None else ""
+    script.write_text(
+        f"set -uo pipefail\n{_macos_shim()}\n{prelude}\nexport DOTGEN_MODE={shlex.quote(mode)}\n"
+        f"install_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))}{mode_arg}\n"
+    )
+    env = os_module.environ.copy()
+    if tmpdir is not None:
+        tmpdir.mkdir(exist_ok=True)
+        env["TMPDIR"] = str(tmpdir)
+    if bin_dir is not None:
+        env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    if extra_env:
+        env.update(extra_env)
+    return subprocess.run(["/bin/bash", str(script)], capture_output=True, text=True, env=env)
+
+
+def _json_patch_artifacts(root: Path, tmpdir: Path) -> list[Path]:
+    return sorted((*root.glob(".dotgen-json-patch.*"), *tmpdir.glob("dotgen-json-*.??????")))
+
+
+def test_install_json_patch_creates_secure_destination_and_cleans_up(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "nested" / "settings.json"
+    tmpdir = root / "tmp"
+    patch.write_text('{"managed":true}')
+
+    result = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(dst.read_text()) == {"managed": True}
+    assert dst.stat().st_mode & 0o777 == 0o600
+    assert _json_patch_artifacts(dst.parent, tmpdir) == []
+
+
+def test_install_json_patch_merge_semantics(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    patch.write_text('{"nested":{"managed":2,"new":null},"array":[3],"leaf":{"value":1},"kind":"changed"}')
+    dst.write_text('{"nested":{"managed":1,"keep":true},"array":[1,2],"leaf":"scalar","kind":{"old":true},"unmanaged":"keep"}')
+
+    result = _run_json_patch(root, "deploy", patch, dst)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(dst.read_text()) == {
+        "array": [3],
+        "kind": "changed",
+        "leaf": {"value": 1},
+        "nested": {"keep": True, "managed": 2, "new": None},
+        "unmanaged": "keep",
+    }
+
+
+def test_install_json_patch_empty_patch_preserves_values(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    patch.write_text("{}\n")
+    dst.write_text('{"z":1,"nested":{"value":true}}\n')
+
+    result = _run_json_patch(root, "deploy", patch, dst)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(dst.read_text()) == {"z": 1, "nested": {"value": True}}
+
+
+@pytest.mark.parametrize(
+    ("patch_text", "live_text", "message"),
+    [
+        ("{bad", "{}", "patch"),
+        ("[]", "{}", "patch"),
+        ("{}\n{}\n", "{}", "patch"),
+        ('{"value":NaN}', "{}", "patch"),
+        ('{"value":Infinity}', "{}", "patch"),
+        ('{"value":-Infinity}', "{}", "patch"),
+        ("{}", "{bad", "destination"),
+        ("{}", "null", "destination"),
+        ("{}", "{}\n{}\n", "destination"),
+        ("{}", '{"value":NaN}', "destination"),
+        ("{}", '{"value":Infinity}', "destination"),
+        ("{}", '{"value":-Infinity}', "destination"),
+    ],
+)
+def test_install_json_patch_rejects_invalid_json_objects(tmp_path: Path, patch_text: str, live_text: str, message: str) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    patch.write_text(patch_text)
+    dst.write_text(live_text)
+    before = dst.read_bytes()
+
+    result = _run_json_patch(root, "deploy", patch, dst)
+
+    assert result.returncode != 0
+    assert message in result.stderr
+    assert dst.read_bytes() == before
+
+
+def test_install_json_patch_rejects_missing_jq_and_invalid_mode_before_temps(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    tmpdir = root / "tmp"
+    empty_bin = root / "empty-bin"
+    patch.write_text("{}\n")
+    empty_bin.mkdir()
+
+    missing = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir, bin_dir=empty_bin, extra_env={"PATH": str(empty_bin)})
+    invalid = _run_json_patch(root, "deploy", patch, dst, requested_mode="600", tmpdir=tmpdir)
+
+    assert missing.returncode != 0 and "jq not installed" in missing.stderr
+    assert invalid.returncode != 0 and "invalid mode" in invalid.stderr
+    assert _json_patch_artifacts(root, tmpdir) == []
+
+
+@pytest.mark.parametrize("kind", ["patch-directory", "patch-symlink", "destination-directory", "destination-symlink"])
+def test_install_json_patch_rejects_non_regular_paths(tmp_path: Path, kind: str) -> None:
+    root = tmp_path.resolve()
+    real_patch = root / "real-patch.json"
+    real_dst = root / "real-settings.json"
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    real_patch.write_text("{}\n")
+    real_dst.write_text("{}\n")
+    patch.write_text("{}\n")
+    if kind == "patch-directory":
+        patch.unlink()
+        patch.mkdir()
+    elif kind == "patch-symlink":
+        patch.unlink()
+        patch.symlink_to(real_patch)
+    elif kind == "destination-directory":
+        dst.mkdir()
+    else:
+        dst.symlink_to(real_dst)
+
+    result = _run_json_patch(root, "deploy", patch, dst)
+
+    assert result.returncode != 0
+    assert "non-symlink file" in result.stderr
+
+
+def test_install_json_patch_rejects_destination_ancestor_symlink(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    real_parent = root / "real-parent"
+    linked_parent = root / "linked-parent"
+    patch.write_text("{}\n")
+    real_parent.mkdir()
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+
+    result = _run_json_patch(root, "deploy", patch, linked_parent / "settings.json")
+
+    assert result.returncode != 0
+    assert "symlink destination ancestor" in result.stderr
+    assert not (real_parent / "settings.json").exists()
+
+
+def test_install_json_patch_diff_is_immutable_and_reports_content_drift(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    patch.write_text('{"managed":2}\n')
+    dst.write_text('{"managed":1,"keep":true}\n')
+    dst.chmod(0o600)
+    before = dst.read_bytes()
+
+    changed = _run_json_patch(root, "diff", patch, dst)
+    absent = _run_json_patch(root, "diff", patch, root / "absent.json")
+
+    assert changed.returncode == 0, changed.stderr
+    assert changed.stdout == f"~ CHANGE {dst}\n"
+    assert absent.returncode == 0, absent.stderr
+    assert absent.stdout == f"+ NEW    {root / 'absent.json'}\n"
+    assert dst.read_bytes() == before
+    assert dst.stat().st_mode & 0o777 == 0o600
+    assert not (root / "absent.json").exists()
+
+
+def test_install_json_patch_diff_reports_mode_only_drift(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    patch.write_text("{}\n")
+    dst.write_text('{\n  "managed": true\n}\n')
+    dst.chmod(0o644)
+    before = dst.read_bytes()
+
+    result = _run_json_patch(root, "diff", patch, dst)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"~ CHANGE {dst}\n"
+    assert dst.read_bytes() == before
+    assert dst.stat().st_mode & 0o777 == 0o644
+
+
+def test_install_json_patch_repairs_mode_then_reruns_without_replacement(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    patch.write_text("{}\n")
+    dst.write_text('{\n  "managed": true\n}\n')
+    dst.chmod(0o644)
+
+    first = _run_json_patch(root, "deploy", patch, dst)
+    inode = dst.stat().st_ino
+    second = _run_json_patch(root, "deploy", patch, dst)
+
+    assert first.returncode == 0, first.stderr
+    assert dst.stat().st_mode & 0o777 == 0o600
+    assert second.returncode == 0, second.stderr
+    assert dst.stat().st_ino == inode
+
+
+@pytest.mark.parametrize("failure", ["jq", "install"])
+def test_install_json_patch_failures_are_atomic_and_clean(tmp_path: Path, failure: str) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    tmpdir = root / "tmp"
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    patch.write_text('{"managed":"new"}\n')
+    dst.write_text('{"managed":"old"}\n')
+    dst.chmod(0o640)
+    before = dst.read_bytes()
+    if failure == "jq":
+        jq = shutil.which("jq")
+        assert jq is not None
+        _write_executable(bin_dir / "jq", f'#!/usr/bin/env bash\n[ "$1" != -S ] && exec {shlex.quote(jq)} "$@"\nexit 41\n')
+    else:
+        _write_executable(bin_dir / "install", '#!/usr/bin/env bash\nprintf partial > "${@: -1}"\nexit 42\n')
+
+    result = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir, bin_dir=bin_dir)
+
+    assert result.returncode != 0
+    assert dst.read_bytes() == before
+    assert dst.stat().st_mode & 0o777 == 0o640
+    assert _json_patch_artifacts(root, tmpdir) == []
+
+
+def test_install_json_patch_preserves_caller_traps(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    status_file = root / "status"
+    patch.write_text("{}\n")
+    script = root / "run-json-traps.sh"
+    script.write_text(
+        f"""{_macos_shim()}
+export DOTGEN_MODE=deploy
+trap ':' EXIT
+trap ':' HUP
+trap ':' INT
+trap ':' TERM
+before="$(trap -p EXIT HUP INT TERM)"
+install_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))} 0600
+status=$?
+after="$(trap -p EXIT HUP INT TERM)"
+[ "$before" = "$after" ] || exit 90
+printf '%s' "$status" > {shlex.quote(str(status_file))}
+"""
+    )
+
+    result = subprocess.run(["/bin/bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert status_file.read_text() == "0"
+
+
+def test_install_json_patch_signal_cleans_up_and_preserves_caller_traps(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    tmpdir = root / "tmp"
+    bin_dir = root / "bin"
+    ready = root / "ready"
+    status_file = root / "status"
+    patch.write_text("{}\n")
+    tmpdir.mkdir()
+    bin_dir.mkdir()
+    jq = shutil.which("jq")
+    assert jq is not None
+    _write_executable(
+        bin_dir / "jq",
+        f'#!/usr/bin/env bash\nif [ "$1" != -S ]; then exec {shlex.quote(jq)} "$@"; fi\nprintf ready > "$READY_MARKER"\nwhile :; do sleep 1; done\n',
+    )
+    script = root / "run-json-signal.sh"
+    script.write_text(
+        f"""{_macos_shim()}
+export DOTGEN_MODE=deploy
+export TMPDIR={shlex.quote(str(tmpdir))}
+export PATH={shlex.quote(str(bin_dir))}:$PATH
+export READY_MARKER={shlex.quote(str(ready))}
+trap ':' EXIT
+trap ':' HUP
+trap ':' INT
+trap ':' TERM
+before="$(trap -p EXIT HUP INT TERM)"
+install_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))} 0600
+status=$?
+after="$(trap -p EXIT HUP INT TERM)"
+[ "$before" = "$after" ] || exit 90
+printf '%s' "$status" > {shlex.quote(str(status_file))}
+"""
+    )
+    proc = subprocess.Popen(["/bin/bash", str(script)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    deadline = time.monotonic() + 5
+    while not ready.exists() and proc.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if not ready.exists():
+        os_module.killpg(proc.pid, signal.SIGKILL)
+        stdout, stderr = proc.communicate()
+        pytest.fail(f"blocking jq did not become ready: stdout={stdout!r} stderr={stderr!r}")
+    os_module.killpg(proc.pid, signal.SIGTERM)
+    stdout, stderr = proc.communicate(timeout=5)
+
+    assert proc.returncode == 0, stderr
+    assert status_file.read_text() == "143"
+    assert _json_patch_artifacts(root, tmpdir) == []
+    assert not dst.exists()
+
+
+def test_install_json_patch_rechecks_destination_before_publication(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    patch = root / "patch.json"
+    dst = root / "settings.json"
+    tmpdir = root / "tmp"
+    bin_dir = root / "bin"
+    patch.write_text('{"managed":true}\n')
+    bin_dir.mkdir()
+    _write_executable(
+        bin_dir / "install",
+        '#!/usr/bin/env bash\ncp "$3" "$4"\nchmod "$2" "$4"\nmkdir "$MUTATE_DST"\n',
+    )
+
+    result = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir, bin_dir=bin_dir, extra_env={"MUTATE_DST": str(dst)})
+
+    assert result.returncode != 0
+    assert "destination is not a regular" in result.stderr
+    assert dst.is_dir()
+    assert list(dst.iterdir()) == []
+    assert _json_patch_artifacts(root, tmpdir) == []
+
+
 def test_load_secrets_idempotent(tmp_path: Path) -> None:
     _write_secrets(tmp_path, 'COUNTER="$((${COUNTER:-0}+1))"\n')
     script = tmp_path / "run.sh"
@@ -574,8 +934,8 @@ def _call(src: Path, dst: Path) -> str:
     return f'install_config_dir "{src}" "{dst}"'
 
 
-def _managed_call(src: Path, dst: Path, identity: str = "fixture") -> str:
-    return "install_config_dir " + " ".join(shlex.quote(str(value)) for value in (src, dst, identity))
+def _managed_call(src: Path, dst: Path, identity: str = "fixture", *preserved: str) -> str:
+    return "install_config_dir " + " ".join(shlex.quote(str(value)) for value in (src, dst, identity, *preserved))
 
 
 def _managed_manifest(state: Path, identity: str) -> Path:
@@ -811,6 +1171,95 @@ def test_install_config_dir_managed_publish_update_and_preservation(tmp_path: Pa
     assert (dst / "unmanaged" / "empty").is_dir()
     assert (dst / "git-like").is_dir()
     assert set(_manifest_records(manifest)[2:]) == {os_module.fsencode(str(path.relative_to(src))) for path in src.rglob("*") if path.is_file()}
+
+
+def test_install_config_dir_managed_releases_preserved_path(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    settings_src = src / "settings.json"
+    settings_src.write_text('{"managed":true}\n')
+    dst = tmp_path / "dst"
+    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    settings_dst = dst / "settings.json"
+    settings_dst.write_text('{"managed":true,"unmanaged":"keep"}\n')
+    settings_src.unlink()
+    manifest = _managed_manifest(tmp_path / "state", "fixture")
+
+    released = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", "settings.json"))
+
+    assert released.returncode == 0, released.stderr
+    assert settings_dst.read_text() == '{"managed":true,"unmanaged":"keep"}\n'
+    assert b"settings.json" not in _manifest_records(manifest)[2:]
+    manifest_bytes = manifest.read_bytes()
+    settings_inode = settings_dst.stat().st_ino
+    rerun = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", "settings.json"))
+    assert rerun.returncode == 0, rerun.stderr
+    assert manifest.read_bytes() == manifest_bytes
+    assert settings_dst.stat().st_ino == settings_inode
+
+
+def test_install_config_dir_preserved_path_diff_migrates_manifest_without_deletion(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    settings_src = src / "settings.json"
+    settings_src.write_text("managed\n")
+    dst = tmp_path / "dst"
+    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    settings_dst = dst / "settings.json"
+    settings_dst.write_text("mutable\n")
+    settings_src.unlink()
+    manifest = _managed_manifest(tmp_path / "state", "fixture")
+    before_tree, before_manifest = _tree(dst), manifest.read_bytes()
+
+    result = _run_managed(tmp_path, shim_text, "diff", _managed_call(src, dst, "fixture", "settings.json"))
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"~ SYNC   {dst}\n"
+    assert "DELETE" not in result.stdout
+    assert _tree(dst) == before_tree
+    assert manifest.read_bytes() == before_manifest
+
+
+def test_install_config_dir_preserved_path_does_not_disable_other_retired_deletions(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    (src / "settings.json").write_text("mutable\n")
+    (src / "retired.txt").write_text("retired\n")
+    dst = tmp_path / "dst"
+    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    (src / "settings.json").unlink()
+    (src / "retired.txt").unlink()
+
+    result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", "settings.json"))
+
+    assert result.returncode == 0, result.stderr
+    assert (dst / "settings.json").read_text() == "mutable\n"
+    assert not (dst / "retired.txt").exists()
+
+
+@pytest.mark.parametrize("preserved", ["", "/absolute", ".", "..", "a/", "a//b", "a/./b", "a/../b"])
+def test_install_config_dir_rejects_invalid_preserved_paths(tmp_path: Path, shim_text: str, preserved: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+
+    result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", preserved))
+
+    assert result.returncode != 0
+    assert "invalid preserved path" in result.stderr
+    assert not dst.exists()
+
+
+def test_install_config_dir_rejects_duplicate_and_inventory_preserved_paths(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    calls = (
+        _managed_call(src, dst, "fixture", "released.json", "released.json"),
+        _managed_call(src, dst, "fixture", "a.txt"),
+        _managed_call(src, dst, "fixture", "nested dir"),
+    )
+
+    for call in calls:
+        result = _run_managed(tmp_path, shim_text, "deploy", call)
+        assert result.returncode != 0
+        assert "preserved path" in result.stderr
+        assert not dst.exists()
 
 
 def test_install_config_dir_two_argument_overlay_never_uses_managed_state(tmp_path: Path, shim_text: str) -> None:

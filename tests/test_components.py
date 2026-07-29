@@ -1,15 +1,17 @@
+import json
 from pathlib import Path
 
 import pytest
 
 from dotgen.component import Component
 from dotgen.components import agent_config as agent_config_module
-from dotgen.components.agent_config import _agent_config_root  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.agent_config import _agent_config_root, managed_settings  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
 from dotgen.components.docker import Docker
+from dotgen.components.doppler import Doppler
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
 from dotgen.components.fonts import Fonts
 from dotgen.components.gcloud import Gcloud
@@ -67,7 +69,7 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Fonts, Zed, Supacode, PiAgent])
+@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, Supacode, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
@@ -81,6 +83,19 @@ def test_bash_base_ls_alias_per_os() -> None:
     linux = BashBase().render(ENVIRONMENTS["debian"]).alias
     assert "ls -hlAG" in mac
     assert "--color=auto" in linux
+
+
+def test_bash_base_git_aliases() -> None:
+    aliases = BashBase().render(ENVIRONMENTS["debian"]).alias.splitlines()
+    expected = {
+        "alias gs='git status'",
+        "alias gc='git checkout'",
+        "alias ga='git commit --amend --no-edit'",
+        "alias gpo='git push origin $(git rev-parse --abbrev-ref HEAD)'",
+        "alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'",
+        ("alias gl=\"git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25\""),
+    }
+    assert expected <= set(aliases)
 
 
 def test_bash_base_macos_changes_shell_with_sudo() -> None:
@@ -206,16 +221,24 @@ def test_kubectl_per_os_branching() -> None:
 
 def test_claude_code_settings() -> None:
     frag = ClaudeCode().render(ENVIRONMENTS["macos"])
-    cfg = next(c for c in frag.configs if c.dest == "claude/settings.json")
+    assert {config.dest for config in frag.configs} == {"managed-settings/claude.json"}
+    cfg = frag.configs[0]
+    assert cfg.mode == 0o600
     assert '"includeCoAuthoredBy": false' in cfg.content
+    assert '"defaultMode": "auto"' in cfg.content
+    assert '"skipAutoPermissionPrompt": true' in cfg.content
+    assert '"skipWorkflowUsageWarning": true' in cfg.content
+    assert '"theme": "light"' in cfg.content
+    assert '"tui": "fullscreen"' in cfg.content
     assert '"SessionStart"' in cfg.content
     assert "~/.claude/hooks/serena-reminder.sh" in cfg.content
 
 
 def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     setup = ClaudeCode().render(ENVIRONMENTS["macos"]).setup
-    assert 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude"' in setup
-    assert 'install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"' in setup
+    assert setup.count('install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"') == 1
+    assert setup.count('install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600') == 1
+    assert 'install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"' not in setup
     assert 'install_config "$DIR/config/claude/CLAUDE.md"' not in setup
     assert 'install_config "$DIR/config/claude/hooks/serena-reminder.sh"' not in setup
     assert "chmod" not in setup
@@ -273,12 +296,35 @@ def test_environment_component_distribution() -> None:
         "go_lang",
         "gcloud",
         "aws",
+        "doppler",
         "fonts",
     }
     assert shared_names.issubset(debian_names & macos_names)
     assert {"ghostty", "zed", "supacode"}.isdisjoint(debian_names)
     assert {"ghostty", "zed", "supacode"}.issubset(macos_names)
     assert "node_fnm" in {c.name for c in ENVIRONMENTS["debian-docker"].components}
+
+
+def test_doppler_is_full_only_and_renders_per_os() -> None:
+    doppler = Doppler()
+    assert doppler.applies_to(ENVIRONMENTS["debian"])
+    assert doppler.applies_to(ENVIRONMENTS["macos"])
+    assert not doppler.applies_to(ENVIRONMENTS["debian-docker"])
+
+    for env_name in ("debian", "macos"):
+        names = [component.name for component in ENVIRONMENTS[env_name].components]
+        assert names.count("doppler") == 1
+    assert "doppler" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
+
+    debian = doppler.render(ENVIRONMENTS["debian"]).setup
+    assert "install_packages apt-transport-https ca-certificates curl gnupg" in debian
+    assert "add_repo apt doppler-cli" in debian
+    assert "https://packages.doppler.com/public/cli/deb/debian any-version main" in debian
+    assert "https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key" in debian
+    assert debian.index("update_pkg_index") < debian.index("install_package doppler")
+
+    macos = doppler.render(ENVIRONMENTS["macos"]).setup
+    assert macos == "install_packages gnupg dopplerhq/cli/doppler\n"
 
 
 def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None:
@@ -443,12 +489,14 @@ def test_pi_agent_setup() -> None:
     assert "install_npm_global @juicesharp/rpiv-btw" in frag.setup
     assert "install_npm_global @vanillagreen/pi-web-tools" in frag.setup
     assert "install_npm_global pi-web-access" not in frag.setup
-    assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent"' in frag.setup
+    assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
+    assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GEMINI_API_KEY" in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
     assert "CONTEXT7_API_KEY" in frag.secrets
-    settings = next(cf for cf in frag.configs if cf.dest == "pi/agent/settings.json")
+    settings = next(cf for cf in frag.configs if cf.dest == "managed-settings/pi.json")
+    assert settings.mode == 0o600
     assert '"defaultModel": "gpt-5.6-sol"' in settings.content
     assert '"defaultThinkingLevel": "high"' in settings.content
     assert "openai-codex/gpt-5.6-luna" in settings.content
@@ -464,7 +512,7 @@ def test_pi_agent_setup() -> None:
     assert 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"' in frag.setup
     dests = {cf.dest for cf in frag.configs}
     assert dests == {
-        "pi/agent/settings.json",
+        "managed-settings/pi.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
         "pi/agent/plannotator.json",
@@ -593,6 +641,38 @@ def test_agent_config_root_override_and_default(monkeypatch: pytest.MonkeyPatch)
     assert _agent_config_root() == Path(agent_config_module.__file__).resolve().parents[4] / "agent-config"
 
 
+def test_managed_settings_uses_override_and_canonicalizes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "agent-config"
+    settings = root / "settings"
+    settings.mkdir(parents=True)
+    (settings / "claude.managed.json").write_text('{"z":1,"nested":{"b":2,"a":1}}')
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
+
+    assert managed_settings("claude") == '{\n  "nested": {\n    "a": 1,\n    "b": 2\n  },\n  "z": 1\n}\n'
+
+
+@pytest.mark.parametrize("content", ["{bad", "[]", "null", '"value"', "{}\n{}\n", '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}'])
+def test_managed_settings_rejects_invalid_content(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, content: str) -> None:
+    root = tmp_path / "agent-config"
+    path = root / "settings" / "claude.managed.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(content)
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
+
+    with pytest.raises(ValueError, match="managed settings") as exc_info:
+        managed_settings("claude")
+    assert str(path) in str(exc_info.value)
+
+
+def test_managed_settings_missing_patch_names_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "agent-config"
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        managed_settings("claude")
+    assert exc_info.value.filename == str(root / "settings" / "claude.managed.json")
+
+
 def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(_AGENT_CONFIG_SRC))
     claude = ClaudeCode().render(ENVIRONMENTS["macos"])
@@ -634,13 +714,26 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     }
     assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
     assert "extensions/context7/cache/generated.json" not in _vendored(pi_vendor, tmp_path / "pi-again")
-    assert {config.dest for config in claude.configs} == {"claude/settings.json"}
+    assert {config.dest for config in claude.configs} == {"managed-settings/claude.json"}
+    claude_settings = claude.configs[0]
+    assert claude_settings.mode == 0o600
+    managed_claude = json.loads(claude_settings.content)
+    assert managed_claude["permissions"]["defaultMode"] == "auto"
+    assert managed_claude["skipAutoPermissionPrompt"] is True
+    assert managed_claude["skipWorkflowUsageWarning"] is True
+    assert managed_claude["theme"] == "light"
+    assert managed_claude["tui"] == "fullscreen"
     assert {config.dest for config in pi.configs if config.dest.startswith("pi/agent/")} == {
-        "pi/agent/settings.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
         "pi/agent/plannotator.json",
     }
+    pi_settings = next(config for config in pi.configs if config.dest == "managed-settings/pi.json")
+    assert pi_settings.mode == 0o600
+    managed_pi = json.loads(pi_settings.content)
+    assert managed_pi["defaultModel"] == "gpt-5.6-sol"
+    assert managed_pi["defaultThinkingLevel"] == "high"
+    assert managed_pi["theme"] == "light"
     angelini = next(vendor for vendor in pi.vendors if vendor.dest == "pi-angelini")
     assert angelini.source == _pi_angelini_root()
     assert len(pi.vendors) == 2
@@ -648,6 +741,9 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
 
 def test_agent_config_components_fail_clearly_for_missing_namespaces(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     root = tmp_path / "missing-agent-config"
+    (root / "settings").mkdir(parents=True)
+    (root / "settings" / "claude.managed.json").write_text("{}\n")
+    (root / "settings" / "pi.managed.json").write_text("{}\n")
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
     claude_vendor = ClaudeCode().render(ENVIRONMENTS["macos"]).vendors[0]
     pi_vendor = next(vendor for vendor in PiAgent().render(ENVIRONMENTS["macos"]).vendors if vendor.dest == "pi/agent")

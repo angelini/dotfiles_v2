@@ -6,11 +6,11 @@ alias ip='curl -s ifconfig.me'
 
 # git
 alias gs='git status'
-alias ga='git add'
-alias gc='git commit'
-alias gpo='git push origin'
-alias gpfo='git push --force-with-lease origin'
-alias gl='git log --color --graph --pretty=format:"%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset" --abbrev-commit'
+alias gc='git checkout'
+alias ga='git commit --amend --no-edit'
+alias gpo='git push origin $(git rev-parse --abbrev-ref HEAD)'
+alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'
+alias gl="git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25"
 alias l='ls -hlA --color=auto'
 
 # --- kubectl ---

@@ -253,6 +253,158 @@ install_config() {
   install -m 0644 "$src" "$dst"
 }
 
+install_json_patch() (
+  if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
+    error "install_json_patch: expected two or three arguments"
+    exit 1
+  fi
+  local patch="$1" dst="$2" mode="${3:-0600}"
+  local patch_tmp="" live_tmp="" candidate="" staging="" status
+  local normalized="" parent target part
+  local json_object_filter='length == 1 and (.[0] | type == "object") and ([.[0] | .. | numbers | select(isnan or isinfinite)] | length == 0)'
+  local -a dst_parts=() components=()
+  local i
+
+  case "$mode" in
+    0[0-7][0-7][0-7]) ;;
+    *)
+      error "install_json_patch: invalid mode: $mode"
+      exit 1
+      ;;
+  esac
+  if ! bin_exists jq; then
+    error "install_json_patch: jq not installed"
+    exit 1
+  fi
+  if [ -L "$patch" ] || [ ! -f "$patch" ]; then
+    error "install_json_patch: patch is not a regular non-symlink file: $patch"
+    exit 1
+  fi
+  if [ -e "$dst" ] || [ -L "$dst" ]; then
+    if [ -L "$dst" ] || [ ! -f "$dst" ]; then
+      error "install_json_patch: destination is not a regular non-symlink file: $dst"
+      exit 1
+    fi
+  fi
+
+  if [[ "$dst" != /* ]]; then
+    dst="$PWD/$dst"
+  fi
+  IFS=/ read -r -a components <<< "$dst"
+  for part in "${components[@]}"; do
+    case "$part" in
+      ''|.) ;;
+      ..) [ "${#dst_parts[@]}" -gt 0 ] && unset 'dst_parts[${#dst_parts[@]}-1]' ;;
+      *) dst_parts+=("$part") ;;
+    esac
+  done
+  for part in "${dst_parts[@]}"; do
+    normalized="$normalized/$part"
+  done
+  [ -n "$normalized" ] || { error "install_json_patch: destination must name a file"; exit 1; }
+  dst="$normalized"
+  parent="${dst%/*}"
+  [ -n "$parent" ] || parent=/
+
+  target=/
+  for ((i=0; i+1<${#dst_parts[@]}; i++)); do
+    part="${dst_parts[i]}"
+    target="${target%/}/$part"
+    if [ -L "$target" ]; then
+      error "install_json_patch: symlink destination ancestor: $target"
+      exit 1
+    fi
+    if [ -e "$target" ] && [ ! -d "$target" ]; then
+      error "install_json_patch: destination ancestor is not a directory: $target"
+      exit 1
+    fi
+  done
+
+  trap 'status=$?
+set +e
+trap - EXIT HUP INT TERM
+[ -z "$patch_tmp" ] || rm -f -- "$patch_tmp"
+[ -z "$live_tmp" ] || rm -f -- "$live_tmp"
+[ -z "$candidate" ] || rm -f -- "$candidate"
+[ -z "$staging" ] || rm -f -- "$staging"
+exit "$status"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  umask 077
+  patch_tmp="$(mktemp "${TMPDIR:-/tmp}/dotgen-json-patch-input.XXXXXX")" || exit 1
+  live_tmp="$(mktemp "${TMPDIR:-/tmp}/dotgen-json-live-input.XXXXXX")" || exit 1
+  candidate="$(mktemp "${TMPDIR:-/tmp}/dotgen-json-candidate.XXXXXX")" || exit 1
+  if ! cat -- "$patch" > "$patch_tmp"; then
+    error "install_json_patch: cannot read patch: $patch"
+    exit 1
+  fi
+  if ! jq -e -s "$json_object_filter" "$patch_tmp" >/dev/null 2>&1; then
+    error "install_json_patch: patch must contain a top-level JSON object: $patch"
+    exit 1
+  fi
+  if [ -f "$dst" ]; then
+    if ! cat -- "$dst" > "$live_tmp"; then
+      error "install_json_patch: cannot read destination: $dst"
+      exit 1
+    fi
+  else
+    printf '{}\n' > "$live_tmp"
+  fi
+  if ! jq -e -s "$json_object_filter" "$live_tmp" >/dev/null 2>&1; then
+    error "install_json_patch: destination must contain a top-level JSON object: $dst"
+    exit 1
+  fi
+  if ! jq -S -s '.[0] * .[1]' "$live_tmp" "$patch_tmp" > "$candidate"; then
+    error "install_json_patch: failed to merge JSON: $dst"
+    exit 1
+  fi
+
+  if [ -f "$dst" ] && cmp -s "$candidate" "$dst" && [ "$(find "$dst" -prune -perm "$mode" -exec printf x \; 2>/dev/null)" = x ]; then
+    exit 0
+  fi
+  if [ "$DOTGEN_MODE" = diff ]; then
+    if [ -f "$dst" ]; then
+      printf '~ CHANGE %s\n' "$dst"
+    else
+      printf '+ NEW    %s\n' "$dst"
+    fi
+    exit 0
+  fi
+
+  ensure_dir "$parent" || exit 1
+  target=/
+  for ((i=0; i+1<${#dst_parts[@]}; i++)); do
+    part="${dst_parts[i]}"
+    target="${target%/}/$part"
+    if [ -L "$target" ] || [ ! -d "$target" ]; then
+      error "install_json_patch: unsafe destination ancestor: $target"
+      exit 1
+    fi
+  done
+  staging="$(mktemp "$parent/.dotgen-json-patch.XXXXXX")" || exit 1
+  if ! install -m "$mode" "$candidate" "$staging"; then
+    exit 1
+  fi
+  target=/
+  for ((i=0; i+1<${#dst_parts[@]}; i++)); do
+    part="${dst_parts[i]}"
+    target="${target%/}/$part"
+    if [ -L "$target" ] || [ ! -d "$target" ]; then
+      error "install_json_patch: unsafe destination ancestor: $target"
+      exit 1
+    fi
+  done
+  if [ -e "$dst" ] || [ -L "$dst" ]; then
+    if [ -L "$dst" ] || [ ! -f "$dst" ]; then
+      error "install_json_patch: destination is not a regular non-symlink file: $dst"
+      exit 1
+    fi
+  fi
+  mv -f -- "$staging" "$dst" || exit 1
+  staging=""
+)
+
 install_config_dir() {
   if [ "$#" -eq 2 ]; then
     local src="$1" dst="$2" rel drift=0 conflict=0
@@ -296,15 +448,15 @@ install_config_dir() {
     cp -Rp "$src"/. "$dst"/
     return
   fi
-  if [ "$#" -ne 3 ]; then
-    error "install_config_dir: expected two or three arguments"
+  if [ "$#" -lt 3 ]; then
+    error "install_config_dir: expected two or at least three arguments"
     return 1
   fi
   (
     local src="$1" dst="$2" identity="$3" normalized part rel target state manifest
-    local inventory_dirs inventory_files inventory_other manifest_tmp publish_tmp record
-    local -a dst_parts=() files=() dirs=() old_files=() components=()
-    local drift=0 manifest_changed=0 i j seen
+    local inventory_dirs inventory_files inventory_other manifest_tmp publish_tmp record preserve
+    local -a dst_parts=() files=() dirs=() old_files=() components=() preserves=("${@:4}")
+    local drift=0 manifest_changed=0 i j seen preserved
     trap 'rm -f -- "${inventory_dirs:-}" "${inventory_files:-}" "${inventory_other:-}" "${manifest_tmp:-}" "${publish_tmp:-}"' EXIT
 
     if [[ ! "$identity" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || [ "$identity" = . ] || [ "$identity" = .. ]; then
@@ -353,6 +505,21 @@ install_config_dir() {
     for ((i=0; i<${#files[@]}; i++)); do
       for ((j=i+1; j<${#files[@]}; j++)); do
         [ "${files[i]}" != "${files[j]}" ] || { error "install_config_dir: duplicate source path: ${files[i]}"; return 1; }
+      done
+    done
+    for preserve in "${preserves[@]}"; do
+      [ -n "$preserve" ] && [[ "$preserve" != /* ]] && [[ "$preserve" != */ ]] || { error "install_config_dir: invalid preserved path: $preserve"; return 1; }
+      IFS=/ read -r -a components <<< "$preserve"
+      for part in "${components[@]}"; do
+        case "$part" in ''|.|..) error "install_config_dir: invalid preserved path: $preserve"; return 1 ;; esac
+      done
+      for rel in "${dirs[@]}" "${files[@]}"; do
+        [ "$preserve" != "$rel" ] || { error "install_config_dir: preserved path exists in source inventory: $preserve"; return 1; }
+      done
+    done
+    for ((i=0; i<${#preserves[@]}; i++)); do
+      for ((j=i+1; j<${#preserves[@]}; j++)); do
+        [ "${preserves[i]}" != "${preserves[j]}" ] || { error "install_config_dir: duplicate preserved path: ${preserves[i]}"; return 1; }
       done
     done
 
@@ -410,6 +577,8 @@ install_config_dir() {
       if [ ! -f "$target" ] || ! cmp -s "$src/$rel" "$target"; then drift=1; fi
     done
     for rel in "${old_files[@]}"; do
+      preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
+      [ "$preserved" = 0 ] || continue
       seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
       [ "$seen" = 0 ] || continue
       target="$dst/$rel"
@@ -427,12 +596,16 @@ install_config_dir() {
       if [ ! -d "$dst" ]; then printf '+ COPY   %s\n' "$dst"
       elif [ "$drift" = 1 ] || [ "$manifest_changed" = 1 ]; then printf '~ SYNC   %s\n' "$dst"; fi
       for rel in "${old_files[@]}"; do
+        preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
+        [ "$preserved" = 0 ] || continue
         seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
         [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && printf '%s\n' "- DELETE $dst/$rel"
       done
       return 0
     fi
     for rel in "${old_files[@]}"; do
+      preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
+      [ "$preserved" = 0 ] || continue
       seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
       [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && rm -f -- "$dst/$rel"
     done
