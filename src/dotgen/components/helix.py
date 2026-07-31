@@ -8,7 +8,7 @@ from dotgen.types import OS
 
 _HELIX_CONFIG = tomli_w.dumps(
     {
-        "theme": "github_light",
+        "theme": "base16_default_light",
         "editor": {
             "cursor-shape": {
                 "insert": "bar",

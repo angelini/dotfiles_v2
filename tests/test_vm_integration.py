@@ -315,7 +315,10 @@ rm -f "$errors"
 
 def test_helix_installed(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
-    handle.assert_cmd("command -v hx && [ -f $HOME/.config/helix/config.toml ]", login=True)
+    handle.assert_cmd(
+        "command -v hx && grep -Fq 'theme = \"base16_default_light\"' $HOME/.config/helix/config.toml",
+        login=True,
+    )
 
 
 def test_git_config_uses_helix_and_delta(vm: tuple[str, VmHandle]) -> None:
