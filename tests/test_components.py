@@ -424,6 +424,7 @@ def test_ghostty_macos_only_and_emits_config() -> None:
     assert "theme = Tomorrow" in cfg
     assert "shell-integration-features = ssh-env,ssh-terminfo" in cfg
     assert "scrollback-limit = 100_000_000" in cfg
+    assert "keybind = shift+enter=text:\\x0a" in cfg
     assert "install_cask ghostty" in frag.setup
     assert "Library/Application Support/com.mitchellh.ghostty" in frag.setup
 

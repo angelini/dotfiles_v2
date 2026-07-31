@@ -13,6 +13,7 @@ tab-inherit-working-directory = false
 scrollback-limit = 100_000_000
 bell-features = no-audio, no-system, no-attention, no-title
 shell-integration-features = ssh-env,ssh-terminfo
+keybind = shift+enter=text:\\x0a
 """
 
 _GHOSTTY_DST = '"$HOME/Library/Application Support/com.mitchellh.ghostty/config"'
