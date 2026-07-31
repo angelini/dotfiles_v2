@@ -42,10 +42,12 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages git jq yq fzf ripgrep fd-find tree vim htop cloc gnupg2 bash-completion bsdmainutils
-  ensure_dir "$HOME/bin"
+  install_packages git git-delta jq yq fzf ripgrep fd-find eza bat tree vim htop btop cloc gnupg2 bash-completion bsdmainutils
   if bin_exists fdfind && ! bin_exists fd; then
-    ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
+    link_file "$(command -v fdfind)" "$HOME/bin/fd"
+  fi
+  if bin_exists batcat && ! bin_exists bat; then
+    link_file "$(command -v batcat)" "$HOME/bin/bat"
   fi
 ); then
   component_end "core_utils" 0

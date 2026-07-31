@@ -114,7 +114,7 @@ def test_rootless_engine(vm: tuple[str, VmHandle]) -> None:
 def test_core_utils_installed(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
     handle.assert_cmd(
-        "command -v jq && command -v rg && command -v fd && command -v tree && command -v htop",
+        "command -v jq && command -v rg && command -v fd && command -v eza && command -v bat && command -v delta && command -v tree && command -v htop && command -v btop",
         login=True,
     )
 
@@ -135,9 +135,11 @@ def test_tmux_and_mosh_remote_session_setup(vm: tuple[str, VmHandle]) -> None:
 set -euo pipefail
 ! grep -q 'component_begin "tmux"' /tmp/dotgen/debian-docker/setup.sh
 ! grep -q 'component_begin "mosh"' /tmp/dotgen/debian-docker/setup.sh
+! grep -q 'component_begin "tmuxinator"' /tmp/dotgen/debian-docker/setup.sh
 ! grep -q '^# --- tmux ---$' /tmp/dotgen/debian-docker/alias.sh
 ! grep -q '^# --- mosh ---$' /tmp/dotgen/debian-docker/alias.sh
 [ ! -e /tmp/dotgen/debian-docker/config/tmux ]
+[ ! -e /tmp/dotgen/debian-docker/config/tmuxinator ]
 ! type ta >/dev/null 2>&1
 ! type mosh-agent >/dev/null 2>&1
 """,
@@ -171,6 +173,88 @@ done
 [ "$(tmux -L "$socket" show-options -gv mouse)" = on ]
 [ "$(tmux -L "$socket" show-options -gv history-limit)" = 100000 ]
 [ "$(tmux -L "$socket" show-options -sv escape-time)" = 10 ]
+""",
+        login=True,
+    )
+
+    if env_name == "macos":
+        handle.assert_cmd(
+            r"""
+! grep -q 'component_begin "tmuxinator"' /tmp/dotgen/macos/setup.sh
+[ ! -e /tmp/dotgen/macos/config/tmuxinator ]
+"""
+        )
+        return
+
+    handle.assert_cmd(
+        r"""
+set -euo pipefail
+command -v tmuxinator
+[ -x /usr/local/bin/dotgen-agent-session ]
+cmp -s /usr/local/bin/dotgen-agent-session /tmp/dotgen/debian/config/tmuxinator/dotgen-agent-session
+cmp -s "$HOME/.config/dotgen/tmuxinator/default.yml" /tmp/dotgen/debian/config/tmuxinator/default.yml
+project="dotgen_tmuxinator_vm_$$"
+root="$HOME/repos/$project"
+config="$HOME/.config/tmuxinator/$project.yml"
+fake_bin="$(mktemp -d)"
+expected="$(mktemp)"
+cleanup() {
+  tmux kill-session -t "=$project" 2>/dev/null || true
+  rm -rf "$fake_bin" "$root"
+  rm -f "$config" "$expected"
+}
+trap cleanup EXIT HUP INT TERM
+mkdir -p "$root"
+sed "s/<%= name %>/$project/g" /tmp/dotgen/debian/config/tmuxinator/default.yml > "$expected"
+dotgen-agent-session init "$project" >/dev/null &
+first_init_pid=$!
+dotgen-agent-session init "$project" >/dev/null &
+second_init_pid=$!
+wait "$first_init_pid"
+wait "$second_init_pid"
+cmp -s "$config" "$expected"
+first_inode="$(stat -c '%i' "$config")"
+dotgen-agent-session init "$project" >/dev/null
+[ "$(stat -c '%i' "$config")" = "$first_inode" ]
+TMUXINATOR_CONFIG="$HOME/.config/tmuxinator" tmuxinator debug "$project" | grep -q 'even-horizontal'
+cat > "$fake_bin/hx" <<'EOF'
+#!/usr/bin/env bash
+printf 'DOTGEN_HX_STARTED\n'
+exec sleep 30
+EOF
+cat > "$fake_bin/claude" <<'EOF'
+#!/usr/bin/env bash
+printf 'DOTGEN_CLAUDE_STARTED\n'
+exec sleep 30
+EOF
+chmod 0755 "$fake_bin/hx" "$fake_bin/claude"
+PATH="$fake_bin:$PATH" TMUXINATOR_CONFIG="$HOME/.config/tmuxinator" tmuxinator start --no-attach "$project"
+[ "$(tmux list-windows -t "=$project" -F '#W' | paste -sd, -)" = work,claude ]
+[ "$(tmux list-panes -t "$project:work" | wc -l | tr -d ' ')" = 2 ]
+set -- $(tmux list-panes -t "$project:work" -F '#{pane_width}')
+left_width="$1"
+right_width="$2"
+[ "$((left_width - right_width))" -ge -1 ] && [ "$((left_width - right_width))" -le 1 ]
+[ "$(tmux display-message -p -t "$project:work.0" '#{pane_active}')" = 1 ]
+[ "$(tmux display-message -p -t "$project:work.0" '#{pane_current_path}')" = "$root" ]
+[ "$(tmux display-message -p -t "$project:work.1" '#{pane_current_path}')" = "$root" ]
+for _ in 1 2 3 4 5; do
+  tmux capture-pane -p -t "$project:work.1" | grep -q DOTGEN_HX_STARTED &&
+    tmux capture-pane -p -t "$project:claude.0" | grep -q DOTGEN_CLAUDE_STARTED && break
+  sleep 1
+done
+tmux capture-pane -p -t "$project:work.1" | grep -q DOTGEN_HX_STARTED
+tmux capture-pane -p -t "$project:claude.0" | grep -q DOTGEN_CLAUDE_STARTED
+PATH="$fake_bin:$PATH" TMUXINATOR_CONFIG="$HOME/.config/tmuxinator" tmuxinator start --no-attach "$project"
+[ "$(tmux list-windows -t "=$project" | wc -l | tr -d ' ')" = 2 ]
+[ "$(tmux list-panes -s -t "=$project" | wc -l | tr -d ' ')" = 3 ]
+if dotgen-agent-session reset "$project"; then
+  exit 1
+fi
+tmux kill-session -t "=$project"
+printf 'sentinel\n' > "$config"
+dotgen-agent-session reset "$project"
+cmp -s "$config" "$expected"
 """,
         login=True,
     )
@@ -234,9 +318,13 @@ def test_helix_installed(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd("command -v hx && [ -f $HOME/.config/helix/config.toml ]", login=True)
 
 
-def test_git_config_uses_helix(vm: tuple[str, VmHandle]) -> None:
+def test_git_config_uses_helix_and_delta(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
-    handle.assert_cmd("grep -q 'editor = hx' $HOME/.gitconfig")
+    handle.assert_cmd(
+        '[ "$(git config --global --get core.editor)" = hx ] && '
+        '[ "$(git config --global --get core.pager)" = delta ] && '
+        '[ "$(git config --global --get interactive.diffFilter)" = "delta --color-only" ]'
+    )
 
 
 def test_login_shell_sets_editor_to_hx(vm: tuple[str, VmHandle]) -> None:
@@ -418,6 +506,8 @@ def test_setup_is_idempotent(vm: tuple[str, VmHandle]) -> None:
     state = "${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1"
     database = "${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db"
     tmux_config = " $HOME/.tmux.conf" if env_name != "debian-docker" else ""
+    if env_name == "debian":
+        tmux_config += " $HOME/.config/dotgen/tmuxinator/default.yml /usr/local/bin/dotgen-agent-session"
     tracked = f'$HOME/.bashrc $HOME/.aliases $HOME/.gitconfig{tmux_config} $HOME/bin/stinkpot "{state}" "{database}"'
     mtime_cmd = "stat -f '%m'" if env_name == "macos" else "stat -c '%Y'"
     before = handle.run(f"{sum_cmd} {tracked}; {mtime_cmd} $HOME/bin/stinkpot").stdout

@@ -17,6 +17,9 @@ _GITCONFIG = """\
 [core]
     editor = hx
     excludesFile = ~/.gitignore_global
+    pager = delta
+[interactive]
+    diffFilter = delta --color-only
 [push]
     default = current
 [pull]

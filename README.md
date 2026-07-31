@@ -108,20 +108,31 @@ The setup preflights non-root execution and sudo authentication before making ch
 
 ## Persistent remote agent sessions
 
-The normal `macos` and `debian` environments install tmux and mosh; `debian-docker` installs neither. From Ghostty on the Mac, connect directly to a named server-side tmux session:
+The normal `macos` and `debian` environments install tmux and mosh; full Debian also installs Tmuxinator, while `debian-docker` installs none of them. From Ghostty on the Mac, enter either the generic session or a project session:
 
 ```bash
-mosh-agent <ssh-config-host>           # session: agents
-mosh-agent <ssh-config-host> project   # session: project
+mosh-agent <ssh-config-host>              # plain session: agents
+mosh-agent <ssh-config-host> dotfiles_v2  # Tmuxinator project: dotfiles_v2
 ```
 
-The helper is equivalent to `mosh -- <host> tmux new-session -A -s <session>`. Mosh uses the existing SSH authentication and then needs inbound UDP 60000–61000 to reach the Debian server. Dotgen does not open host firewalls, cloud security groups, or NAT rules. Use an OpenSSH config host alias for non-default usernames, identity files, or SSH ports.
+A project name maps to an existing real directory at `~/repos/<project>` on the server. Names accept only letters, digits, `_`, and `-`; `agents` is reserved for the generic session. On first use, the Debian helper creates `~/.config/tmuxinator/<project>.yml` from the managed template and starts the project. Later connections attach to the existing session without duplicating windows. The initial layout has a 50/50 `work` window with a shell on the left and `hx .` on the right, followed by a full-window `claude` session.
+
+The generic form executes `tmux new-session -A -s agents`; the project form executes `/usr/local/bin/dotgen-agent-session start <project>`. Mosh uses the existing SSH authentication and then needs inbound UDP 60000–61000 to reach the Debian server. Dotgen does not open host firewalls, cloud security groups, or NAT rules. Use an OpenSSH config host alias for non-default usernames, identity files, or SSH ports. After deployment, perform one real project attachment from the Mac or iOS client; ordinary tests do not traverse the complete SSH-to-mosh-server remote-command path.
+
+Generated project configurations are persistent and are never silently replaced by deployment or connection. To apply a newer managed template, first end the project session after saving its work, then reset its config on the server:
+
+```bash
+dotgen-agent-session init <project>   # create config without starting tmux
+dotgen-agent-session reset <project>  # regenerate from the managed template
+```
+
+Reset refuses while the exact project session exists. Tmuxinator does not reconcile config changes into a live session, and ending a session terminates every process in its panes.
 
 Mosh keeps the active terminal responsive and reconnects after sleep, Wi-Fi loss, or a client IP change. Tmux is the persistence boundary: Claude Code, Pi, and other processes in the named session continue after the terminal or mosh client exits. A new `mosh-agent` invocation reattaches. Neither tool preserves a live process across a Debian reboot or tmux server failure.
 
-The `ta [session]` helper attaches or creates a session after either SSH or mosh login and switches sessions without nesting when already inside tmux. It also defaults to `agents`. Session names accept only letters, digits, `_`, and `-`.
+The `ta [session]` helper attaches or creates a plain session after either SSH or mosh login and switches sessions without nesting when already inside tmux. It defaults to `agents`. Session names accept only letters, digits, `_`, and `-`.
 
-The tmux prefix remains stock `Ctrl-B`. Useful defaults are `Ctrl-B d` to detach, `Ctrl-B c` for a window, `Ctrl-B %` and `Ctrl-B "` for splits, and `Ctrl-B [` for copy mode and retained scrollback. Mouse mode is enabled. Hold Shift while selecting in Ghostty to bypass tmux mouse handling and use native terminal selection.
+The tmux prefix remains stock `Ctrl-B`. Useful defaults are `Ctrl-B d` to detach, `Ctrl-B w` to choose a project window, `Ctrl-B n` / `Ctrl-B p` for the next or previous window, `Ctrl-B c` for a window, `Ctrl-B |` and `Ctrl-B -` for splits, `Ctrl-B [` for copy mode and retained scrollback, and `Ctrl-B r` to reload `~/.tmux.conf`. New windows and panes inherit the active pane's directory; destroying a session switches its clients to another session when one is available. The stock `%` and `"` split bindings also remain available. Mouse mode is enabled. Hold Shift while selecting in Ghostty to bypass tmux mouse handling and use native terminal selection.
 
 Tmux copy mode and applications inside panes may write the Mac clipboard through OSC 52. This is convenient for trusted agent and editor processes, but any pane process can replace tmux paste buffers and the local clipboard. Mosh supports ordinary OSC 52 and truecolor as of 1.4, but its terminal-state protocol is not a transparent SSH stream. Prefer SSH for large clipboard transfers, image/graphics protocols, port forwarding, or any workflow that needs full terminal-protocol fidelity:
 

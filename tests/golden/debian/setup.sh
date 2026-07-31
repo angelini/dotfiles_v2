@@ -42,10 +42,12 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages git jq yq fzf ripgrep fd-find tree vim htop cloc gnupg2 bash-completion bsdmainutils
-  ensure_dir "$HOME/bin"
+  install_packages git git-delta jq yq fzf ripgrep fd-find eza bat tree vim htop btop cloc gnupg2 bash-completion bsdmainutils
   if bin_exists fdfind && ! bin_exists fd; then
-    ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
+    link_file "$(command -v fdfind)" "$HOME/bin/fd"
+  fi
+  if bin_exists batcat && ! bin_exists bat; then
+    link_file "$(command -v batcat)" "$HOME/bin/bat"
   fi
 ); then
   component_end "core_utils" 0
@@ -660,6 +662,46 @@ if (
   component_end "fonts" 0
 else
   _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
+fi
+
+# --- tmuxinator ---
+component_begin "tmuxinator"
+if (
+  set -e
+  install_package tmuxinator
+  install_config "$DIR/config/tmuxinator/default.yml" "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/tmuxinator/default.yml"
+
+  install_tmuxinator_helper() {
+    local src="$DIR/config/tmuxinator/dotgen-agent-session"
+    local dst="/usr/local/bin/dotgen-agent-session"
+    if [ ! -f "$src" ] || [ -L "$src" ] || [ ! -x "$src" ]; then
+      error "invalid bundled tmuxinator helper: $src"
+      return 1
+    fi
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+      if [ ! -f "$dst" ] || [ -L "$dst" ]; then
+        error "unsafe tmuxinator helper destination: $dst"
+        return 1
+      fi
+    fi
+    if [ "$DOTGEN_MODE" = diff ]; then
+      if [ ! -e "$dst" ]; then
+        printf '+ INSTALL %s\n' "$dst"
+      elif ! cmp -s "$src" "$dst" || [ "$(stat -c '%a' "$dst")" != 755 ]; then
+        printf '~ CHANGE %s\n' "$dst"
+      fi
+      return 0
+    fi
+    if [ -e "$dst" ] && cmp -s "$src" "$dst" && [ "$(stat -c '%a' "$dst")" = 755 ]; then
+      return 0
+    fi
+    sudo install -m 0755 "$src" "$dst"
+  }
+  install_tmuxinator_helper
+); then
+  component_end "tmuxinator" 0
+else
+  _rc=$?; component_end "tmuxinator" "$_rc"; exit "$_rc"
 fi
 
 # --- docker ---

@@ -14,6 +14,11 @@ set -s escape-time 10
 set -g focus-events on
 set -g mouse on
 set -g history-limit 100000
+set -g detach-on-destroy off
+bind r source-file ~/.tmux.conf \; display-message "tmux config reloaded"
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+bind c new-window -c "#{pane_current_path}"
 """
 
 _SETUP = """\

@@ -27,6 +27,7 @@ from dotgen.components.starship import Starship
 from dotgen.components.stinkpot import Stinkpot
 from dotgen.components.supacode import Supacode
 from dotgen.components.tmux import Tmux
+from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
@@ -59,7 +60,7 @@ _SHARED: tuple[Component, ...] = (
     Fonts(),
 )
 
-_DEBIAN_FULL: tuple[Component, ...] = (Docker(),)
+_DEBIAN_FULL: tuple[Component, ...] = (Tmuxinator(), Docker())
 
 _MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), Supacode())
 

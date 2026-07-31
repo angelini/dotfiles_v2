@@ -75,10 +75,10 @@ One assertion per `def test_*` so failures are reported individually. Representa
 
 | Concern | Assertion |
 |---|---|
-| Core utils (all envs) | `command -v jq && command -v rg && command -v fd && command -v tree && command -v htop` |
+| Core utils (all envs) | `command -v jq && command -v rg && command -v fd && command -v eza && command -v bat && command -v delta && command -v tree && command -v htop && command -v btop` |
 | Tooling (all envs) | `command -v kubectl && command -v helm && command -v starship && command -v zoxide && command -v uv && command -v gh && command -v claude` |
 | Helix | `command -v hx && [ -f ~/.config/helix/config.toml ]` |
-| Git config | `grep -q 'editor = hx' ~/.gitconfig` |
+| Git config | `core.editor=hx`, `core.pager=delta`, and `interactive.diffFilter='delta --color-only'` |
 | Bashrc / aliases (login shell) | `bash -lc 'echo $EDITOR'` → `hx`; `bash -lc 'type kc'` reports a function |
 | Fedora-only addons | `command -v cargo && command -v fnm && command -v go && command -v aws && command -v zed`; skip on debian via `pytest.skipif` |
 | **Idempotency** | re-run `setup.sh deploy`; assert exit 0 *and* `~/.bashrc` is byte-identical to the post-first-run snapshot (`sha256sum` taken before/after) |

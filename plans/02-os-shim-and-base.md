@@ -66,9 +66,9 @@ Each lives under `src/dotgen/components/`. Each is a `@dataclass(frozen=True)` i
 - `bashrc` contributions: `HISTSIZE=1000000`, `HISTFILESIZE=1000000`, `HISTCONTROL=ignoredups:erasedups`, `shopt -s histappend`, `ulimit -n 65536`.
 - `bashrc`: `set_win_title` function, `PROMPT_COMMAND="set_win_title; $PROMPT_COMMAND"`.
 - `bashrc`: `epoch()` function (Python one-liner converting Unix ts → readable).
-- `alias`: generic aliases — `l='ls -hlAG'` (macOS) / `l='ls -hlA --color=auto'` (linux), `klear='clear && printf "[3J"'`, `rgc='rg -C 30'`, `ip='curl -s ifconfig.me'`, git aliases (`gs`, `gc`, `ga`, `gpo`, `gpfo`, `gl` with the colored log format from v1 line 1–60 of `aliases`).
+- `alias`: generic aliases — `l='eza --long --all --group-directories-first --git'`, `klear='clear && printf "[3J"'`, `rgc='rg -C 30'`, `ip='curl -s ifconfig.me'`, git aliases (`gs`, `gc`, `ga`, `gpo`, `gpfo`, `gl` with the colored log format from v1 line 1–60 of `aliases`).
 
-Per-OS `l` alias is the only branch.
+The `l` alias uses eza consistently; changing the login shell remains the only per-OS branch.
 
 #### `core_utils.py`
 
@@ -79,9 +79,13 @@ Per-OS `l` alias is the only branch.
 | jq | jq | jq | jq |
 | ripgrep | ripgrep | ripgrep | ripgrep |
 | fd | fd-find (+ symlink `~/bin/fd → fdfind`) | fd-find | fd |
+| eza | eza | eza | eza |
+| bat | bat (+ symlink `~/bin/bat → batcat`) | bat | bat |
+| delta | git-delta | git-delta | git-delta |
 | tree | tree | tree | tree |
 | vim | vim | vim | vim |
 | htop | htop | htop | htop |
+| btop | btop | btop | btop |
 | gnupg | gnupg2 | gnupg2 | gnupg |
 | bash-completion | bash-completion | bash-completion | bash-completion |
 
@@ -89,7 +93,7 @@ Per-OS `l` alias is the only branch.
 
 Emits two `ConfigFile`s:
 
-- `~/.gitconfig` — `user.name=Alex Angelini`, `user.email=alex.louis.angelini@gmail.com`, `core.editor=hx`, `core.excludesFile=~/.gitignore_global`, `push.default=current`, `diff.algorithm=patience`, `init.defaultBranch=main`, `url."ssh://git@github.com/".insteadOf=https://github.com/`, `pull.ff=only`.
+- `~/.gitconfig` — `user.name=Alex Angelini`, `user.email=alex.louis.angelini@gmail.com`, `core.editor=hx`, `core.excludesFile=~/.gitignore_global`, `core.pager=delta`, `interactive.diffFilter='delta --color-only'`, `push.default=current`, `diff.algorithm=patience`, `init.defaultBranch=main`, `url."ssh://git@github.com/".insteadOf=https://github.com/`, `pull.ff=only`.
 - `~/.gitignore_global` — `.DS_Store`, `__scratch__.*`, `CLAUDE.md`, `.serena/`, `.node-version` (we use fnm + `.node-version`), `node_modules/` (caller asked), keep minimal.
 
 Emits no `setup` text beyond `install_config config/git/gitconfig "$HOME/.gitconfig"` (called via shim helper).

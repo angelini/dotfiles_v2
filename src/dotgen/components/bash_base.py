@@ -35,8 +35,7 @@ alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'
 alias gl="git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25"
 """
 
-_ALIAS_LS_MACOS = "alias l='ls -hlAG'\n"
-_ALIAS_LS_LINUX = "alias l='ls -hlA --color=auto'\n"
+_ALIAS_LS = "alias l='eza --long --all --group-directories-first --git'\n"
 
 
 _BASH_MACOS_SETUP = r"""if [ "$(detect_os)" = macos ]; then
@@ -61,10 +60,9 @@ class BashBase:
         return True
 
     def render(self, env: Environment) -> Fragment:
-        ls_alias = _ALIAS_LS_MACOS if env.os is OS.MACOS else _ALIAS_LS_LINUX
         setup = _BASH_MACOS_SETUP if env.os is OS.MACOS else ""
         return Fragment(
             setup=setup,
             bashrc=_BASHRC,
-            alias=_ALIASES_COMMON + ls_alias,
+            alias=_ALIASES_COMMON + _ALIAS_LS,
         )

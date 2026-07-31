@@ -8,14 +8,18 @@ from dotgen.types import OS
 _PACKAGES: dict[OS, tuple[str, ...]] = {
     OS.DEBIAN: (
         "git",
+        "git-delta",
         "jq",
         "yq",
         "fzf",
         "ripgrep",
         "fd-find",
+        "eza",
+        "bat",
         "tree",
         "vim",
         "htop",
+        "btop",
         "cloc",
         "gnupg2",
         "bash-completion",
@@ -23,24 +27,30 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
     ),
     OS.MACOS: (
         "git",
+        "git-delta",
         "jq",
         "yq",
         "fzf",
         "ripgrep",
         "fd",
+        "eza",
+        "bat",
         "tree",
         "vim",
         "htop",
+        "btop",
         "cloc",
         "gnupg",
         "bash-completion",
     ),
 }
 
-_FD_SHIM_DEBIAN = """\
-ensure_dir "$HOME/bin"
+_CLI_SHIMS_DEBIAN = """\
 if bin_exists fdfind && ! bin_exists fd; then
-  ln -sf "$(command -v fdfind)" "$HOME/bin/fd"
+  link_file "$(command -v fdfind)" "$HOME/bin/fd"
+fi
+if bin_exists batcat && ! bin_exists bat; then
+  link_file "$(command -v batcat)" "$HOME/bin/bat"
 fi
 """
 
@@ -56,5 +66,5 @@ class CoreUtils:
         pkgs = _PACKAGES[env.os]
         body = argv("install_packages", *pkgs) + "\n"
         if env.os is OS.DEBIAN:
-            body += _FD_SHIM_DEBIAN
+            body += _CLI_SHIMS_DEBIAN
         return Fragment(setup=body)

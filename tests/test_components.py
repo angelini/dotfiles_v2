@@ -33,6 +33,7 @@ from dotgen.components.starship import Starship
 from dotgen.components.stinkpot import Stinkpot
 from dotgen.components.supacode import Supacode
 from dotgen.components.tmux import Tmux
+from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
@@ -55,6 +56,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
         Stinkpot,
         Tmux,
         Mosh,
+        Tmuxinator,
         GitSetup,
         Helix,
         Starship,
@@ -82,11 +84,10 @@ def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> Non
             assert isinstance(comp.render(env), Fragment)
 
 
-def test_bash_base_ls_alias_per_os() -> None:
-    mac = BashBase().render(ENVIRONMENTS["macos"]).alias
-    linux = BashBase().render(ENVIRONMENTS["debian"]).alias
-    assert "ls -hlAG" in mac
-    assert "--color=auto" in linux
+def test_bash_base_l_alias_uses_eza() -> None:
+    expected = "alias l='eza --long --all --group-directories-first --git'"
+    for environment in ENVIRONMENTS.values():
+        assert expected in BashBase().render(environment).alias
 
 
 def test_bash_base_git_aliases() -> None:
@@ -122,9 +123,29 @@ def test_core_utils_per_os_fd_token() -> None:
     assert " fd " in macos and "fd-find" not in macos
 
 
-def test_core_utils_debian_adds_fd_symlink() -> None:
+def test_core_utils_include_process_monitors() -> None:
+    for environment in ENVIRONMENTS.values():
+        setup = CoreUtils().render(environment).setup
+        assert " htop " in setup
+        assert " btop " in setup
+
+
+def test_core_utils_include_modern_cli_tools() -> None:
+    for environment in ENVIRONMENTS.values():
+        setup = CoreUtils().render(environment).setup
+        assert " git-delta " in setup
+        assert " eza " in setup
+        assert " bat " in setup
+
+
+def test_core_utils_debian_normalizes_binary_names() -> None:
     setup = CoreUtils().render(ENVIRONMENTS["debian"]).setup
-    assert "fdfind" in setup and "ln -sf" in setup
+    assert "command -v fdfind" in setup
+    assert '"$HOME/bin/fd"' in setup
+    assert "command -v batcat" in setup
+    assert '"$HOME/bin/bat"' in setup
+    assert setup.count("link_file ") == 2
+    assert "ln -sf" not in setup
 
 
 def test_git_setup_emits_two_configs() -> None:
@@ -140,6 +161,13 @@ def test_git_setup_uses_secret_placeholders() -> None:
     assert "${GIT_USER_EMAIL}" in cfg.content
     assert frag.secrets == frozenset({"GIT_USER_NAME", "GIT_USER_EMAIL"})
     assert "install_config_template " in frag.setup
+
+
+def test_git_setup_uses_delta_pager() -> None:
+    configs = GitSetup().render(ENVIRONMENTS["macos"]).configs
+    gitconfig = next(c for c in configs if c.dest == "git/gitconfig").content
+    assert "pager = delta" in gitconfig
+    assert "diffFilter = delta --color-only" in gitconfig
 
 
 def test_npm_config_is_secure_and_exact_in_every_environment() -> None:
@@ -341,7 +369,7 @@ def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None
         assert "docker" not in [component.name for component in ENVIRONMENTS[name].components]
     names = [component.name for component in ENVIRONMENTS["debian"].components]
     assert names.count("docker") == 1
-    assert names[-4:] == ["fonts", "docker", "git_setup", "dotfiles_deploy"]
+    assert names[-5:] == ["fonts", "tmuxinator", "docker", "git_setup", "dotfiles_deploy"]
 
 
 def test_docker_render_contract() -> None:

@@ -11,23 +11,27 @@ _ALIAS_BY_OS: dict[OS, str] = {
     OS.MACOS: """\
 mosh-agent() {
   if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-    printf 'usage: mosh-agent <host> [session]\\n' >&2
+    printf 'usage: mosh-agent <host> [project]\\n' >&2
     return 2
   fi
-  local host="$1" session="${2-agents}"
+  local host="$1" project="${2-}"
   case "$host" in
     ""|-*)
       printf 'mosh-agent: invalid host: %s\\n' "$host" >&2
       return 2
       ;;
   esac
-  case "$session" in
-    ""|*[!A-Za-z0-9_-]*)
-      printf 'mosh-agent: invalid session name: %s\\n' "$session" >&2
+  if [ "$#" -eq 1 ]; then
+    command mosh -- "$host" tmux new-session -A -s agents
+    return
+  fi
+  case "$project" in
+    ""|-*|agents|*[!A-Za-z0-9_-]*)
+      printf 'mosh-agent: invalid project name: %s\\n' "$project" >&2
       return 2
       ;;
   esac
-  command mosh -- "$host" tmux new-session -A -s "$session"
+  command mosh -- "$host" /usr/local/bin/dotgen-agent-session start "$project"
 }
 """,
 }
