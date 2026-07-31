@@ -15,6 +15,7 @@ from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.kubectl import Kubectl
+from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
 from dotgen.components.pi_agent import PiAgent
@@ -25,6 +26,7 @@ from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
 from dotgen.components.stinkpot import Stinkpot
 from dotgen.components.supacode import Supacode
+from dotgen.components.tmux import Tmux
 from dotgen.components.zed import Zed
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
@@ -34,6 +36,8 @@ _SHARED: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
     Stinkpot(),
+    Tmux(),
+    Mosh(),
     Helix(),
     Starship(),
     Shellcheck(),
@@ -70,6 +74,8 @@ _DOCKER_SKIP = {
     "claude_code",
     "postgres",
     "doppler",
+    "tmux",
+    "mosh",
 }
 
 # GitSetup depends on Gh

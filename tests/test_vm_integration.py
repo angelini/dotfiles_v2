@@ -127,6 +127,55 @@ def test_shared_tooling_installed(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd(" && ".join(cmds), login=True)
 
 
+def test_tmux_and_mosh_remote_session_setup(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name == "debian-docker":
+        handle.assert_cmd(
+            r"""
+set -euo pipefail
+! grep -q 'component_begin "tmux"' /tmp/dotgen/debian-docker/setup.sh
+! grep -q 'component_begin "mosh"' /tmp/dotgen/debian-docker/setup.sh
+! grep -q '^# --- tmux ---$' /tmp/dotgen/debian-docker/alias.sh
+! grep -q '^# --- mosh ---$' /tmp/dotgen/debian-docker/alias.sh
+[ ! -e /tmp/dotgen/debian-docker/config/tmux ]
+! type ta >/dev/null 2>&1
+! type mosh-agent >/dev/null 2>&1
+""",
+            login=True,
+        )
+        return
+
+    helper_check = "type mosh-agent" if env_name == "macos" else "! type mosh-agent >/dev/null 2>&1"
+    handle.assert_cmd(
+        rf"""
+set -euo pipefail
+command -v tmux
+command -v mosh
+infocmp tmux-256color >/dev/null
+cmp -s "$HOME/.tmux.conf" /tmp/dotgen/{env_name}/config/tmux/tmux.conf
+type ta
+{helper_check}
+socket="dotgen-test-$$"
+term_file="$(mktemp)"
+cleanup() {{
+  tmux -L "$socket" kill-server 2>/dev/null || true
+  rm -f "$term_file"
+}}
+trap cleanup EXIT HUP INT TERM
+tmux -L "$socket" -f "$HOME/.tmux.conf" new-session -d -s config-check "printf '%s\\n' \"\$TERM\" > '$term_file'; exec sleep 30"
+for _ in 1 2 3 4 5; do
+  [ -s "$term_file" ] && break
+  sleep 1
+done
+[ "$(cat "$term_file")" = tmux-256color ]
+[ "$(tmux -L "$socket" show-options -gv mouse)" = on ]
+[ "$(tmux -L "$socket" show-options -gv history-limit)" = 100000 ]
+[ "$(tmux -L "$socket" show-options -sv escape-time)" = 10 ]
+""",
+        login=True,
+    )
+
+
 def test_stinkpot_is_bundled_installed_and_migrated(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     expected_os = "darwin" if env_name == "macos" else "linux"
@@ -368,7 +417,8 @@ def test_setup_is_idempotent(vm: tuple[str, VmHandle]) -> None:
     sum_cmd = "sha256sum" if env_name != "macos" else "shasum -a 256"
     state = "${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1"
     database = "${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db"
-    tracked = f'$HOME/.bashrc $HOME/.aliases $HOME/.gitconfig $HOME/bin/stinkpot "{state}" "{database}"'
+    tmux_config = " $HOME/.tmux.conf" if env_name != "debian-docker" else ""
+    tracked = f'$HOME/.bashrc $HOME/.aliases $HOME/.gitconfig{tmux_config} $HOME/bin/stinkpot "{state}" "{database}"'
     mtime_cmd = "stat -f '%m'" if env_name == "macos" else "stat -c '%Y'"
     before = handle.run(f"{sum_cmd} {tracked}; {mtime_cmd} $HOME/bin/stinkpot").stdout
     handle.run(_deploy_cmd(env_name), timeout=_REDEPLOY_TIMEOUT[env_name])

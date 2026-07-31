@@ -7,6 +7,7 @@
 0644  1658dce229f0219751e7dbacd3e1daaa569008d1e8518fef33d63d81c6fc7011  helix/config.toml
 0644  20d4137626e9064eb784a8a69b128c374f9688d3126deab0f0c9a3d18ebefb23  starship/starship.toml
 0644  5729e71b2dfe96c3a480aefd4b3ef6f0445a194bfaae25bf9d336164ef399813  pi/sandbox/pi-macos.sb
+0644  646af8e214f89af6b799b2666f25f098ae4baa6ae05c88cf6e2c0881d98ec8a1  tmux/tmux.conf
 0644  7b475f8084759694e3c04cb6c1f45da16dc652118abaab0e919210c627de1d90  pi/agent/plannotator.json
 0644  a62ded06e54c0bfce18ee0bf022b20efb6c05ee3e30d426da2cc9b9a00abeed2  bash/bash_profile
 0644  bb3fd9de59f59ba79c5e89b37cd33e320fba9acb459fe3f01a299b78ff126f80  git/gitignore_global

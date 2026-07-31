@@ -232,6 +232,29 @@ else
   _rc=$?; component_end "stinkpot" "$_rc"; exit "$_rc"
 fi
 
+# --- tmux ---
+component_begin "tmux"
+if (
+  set -e
+  install_package tmux
+  install_config "$DIR/config/tmux/tmux.conf" "$HOME/.tmux.conf"
+); then
+  component_end "tmux" 0
+else
+  _rc=$?; component_end "tmux" "$_rc"; exit "$_rc"
+fi
+
+# --- mosh ---
+component_begin "mosh"
+if (
+  set -e
+  install_package mosh
+); then
+  component_end "mosh" 0
+else
+  _rc=$?; component_end "mosh" "$_rc"; exit "$_rc"
+fi
+
 # --- helix ---
 component_begin "helix"
 if (

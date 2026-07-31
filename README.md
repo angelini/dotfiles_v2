@@ -106,6 +106,29 @@ exec bash -l
 
 The setup preflights non-root execution and sudo authentication before making changes. To install a locally built bundle on the Mac, run `just install macos`.
 
+## Persistent remote agent sessions
+
+The normal `macos` and `debian` environments install tmux and mosh; `debian-docker` installs neither. From Ghostty on the Mac, connect directly to a named server-side tmux session:
+
+```bash
+mosh-agent <ssh-config-host>           # session: agents
+mosh-agent <ssh-config-host> project   # session: project
+```
+
+The helper is equivalent to `mosh -- <host> tmux new-session -A -s <session>`. Mosh uses the existing SSH authentication and then needs inbound UDP 60000–61000 to reach the Debian server. Dotgen does not open host firewalls, cloud security groups, or NAT rules. Use an OpenSSH config host alias for non-default usernames, identity files, or SSH ports.
+
+Mosh keeps the active terminal responsive and reconnects after sleep, Wi-Fi loss, or a client IP change. Tmux is the persistence boundary: Claude Code, Pi, and other processes in the named session continue after the terminal or mosh client exits. A new `mosh-agent` invocation reattaches. Neither tool preserves a live process across a Debian reboot or tmux server failure.
+
+The `ta [session]` helper attaches or creates a session after either SSH or mosh login and switches sessions without nesting when already inside tmux. It also defaults to `agents`. Session names accept only letters, digits, `_`, and `-`.
+
+The tmux prefix remains stock `Ctrl-B`. Useful defaults are `Ctrl-B d` to detach, `Ctrl-B c` for a window, `Ctrl-B %` and `Ctrl-B "` for splits, and `Ctrl-B [` for copy mode and retained scrollback. Mouse mode is enabled. Hold Shift while selecting in Ghostty to bypass tmux mouse handling and use native terminal selection.
+
+Tmux copy mode and applications inside panes may write the Mac clipboard through OSC 52. This is convenient for trusted agent and editor processes, but any pane process can replace tmux paste buffers and the local clipboard. Mosh supports ordinary OSC 52 and truecolor as of 1.4, but its terminal-state protocol is not a transparent SSH stream. Prefer SSH for large clipboard transfers, image/graphics protocols, port forwarding, or any workflow that needs full terminal-protocol fidelity:
+
+```bash
+ssh -t <ssh-config-host> 'tmux new-session -A -s agents'
+```
+
 ## Rootless Docker on full Debian
 
 Rootless Docker is enabled only by the full `debian` environment, not `debian-docker` or macOS. It requires exact Debian 13 Trixie, the official Docker stable repository, unpinned CE, CLI, containerd, buildx, Compose, and rootless packages, cgroup v2, systemd, logind, and a regular deployment user with sudo used only for host administration. Setup loads the kernel module required by the active iptables backend (`nf_tables` by default or `ip_tables` for legacy iptables) before rootless configuration.

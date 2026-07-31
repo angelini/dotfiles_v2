@@ -13,6 +13,51 @@ alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'
 alias gl="git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25"
 alias l='ls -hlAG'
 
+# --- tmux ---
+ta() {
+  if [ "$#" -gt 1 ]; then
+    printf 'usage: ta [session]\n' >&2
+    return 2
+  fi
+  local session="${1-agents}"
+  case "$session" in
+    ""|*[!A-Za-z0-9_-]*)
+      printf 'ta: invalid session name: %s\n' "$session" >&2
+      return 2
+      ;;
+  esac
+  if [ -n "${TMUX:-}" ]; then
+    if ! command tmux has-session -t "=$session" 2>/dev/null; then
+      command tmux new-session -d -s "$session" || return
+    fi
+    command tmux switch-client -t "=$session"
+  else
+    command tmux new-session -A -s "$session"
+  fi
+}
+
+# --- mosh ---
+mosh-agent() {
+  if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    printf 'usage: mosh-agent <host> [session]\n' >&2
+    return 2
+  fi
+  local host="$1" session="${2-agents}"
+  case "$host" in
+    ""|-*)
+      printf 'mosh-agent: invalid host: %s\n' "$host" >&2
+      return 2
+      ;;
+  esac
+  case "$session" in
+    ""|*[!A-Za-z0-9_-]*)
+      printf 'mosh-agent: invalid session name: %s\n' "$session" >&2
+      return 2
+      ;;
+  esac
+  command mosh -- "$host" tmux new-session -A -s "$session"
+}
+
 # --- kubectl ---
 alias kc='kubectl'
 alias kca='kubectl get all'
