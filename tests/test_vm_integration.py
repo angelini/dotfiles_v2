@@ -172,6 +172,8 @@ done
 [ "$(cat "$term_file")" = tmux-256color ]
 [ "$(tmux -L "$socket" show-options -gv mouse)" = on ]
 [ "$(tmux -L "$socket" show-options -gv history-limit)" = 100000 ]
+[ "$(tmux -L "$socket" show-options -gv base-index)" = 1 ]
+[ "$(tmux -L "$socket" show-options -gv renumber-windows)" = on ]
 [ "$(tmux -L "$socket" show-options -sv escape-time)" = 10 ]
 """,
         login=True,

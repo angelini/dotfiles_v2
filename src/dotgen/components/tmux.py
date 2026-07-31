@@ -15,6 +15,21 @@ set -g focus-events on
 set -g mouse on
 set -g history-limit 100000
 set -g detach-on-destroy off
+set -g base-index 1
+set -g renumber-windows on
+set -g status-position bottom
+set -g status-justify left
+set -g status-interval 5
+set -g status-style "bg=#1d1f21,fg=#c5c8c6"
+set -g status-left-length 40
+set -g status-right-length 80
+set -g status-left "#[fg=#1d1f21,bg=#81a2be,bold] #S #[fg=#81a2be,bg=#1d1f21,nobold]"
+set -g status-right "#[fg=#8abeb7,bg=#1d1f21]#[fg=#1d1f21,bg=#8abeb7] #H #[fg=#81a2be,bg=#8abeb7]#[fg=#1d1f21,bg=#81a2be,bold] %a %H:%M "
+setw -g window-status-separator ""
+setw -g window-status-format "#[fg=#969896,bg=#1d1f21] #I:#W#F "
+setw -g window-status-current-format "#[fg=#1d1f21,bg=#b294bb]#[fg=#1d1f21,bg=#b294bb,bold] #I:#W#F #[fg=#b294bb,bg=#1d1f21,nobold]"
+set -g message-style "bg=#f0c674,fg=#1d1f21,bold"
+set -g mode-style "bg=#81a2be,fg=#1d1f21,bold"
 bind r source-file ~/.tmux.conf \; display-message "tmux config reloaded"
 bind | split-window -h -c "#{pane_current_path}"
 bind - split-window -v -c "#{pane_current_path}"
