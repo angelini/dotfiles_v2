@@ -15,6 +15,7 @@ SHIM_FUNCTIONS: tuple[str, ...] = (
     "update_pkg_index",
     "service_enable",
     "service_mask",
+    "bin_version_matches",
     "download_bin",
     "download_tar_bin",
     "link_file",
@@ -534,10 +535,25 @@ install_script() {
   rm -f "$tmp"
 }
 
+bin_version_matches() {
+  local bin="$1" expected="$2" output
+  shift 2
+  [ -x "$bin" ] || return 1
+  [ -n "$expected" ] || return 1
+  output="$("$bin" "$@" 2>&1)" || return 1
+  awk -v expected="$expected" '{ for (i = 1; i <= NF; i++) if ($i == expected) found = 1 } END { exit(found ? 0 : 1) }' <<< "$output"
+}
+
 download_bin() {
-  local name="$1" url="$2"
+  local name="$1" url="$2" expected="${3:-}"
+  if [ "$#" -gt 2 ]; then shift 3; else shift 2; fi
+  if [ -n "$expected" ]; then
+    bin_version_matches "$HOME/bin/$name" "$expected" "$@" && return 0
+  elif [ "$DOTGEN_MODE" = diff ] && [ -x "$HOME/bin/$name" ]; then
+    return 0
+  fi
   if [ "$DOTGEN_MODE" = diff ]; then
-    [ -x "$HOME/bin/$name" ] || printf '+ INSTALL bin %s (%s)\n' "$name" "$url"
+    printf '+ INSTALL bin %s (%s)\n' "$name" "$url"
     return 0
   fi
   ensure_dir "$HOME/bin"
@@ -546,9 +562,15 @@ download_bin() {
 }
 
 download_tar_bin() {
-  local name="$1" url="$2" inner="${3:-$1}"
+  local name="$1" url="$2" inner="${3:-$1}" expected="${4:-}"
+  if [ "$#" -gt 3 ]; then shift 4; else shift "$#"; fi
+  if [ -n "$expected" ]; then
+    bin_version_matches "$HOME/bin/$name" "$expected" "$@" && return 0
+  elif [ "$DOTGEN_MODE" = diff ] && [ -x "$HOME/bin/$name" ]; then
+    return 0
+  fi
   if [ "$DOTGEN_MODE" = diff ]; then
-    [ -x "$HOME/bin/$name" ] || printf '+ INSTALL bin %s (%s)\n' "$name" "$url"
+    printf '+ INSTALL bin %s (%s)\n' "$name" "$url"
     return 0
   fi
   ensure_dir "$HOME/bin"
@@ -593,9 +615,11 @@ ask() {
 }
 
 install_npm_global() {
-  local pkg="$1" fnm_bin
+  local fnm_bin
   if [ "$DOTGEN_MODE" = diff ]; then
-    printf '+ INSTALL npm %s\n' "$pkg"
+    printf '+ INSTALL npm'
+    printf ' %s' "$@"
+    printf '\n'
     return 0
   fi
   if ! bin_exists npm; then
@@ -608,7 +632,7 @@ install_npm_global() {
     error "npm unavailable; node_fnm must run before npm installs"
     return 1
   fi
-  npm install -g "$pkg"
+  npm install -g "$@"
 }
 
 component_begin() {

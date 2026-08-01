@@ -302,32 +302,32 @@ if (
   _install_kubectl_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl"
+    download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl" "v1.35.4" version --client
   }
   _install_helm_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm"
+    download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.20.2" version --template '{{.Version}}'
   }
   _install_k9s_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_tar_bin k9s "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz" "k9s"
+    download_tar_bin k9s "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_${arch}.tar.gz" "k9s" "v0.51.0" version --short
   }
   _install_kubectx_linux() {
     local arch
     arch="$(_kubectx_arch)"
-    download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx"
+    download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx" "v0.11.0" --version
   }
   _install_kubens_linux() {
     local arch
     arch="$(_kubectx_arch)"
-    download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens"
+    download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens" "v0.11.0" --version
   }
   _install_kubie_linux() {
     local arch
     arch="$(_kubie_arch)"
-    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}"
+    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}" "0.27.0" --version
   }
   _install_kubectl_linux
   _install_helm_linux
@@ -392,18 +392,7 @@ component_begin "pi_agent"
 if (
   set -e
   install_package bubblewrap
-  install_npm_global @earendil-works/pi-coding-agent
-  install_npm_global pi-lens
-  install_npm_global pi-mcp-adapter
-  install_npm_global pi-subagents
-  install_npm_global pi-simplify
-  install_npm_global @plannotator/pi-extension
-  install_npm_global @dreki-gg/pi-context7
-  install_npm_global @juicesharp/rpiv-ask-user-question
-  install_npm_global @juicesharp/rpiv-btw
-  install_npm_global @juicesharp/rpiv-todo
-  install_npm_global @samfp/pi-memory
-  install_npm_global @vanillagreen/pi-web-tools
+  install_npm_global @earendil-works/pi-coding-agent pi-lens pi-mcp-adapter pi-subagents pi-simplify @plannotator/pi-extension @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"

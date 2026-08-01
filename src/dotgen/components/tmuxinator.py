@@ -15,7 +15,7 @@ windows:
       panes:
         - shell:
         - editor: hx .
-  - claude: claude
+  - agents: claude
 """
 
 _PROJECT_HELPER = r"""#!/usr/bin/env bash

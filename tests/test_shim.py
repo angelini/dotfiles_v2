@@ -5,6 +5,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import tarfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -509,10 +510,7 @@ def _run_json_patch(
 ) -> subprocess.CompletedProcess[str]:
     script = tmp_path / "run-json-patch.sh"
     mode_arg = f" {shlex.quote(requested_mode)}" if requested_mode is not None else ""
-    script.write_text(
-        f"set -uo pipefail\n{_macos_shim()}\n{prelude}\nexport DOTGEN_MODE={shlex.quote(mode)}\n"
-        f"install_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))}{mode_arg}\n"
-    )
+    script.write_text(f"set -uo pipefail\n{_macos_shim()}\n{prelude}\nexport DOTGEN_MODE={shlex.quote(mode)}\ninstall_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))}{mode_arg}\n")
     env = os_module.environ.copy()
     if tmpdir is not None:
         tmpdir.mkdir(exist_ok=True)
@@ -908,11 +906,108 @@ remove_packages absent installed
     assert "debian only" in _function_body(macos, "service_mask")
 
 
-def test_npm_install_activates_fnm_in_its_component_subshell() -> None:
+def test_download_bin_reuses_matching_version_and_replaces_mismatch(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = home / "bin" / "tool"
+    target.parent.mkdir(parents=True)
+    _write_executable(target, '#!/usr/bin/env bash\n[ "$*" = "version --short" ] || exit 7\nprintf "tool v1.0.0\\n"\n')
+    calls = tmp_path / "curl-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{_macos_shim()}
+export HOME={shlex.quote(str(home))}
+export DOTGEN_MODE=deploy
+export CALLS={shlex.quote(str(calls))}
+curl() {{
+  printf x >> "$CALLS"
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then
+      printf '#!/usr/bin/env bash\\n[ "$*" = "version --short" ] || exit 7\\nprintf "tool v2.0.0\\\\n"\\n' > "$2"
+      return 0
+    fi
+    shift
+  done
+  return 2
+}}
+download_bin tool https://example.test/tool v2.0.0 version --short
+download_bin tool https://example.test/tool v2.0.0 version --short
+if bin_version_matches "$HOME/bin/tool" v2.0 version --short; then exit 9; fi
+DOTGEN_MODE=diff
+download_bin tool https://example.test/tool v3.0.0 version --short
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "x"
+    assert subprocess.check_output([target, "version", "--short"], text=True) == "tool v2.0.0\n"
+    assert result.stdout == "+ INSTALL bin tool (https://example.test/tool)\n"
+
+
+def test_download_tar_bin_reuses_matching_version(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = home / "bin" / "tool"
+    target.parent.mkdir(parents=True)
+    _write_executable(target, '#!/usr/bin/env bash\nprintf "v1.0.0\\n"\n')
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    archived_tool = payload / "tool"
+    _write_executable(archived_tool, '#!/usr/bin/env bash\n[ "$*" = "--version" ] || exit 7\nprintf "v2.0.0\\n"\n')
+    archive = tmp_path / "tool.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(archived_tool, arcname="nested/tool")
+    calls = tmp_path / "curl-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{_macos_shim()}
+export HOME={shlex.quote(str(home))}
+export DOTGEN_MODE=deploy
+export ARCHIVE={shlex.quote(str(archive))}
+export CALLS={shlex.quote(str(calls))}
+curl() {{
+  printf x >> "$CALLS"
+  command cat "$ARCHIVE"
+}}
+download_tar_bin tool https://example.test/tool.tar.gz nested/tool v2.0.0 --version
+download_tar_bin tool https://example.test/tool.tar.gz nested/tool v2.0.0 --version
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "x"
+    assert subprocess.check_output([target, "--version"], text=True) == "v2.0.0\n"
+
+
+def test_npm_install_activates_fnm_and_batches_packages(tmp_path: Path) -> None:
     body = _function_body(OSShim(OS.DEBIAN).render(), "install_npm_global")
     assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in body
     assert 'eval "$("$fnm_bin" env --shell bash)"' in body
     assert 'error "npm unavailable; node_fnm must run before npm installs"' in body
+    assert 'npm install -g "$@"' in body
+    calls = tmp_path / "npm-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{_macos_shim()}
+export DOTGEN_MODE=deploy
+export CALLS={shlex.quote(str(calls))}
+npm() {{ printf '%s\\n' "$*" >> "$CALLS"; }}
+install_npm_global pkg-one @scope/pkg-two
+DOTGEN_MODE=diff
+install_npm_global pkg-one @scope/pkg-two
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "install -g pkg-one @scope/pkg-two\n"
+    assert result.stdout == "+ INSTALL npm pkg-one @scope/pkg-two\n"
 
 
 def _vendor_src(root: Path) -> Path:

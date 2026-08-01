@@ -6,6 +6,7 @@ from dotgen.types import OS
 
 _KUBE_VERSION = "v1.35.4"
 _HELM_VERSION = "v3.20.2"
+_K9S_VERSION = "v0.51.0"
 _KUBECTX_VERSION = "v0.11.0"
 _KUBIE_VERSION = "v0.27.0"
 
@@ -36,42 +37,53 @@ _install_kubectl_linux() {
   arch="$(_kube_arch)"
   download_bin kubectl """
     + f'"https://dl.k8s.io/release/{_KUBE_VERSION}/bin/linux/'
-    + r"""${arch}/kubectl"
+    + r'${arch}/kubectl" '
+    + f'"{_KUBE_VERSION}" version --client'
+    + r"""
 }
 _install_helm_linux() {
   local arch
   arch="$(_kube_arch)"
   download_tar_bin helm """
     + f'"https://get.helm.sh/helm-{_HELM_VERSION}-linux-'
-    + r"""${arch}.tar.gz" "linux-${arch}/helm"
+    + r'${arch}.tar.gz" "linux-${arch}/helm" '
+    + f"\"{_HELM_VERSION}\" version --template '{{{{.Version}}}}'"
+    + r"""
 }
 _install_k9s_linux() {
   local arch
   arch="$(_kube_arch)"
   download_tar_bin k9s """
-    + r'"https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_${arch}.tar.gz"'
-    + r""" "k9s"
+    + f'"https://github.com/derailed/k9s/releases/download/{_K9S_VERSION}/k9s_Linux_'
+    + r'${arch}.tar.gz" "k9s" '
+    + f'"{_K9S_VERSION}" version --short'
+    + r"""
 }
 _install_kubectx_linux() {
   local arch
   arch="$(_kubectx_arch)"
   download_tar_bin kubectx """
     + f'"https://github.com/ahmetb/kubectx/releases/download/{_KUBECTX_VERSION}/kubectx_{_KUBECTX_VERSION}_linux_'
-    + r"""${arch}.tar.gz" "kubectx"
+    + r'${arch}.tar.gz" "kubectx" '
+    + f'"{_KUBECTX_VERSION}" --version'
+    + r"""
 }
 _install_kubens_linux() {
   local arch
   arch="$(_kubectx_arch)"
   download_tar_bin kubens """
     + f'"https://github.com/ahmetb/kubectx/releases/download/{_KUBECTX_VERSION}/kubens_{_KUBECTX_VERSION}_linux_'
-    + r"""${arch}.tar.gz" "kubens"
+    + r'${arch}.tar.gz" "kubens" '
+    + f'"{_KUBECTX_VERSION}" --version'
+    + r"""
 }
 _install_kubie_linux() {
   local arch
   arch="$(_kubie_arch)"
   download_bin kubie """
     + f'"https://github.com/sbstp/kubie/releases/download/{_KUBIE_VERSION}/kubie-linux-'
-    + r'${arch}"'
+    + r'${arch}" '
+    + f'"{_KUBIE_VERSION.removeprefix("v")}" --version'
     + "\n}\n"
 )
 

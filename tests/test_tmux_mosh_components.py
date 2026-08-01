@@ -55,7 +55,7 @@ windows:
       panes:
         - shell:
         - editor: hx .
-  - claude: claude
+  - agents: claude
 """
 
 

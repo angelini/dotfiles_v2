@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -356,7 +357,8 @@ pi-unsafe() {
 """
 
 _SETUP_BASE = (
-    "\n".join(f"install_npm_global {pkg}" for pkg in _PI_PACKAGES)
+    "install_npm_global "
+    + shlex.join(_PI_PACKAGES)
     + r"""
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"

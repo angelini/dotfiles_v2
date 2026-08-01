@@ -231,7 +231,7 @@ exec sleep 30
 EOF
 chmod 0755 "$fake_bin/hx" "$fake_bin/claude"
 PATH="$fake_bin:$PATH" TMUXINATOR_CONFIG="$HOME/.config/tmuxinator" tmuxinator start --no-attach "$project"
-[ "$(tmux list-windows -t "=$project" -F '#W' | paste -sd, -)" = work,claude ]
+[ "$(tmux list-windows -t "=$project" -F '#W' | paste -sd, -)" = work,agents ]
 [ "$(tmux list-panes -t "$project:work" | wc -l | tr -d ' ')" = 2 ]
 set -- $(tmux list-panes -t "$project:work" -F '#{pane_width}')
 left_width="$1"
@@ -242,11 +242,11 @@ right_width="$2"
 [ "$(tmux display-message -p -t "$project:work.1" '#{pane_current_path}')" = "$root" ]
 for _ in 1 2 3 4 5; do
   tmux capture-pane -p -t "$project:work.1" | grep -q DOTGEN_HX_STARTED &&
-    tmux capture-pane -p -t "$project:claude.0" | grep -q DOTGEN_CLAUDE_STARTED && break
+    tmux capture-pane -p -t "$project:agents.0" | grep -q DOTGEN_CLAUDE_STARTED && break
   sleep 1
 done
 tmux capture-pane -p -t "$project:work.1" | grep -q DOTGEN_HX_STARTED
-tmux capture-pane -p -t "$project:claude.0" | grep -q DOTGEN_CLAUDE_STARTED
+tmux capture-pane -p -t "$project:agents.0" | grep -q DOTGEN_CLAUDE_STARTED
 PATH="$fake_bin:$PATH" TMUXINATOR_CONFIG="$HOME/.config/tmuxinator" tmuxinator start --no-attach "$project"
 [ "$(tmux list-windows -t "=$project" | wc -l | tr -d ' ')" = 2 ]
 [ "$(tmux list-panes -s -t "=$project" | wc -l | tr -d ' ')" = 3 ]

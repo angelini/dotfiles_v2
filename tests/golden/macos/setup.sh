@@ -450,18 +450,7 @@ fi
 component_begin "pi_agent"
 if (
   set -e
-  install_npm_global @earendil-works/pi-coding-agent
-  install_npm_global pi-lens
-  install_npm_global pi-mcp-adapter
-  install_npm_global pi-subagents
-  install_npm_global pi-simplify
-  install_npm_global @plannotator/pi-extension
-  install_npm_global @dreki-gg/pi-context7
-  install_npm_global @juicesharp/rpiv-ask-user-question
-  install_npm_global @juicesharp/rpiv-btw
-  install_npm_global @juicesharp/rpiv-todo
-  install_npm_global @samfp/pi-memory
-  install_npm_global @vanillagreen/pi-web-tools
+  install_npm_global @earendil-works/pi-coding-agent pi-lens pi-mcp-adapter pi-subagents pi-simplify @plannotator/pi-extension @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"

@@ -11,7 +11,7 @@ Add Debian-side Tmuxinator project sessions that are created on first use and re
 Each generated project starts with exactly two windows:
 
 1. `work`: a 50/50 left-right split with an interactive shell on the left and `hx .` on the right, initially focused on the shell.
-2. `claude`: one full-window pane running `claude`.
+2. `agents`: one full-window pane running `claude`.
 
 ## Context and upstream assessment
 
@@ -39,7 +39,7 @@ Tmuxinator creates the configured windows and runs their commands only when the 
 - Install a managed scaffold separately from generated project files.
 - Create a persistent project config only when absent. Never overwrite it during ordinary connection or dotfiles redeploy.
 - Apply future scaffold changes through an explicit manual reset command. Reset must refuse while the project tmux session exists and must replace the config atomically only after successful rendering.
-- Use exactly two initial windows: `work` and `claude`.
+- Use exactly two initial windows: `work` and `agents`.
 - Use `layout: even-horizontal` for the 50/50 `work` split.
 - Put the blank interactive shell in the first/left pane and run `hx .` in the second/right pane. Tmuxinator 3.3.3 always selects the first pane, and `startup_pane: 0` preserves shell focus without the newer `focused_pane` key.
 - Run `claude` in the sole pane of the second window.
@@ -107,7 +107,7 @@ windows:
       panes:
         - shell:
         - editor: hx .
-  - claude: claude
+  - agents: claude
 ```
 
 The scaffold must remain free of secrets and host-specific credentials. Pane commands are sent to an interactive shell; exiting Helix or Claude returns to that shell.
@@ -233,8 +233,8 @@ Extend Debian VM coverage to assert:
 - the managed scaffold equals the bundled source;
 - `init` creates a valid project config for a disposable real directory;
 - repeated `init` leaves a sentinel config byte-for-byte unchanged;
-- `tmuxinator debug <project>` parses the generated YAML and contains two windows, the expected split/layout, `hx .`, and `claude`;
-- a disposable `tmuxinator start --no-attach <project>` creates exactly the `work` and `claude` windows; `work` has two panes with widths differing by at most one column, pane 0 is active, and both panes use the project working directory;
+- `tmuxinator debug <project>` parses the generated YAML and contains the `work` and `agents` windows, the expected split/layout, `hx .`, and `claude`;
+- a disposable `tmuxinator start --no-attach <project>` creates exactly the `work` and `agents` windows; `work` has two panes with widths differing by at most one column, pane 0 is active, and both panes use the project working directory;
 - test-only `hx` and `claude` executables placed first on `PATH` print distinct markers and remain alive, allowing pane capture to prove both startup commands ran without depending on interactive credentials;
 - a second detached start keeps the same two windows and does not duplicate panes;
 - reset refuses while the exact disposable tmux session exists;
@@ -288,7 +288,7 @@ Manual client acceptance:
 1. Ensure a real `~/repos/<project>` directory exists and no same-named tmux session exists.
 2. Run `mosh-agent <host> <project>` from Ghostty.
 3. Verify `work` opens first with shell left, Helix right, equal pane widths, and pane 0/shell focus.
-4. Verify `claude` is the second window and occupies one full pane.
+4. Verify `agents` is the second window, occupies one full pane, and runs `claude`.
 5. Detach and reconnect with the same command; verify the existing Claude process survives and no duplicate windows appear.
 6. Verify `mosh-agent <host>` enters the generic `dev` session.
 7. Verify an iOS mosh client can invoke the same absolute remote helper command.
