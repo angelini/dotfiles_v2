@@ -6,7 +6,7 @@ Implemented and CI-validated. Optional VM execution and manual real-mosh accepta
 
 ## Goal
 
-Add Debian-side Tmuxinator project sessions that are created on first use and reattached through mosh. Preserve `mosh-agent <host>` as the existing generic `agents` tmux session. Change `mosh-agent <host> <project>` to initialize a persistent project configuration on the server when needed, then enter the Tmuxinator-managed session.
+Add Debian-side Tmuxinator project sessions that are created on first use and reattached through mosh. Preserve `mosh-agent <host>` as the generic `dev` tmux session. Change `mosh-agent <host> <project>` to initialize a persistent project configuration on the server when needed, then enter the Tmuxinator-managed session.
 
 Each generated project starts with exactly two windows:
 
@@ -30,11 +30,11 @@ Tmuxinator creates the configured windows and runs their commands only when the 
 ## Approved decisions
 
 - Install Tmuxinator only in the full `debian` environment, not on macOS or in `debian-docker`.
-- Preserve `mosh-agent <host>` as `mosh -- <host> tmux new-session -A -s agents`.
+- Preserve `mosh-agent <host>` as `mosh -- <host> tmux new-session -A -s dev`.
 - Interpret the second argument as a project: `mosh-agent <host> <project>`.
 - Map project `<project>` to the existing real directory `~/repos/<project>`.
 - Restrict project names to ASCII letters, digits, `_`, and `-`, reject a leading dash, and match the existing helper contract.
-- Reserve `agents`; it cannot be used as a Tmuxinator project name.
+- Reserve `dev`; it cannot be used as a Tmuxinator project name.
 - Reject missing project directories and reject a project root that is a symlink. The helper never creates or clones repositories.
 - Install a managed scaffold separately from generated project files.
 - Create a persistent project config only when absent. Never overwrite it during ordinary connection or dotfiles redeploy.
@@ -54,7 +54,7 @@ mosh-agent <host>
 mosh-agent <host> <project>
 ```
 
-- One argument enters the existing plain `agents` session.
+- One argument enters the plain `dev` session.
 - Two arguments execute the server helper directly through mosh:
 
 ```text
@@ -75,7 +75,7 @@ dotgen-agent-session reset <project>
 - `start` performs the same safe initialization and executes `tmuxinator start <project>`.
 - `reset` refuses when an exact tmux session named `<project>` exists, renders a replacement config to a temporary file, atomically replaces the persistent config, and exits without starting the session.
 
-All subcommands accept exactly one project argument. Invalid names, `agents`, missing roots, symlink roots, unexpected config file types, and extra arguments fail with status 2 before Tmuxinator starts.
+All subcommands accept exactly one project argument. Invalid names, `dev`, missing roots, symlink roots, unexpected config file types, and extra arguments fail with status 2 before Tmuxinator starts.
 
 ## Managed and persistent files
 
@@ -146,7 +146,7 @@ Temporary render directories and files must be cleaned on success, failure, and 
 - Creating, cloning, pulling, or selecting repositories.
 - Supporting project names containing dots, slashes, spaces, or Unicode.
 - Supporting symlinked project roots.
-- Migrating the generic `agents` session to Tmuxinator.
+- Migrating the generic `dev` session to Tmuxinator.
 - Automatically modifying existing project configs when the scaffold changes.
 - Automatically killing sessions to apply a new layout.
 - Per-project test, server, log, or monitoring windows in the initial scaffold.
@@ -177,8 +177,8 @@ Do not add it to macOS, `_SHARED`, or the Docker environment. Keep the component
 
 Modify `src/dotgen/components/mosh.py` so:
 
-- one argument preserves the current generic `agents` remote argv exactly;
-- two arguments validate the project, reject `agents`, and invoke `/usr/local/bin/dotgen-agent-session start <project>`;
+- one argument preserves the current generic `dev` remote argv exactly;
+- two arguments validate the project, reject `dev`, and invoke `/usr/local/bin/dotgen-agent-session start <project>`;
 - invalid host, invalid project, and extra arguments return 2 before invoking mosh;
 - project and host remain separate argv entries.
 
@@ -195,7 +195,7 @@ Cover:
 - exact scaffold content and ordering: two windows only, first/left blank shell pane, second/right `hx .` pane, `even-horizontal`, `startup_pane: 0`, and one full-window `claude` command; do not add a Python YAML dependency solely for this test;
 - generic one-argument mosh argv remaining unchanged;
 - exact two-argument remote helper argv;
-- rejection of `agents`, empty, leading-dash, dotted, slashed, spaced, Unicode, and extra project arguments;
+- rejection of `dev`, empty, leading-dash, dotted, slashed, spaced, Unicode, and extra project arguments;
 - server helper `init`, `start`, and `reset` behavior using a temporary home and fake `tmux`, `tmuxinator`, and lock commands;
 - missing and symlink project roots;
 - unsafe managed/persistent config file types;
@@ -290,7 +290,7 @@ Manual client acceptance:
 3. Verify `work` opens first with shell left, Helix right, equal pane widths, and pane 0/shell focus.
 4. Verify `claude` is the second window and occupies one full pane.
 5. Detach and reconnect with the same command; verify the existing Claude process survives and no duplicate windows appear.
-6. Verify `mosh-agent <host>` still enters the generic `agents` session.
+6. Verify `mosh-agent <host>` enters the generic `dev` session.
 7. Verify an iOS mosh client can invoke the same absolute remote helper command.
 8. Exit the project session, run `dotgen-agent-session reset <project>`, reconnect, and verify the scaffold is regenerated.
 
@@ -306,4 +306,4 @@ Manual client acceptance:
 
 ## End state
 
-`mosh-agent host` continues to enter the generic `agents` session. `mosh-agent host project` validates a real `~/repos/project`, invokes the Debian server helper, creates `~/.config/tmuxinator/project.yml` from the managed scaffold on first use, and starts or reattaches the project session. The project opens with a 50/50 shell-and-Helix work window followed by a full-window Claude session. Existing project configs and running sessions are never silently overwritten or killed.
+`mosh-agent host` enters the generic `dev` session. `mosh-agent host project` validates a real `~/repos/project`, invokes the Debian server helper, creates `~/.config/tmuxinator/project.yml` from the managed scaffold on first use, and starts or reattaches the project session. The project opens with a 50/50 shell-and-Helix work window followed by a full-window Claude session. Existing project configs and running sessions are never silently overwritten or killed.

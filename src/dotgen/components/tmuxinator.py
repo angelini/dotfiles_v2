@@ -39,7 +39,7 @@ case "$action" in
   *) usage ;;
 esac
 case "$project" in
-  ""|-*|agents|*[!A-Za-z0-9_-]*) die "invalid project name: $project" ;;
+  ""|-*|dev|*[!A-Za-z0-9_-]*) die "invalid project name: $project" ;;
 esac
 
 repos="$HOME/repos"

@@ -331,7 +331,7 @@ def test_project_helper_failed_reset_preserves_config(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "args",
     [
-        ("start", "agents"),
+        ("start", "dev"),
         ("start", ""),
         ("start", "--no-attach"),
         ("start", "bad.name"),
@@ -390,7 +390,7 @@ def test_project_helper_rejects_symlink_config(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("command", "expected"),
     [
-        ("ta", b"new-session\0-A\0-s\0agents\0\n"),
+        ("ta", b"new-session\0-A\0-s\0dev\0\n"),
         ("ta project_1", b"new-session\0-A\0-s\0project_1\0\n"),
     ],
 )
@@ -436,7 +436,7 @@ def test_ta_rejects_invalid_input_before_tmux(tmp_path: Path, command: str) -> N
     [
         (
             "mosh-agent server",
-            b"--\0server\0tmux\0new-session\0-A\0-s\0agents\0\n",
+            b"--\0server\0tmux\0new-session\0-A\0-s\0dev\0\n",
         ),
         (
             'mosh-agent "user@dev host" project-1',
@@ -459,7 +459,7 @@ def test_mosh_agent_preserves_remote_argv(tmp_path: Path, command: str, expected
         "mosh-agent --bad",
         'mosh-agent server ""',
         "mosh-agent server --no-attach",
-        "mosh-agent server agents",
+        "mosh-agent server dev",
         "mosh-agent server bad.name",
         "mosh-agent server bad/name",
         "mosh-agent server café",

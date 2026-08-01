@@ -22,11 +22,11 @@ mosh-agent() {
       ;;
   esac
   if [ "$#" -eq 1 ]; then
-    command mosh -- "$host" tmux new-session -A -s agents
+    command mosh -- "$host" tmux new-session -A -s dev
     return
   fi
   case "$project" in
-    ""|-*|agents|*[!A-Za-z0-9_-]*)
+    ""|-*|dev|*[!A-Za-z0-9_-]*)
       printf 'mosh-agent: invalid project name: %s\\n' "$project" >&2
       return 2
       ;;

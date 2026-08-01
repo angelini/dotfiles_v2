@@ -19,7 +19,7 @@ ta() {
     printf 'usage: ta [session]\n' >&2
     return 2
   fi
-  local session="${1-agents}"
+  local session="${1-dev}"
   case "$session" in
     ""|*[!A-Za-z0-9_-]*)
       printf 'ta: invalid session name: %s\n' "$session" >&2
