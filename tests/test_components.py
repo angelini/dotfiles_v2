@@ -215,6 +215,7 @@ def test_helix_emits_config_and_editor_env(env: Environment) -> None:
     frag = Helix().render(env)
     cfg = next(c for c in frag.configs if c.dest == "helix/config.toml").content
     assert 'theme = "base16_default_light"' in cfg
+    assert "true-color = true" in cfg
     assert 'normal = "block"' in cfg
     assert 'select = "underline"' in cfg
     assert "[editor.file-picker]" in cfg

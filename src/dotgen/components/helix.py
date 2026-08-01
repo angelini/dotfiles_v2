@@ -10,6 +10,7 @@ _HELIX_CONFIG = tomli_w.dumps(
     {
         "theme": "base16_default_light",
         "editor": {
+            "true-color": True,
             "cursor-shape": {
                 "insert": "bar",
                 "normal": "block",
