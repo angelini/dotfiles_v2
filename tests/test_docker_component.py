@@ -35,7 +35,6 @@ class DockerHarness:
 
     def run(
         self,
-        mode: str = "deploy",
         *,
         os_release: str = "ID=debian\nVERSION_ID=13\nVERSION_CODENAME=trixie\n",
         arch: str = "amd64",
@@ -192,13 +191,12 @@ class DockerHarness:
             error() { printf '%s\n' "$*" >&2; }
             bin_exists() { command -v "$1" >/dev/null; }
             sudo() { echo "SUDO $*" >> "$STATE/events"; while [[ "${1:-}" = *=* ]]; do shift; done; "$@"; }
-            install_package() { [ "$DOTGEN_MODE" = diff ] && { echo "REPORT INSTALL $1" >> "$STATE/events"; return; }; echo "INSTALL $1" >> "$STATE/events"; }
-            install_packages() { [ "$DOTGEN_MODE" = diff ] && { echo "REPORT INSTALLS" >> "$STATE/events"; return; }; echo "INSTALLS $*" >> "$STATE/events"; [ -z "$PACKAGE_FAILURE" ] || return 1; }
-            add_repo() { [ "$DOTGEN_MODE" = diff ] && { echo "REPORT ADD_REPO" >> "$STATE/events"; return; }; echo "ADD_REPO" >> "$STATE/events"; }
-            remove_packages() { [ "$DOTGEN_MODE" = diff ] && { echo "REPORT REMOVE" >> "$STATE/events"; return; }; echo "REMOVE" >> "$STATE/events"; }
-            update_pkg_index() { [ "$DOTGEN_MODE" = diff ] && { echo "REPORT UPDATE_INDEX" >> "$STATE/events"; return; }; echo "UPDATE_INDEX" >> "$STATE/events"; }
+            install_package() { echo "INSTALL $1" >> "$STATE/events"; }
+            install_packages() { echo "INSTALLS $*" >> "$STATE/events"; [ -z "$PACKAGE_FAILURE" ] || return 1; }
+            add_repo() { echo "ADD_REPO" >> "$STATE/events"; }
+            remove_packages() { echo "REMOVE" >> "$STATE/events"; }
+            update_pkg_index() { echo "UPDATE_INDEX" >> "$STATE/events"; }
             service_mask() {
-              [ "$DOTGEN_MODE" = diff ] && { echo "REPORT MASK $*" >> "$STATE/events"; return; }
               for unit in "$@"; do
                 echo masked > "$STATE/$unit.enabled"
                 echo inactive > "$STATE/$unit.active"
@@ -211,7 +209,6 @@ class DockerHarness:
         script.write_text(prelude + "\nsource " + str(root / "setup.sh") + "\n")
         env = os.environ | {
             "PATH": f"{fake}:{os.environ['PATH']}",
-            "DOTGEN_MODE": mode,
             "STATE": str(state),
             "ROOT": str(root),
             "HOME": str(home),
@@ -343,15 +340,7 @@ def test_iptables_module_failure_stops_before_rootless_setup(docker_harness: Doc
     assert not any(event.startswith("SETUP") for event in docker_harness.events())
 
 
-def test_diff_runtime_readiness_and_environment_resistance(docker_harness: DockerHarness) -> None:
-    assert docker_harness.run(mode="diff").returncode == 0
-    before = {str(path.relative_to(docker_harness.root)): path.read_bytes() for path in docker_harness.root.rglob("*") if path.is_file() and path.name not in {"run.sh", "setup.sh", "events"}}
-    result = docker_harness.run(mode="diff", reset=False)
-    assert result.returncode == 0, result.stderr
-    assert all(event.startswith(("REPORT", "SYSTEMCTL")) for event in docker_harness.events())
-    after = {str(path.relative_to(docker_harness.root)): path.read_bytes() for path in docker_harness.root.rglob("*") if path.is_file() and path.name not in {"run.sh", "setup.sh", "events"}}
-    assert not any(event.startswith(("SUDO", "LOGINCTL", "SETUP", "DOCKER")) for event in docker_harness.events())
-    assert after == before
+def test_runtime_readiness_and_environment_resistance(docker_harness: DockerHarness) -> None:
     result = docker_harness.run(
         ready_after=3, incoming_env={"XDG_RUNTIME_DIR": str(docker_harness.root / "run/user/1000"), "DOCKER_HOST": "bad", "DOCKER_CONTEXT": "bad", "XDG_CONFIG_HOME": "/bad", "DOCKER_CONFIG": "/bad"}
     )

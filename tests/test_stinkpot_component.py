@@ -76,7 +76,6 @@ def _bundle(tmp_path: Path, rel: str) -> Path:
 def _run_setup(
     tmp_path: Path,
     *,
-    mode: str,
     os_name: str,
     arch: str,
     home: Path | None = None,
@@ -99,7 +98,6 @@ set -euo pipefail
 HOME={home!s}
 export HOME
 DIR={root!s}
-DOTGEN_MODE={mode}
 detect_os() {{ printf '%s\\n' {os_name}; }}
 detect_arch() {{ printf '%s\\n' {arch}; }}
 error() {{ printf 'ERROR: %s\\n' "$*" >&2; }}
@@ -109,7 +107,7 @@ component_end() {{ :; }}
 sha256sum() {{ python3 -c 'import hashlib,sys; p=sys.argv[1]; print(hashlib.sha256(open(p,"rb").read()).hexdigest(), p)' "$1"; }}
 shasum() {{ shift 2; sha256sum "$1"; }}
 {setup}
-[ "$DOTGEN_MODE" != deploy ] || : > "$HOME/next-component-ran"
+: > "$HOME/next-component-ran"
 """
     )
     env = os.environ.copy()
@@ -124,7 +122,7 @@ def test_stinkpot_deploy_installs_atomically_and_imports_once(tmp_path: Path) ->
     original = b"echo legacy\nprintf preserved\n"
     legacy.write_bytes(original)
 
-    first = _run_setup(tmp_path, mode="deploy", os_name="debian", arch="x86_64", home=home)
+    first = _run_setup(tmp_path, os_name="debian", arch="x86_64", home=home)
     assert first.returncode == 0, first.stderr
     installed = home / "bin/stinkpot"
     marker = home / ".local/state/dotgen/stinkpot/bash-history-import-v1"
@@ -139,7 +137,7 @@ def test_stinkpot_deploy_installs_atomically_and_imports_once(tmp_path: Path) ->
     assert stat.S_IMODE(database.stat().st_mode) == 0o600
 
     mtime = installed.stat().st_mtime_ns
-    second = _run_setup(tmp_path, mode="deploy", os_name="debian", arch="x86_64", home=home)
+    second = _run_setup(tmp_path, os_name="debian", arch="x86_64", home=home)
     assert second.returncode == 0, second.stderr
     assert installed.stat().st_mtime_ns == mtime
     assert (home / "import-calls").read_text().splitlines() == ["import"]
@@ -155,7 +153,6 @@ def test_failed_import_prevents_marker_and_following_components(tmp_path: Path) 
 
     result = _run_setup(
         tmp_path,
-        mode="deploy",
         os_name="debian",
         arch="x86_64",
         home=home,
@@ -169,20 +166,9 @@ def test_failed_import_prevents_marker_and_following_components(tmp_path: Path) 
     assert not (home / "next-component-ran").exists()
 
 
-def test_stinkpot_diff_is_read_only(tmp_path: Path) -> None:
-    home = tmp_path / "home"
-    result = _run_setup(tmp_path, mode="diff", os_name="macos", arch="arm64", home=home)
-    assert result.returncode == 0, result.stderr
-    assert "+ INSTALL" in result.stdout
-    assert "+ MIGRATE" in result.stdout
-    assert not (home / "bin/stinkpot").exists()
-    assert not (home / ".local/share/stinkpot").exists()
-    assert not (home / ".local/state/dotgen/stinkpot").exists()
-
-
 def test_stinkpot_rejects_darwin_amd64_without_install(tmp_path: Path) -> None:
     home = tmp_path / "home"
-    result = _run_setup(tmp_path, mode="deploy", os_name="macos", arch="x86_64", home=home)
+    result = _run_setup(tmp_path, os_name="macos", arch="x86_64", home=home)
     assert result.returncode != 0
     assert "does not support Darwin amd64" in result.stderr
     assert not (home / "bin/stinkpot").exists()

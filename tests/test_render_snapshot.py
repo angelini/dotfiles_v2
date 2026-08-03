@@ -158,7 +158,6 @@ def test_generated_bundle_migrates_legacy_claude_settings_ownership(tmp_path: Pa
 source {shlex.quote(str(bundle / "os_shim.sh"))}
 export HOME={shlex.quote(str(home))}
 export XDG_STATE_HOME={shlex.quote(str(state))}
-export DOTGEN_MODE=deploy
 install_config_dir {shlex.quote(str(bundle / "config" / "claude"))} "$HOME/.claude" claude settings.json
 install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "claude.json"))} "$HOME/.claude/settings.json" 0600
 """
@@ -199,23 +198,17 @@ def test_generated_bundle_migrates_legacy_pi_settings_ownership(tmp_path: Path, 
     live = home / ".pi" / "agent"
     live.mkdir(parents=True)
     settings = live / "settings.json"
-    settings.write_text(
-        '{"defaultModel":"legacy","lastChangelogVersion":"0.82.1",'
-        '"packages":["local"],"unmanaged":"keep"}\n'
-    )
+    settings.write_text('{"defaultModel":"legacy","lastChangelogVersion":"0.82.1","packages":["local"],"unmanaged":"keep"}\n')
     (live / "AGENTS.md").write_text("legacy\n")
     manifest = state / "dotgen" / "install-config-dir" / "pi-agent.manifest"
     manifest.parent.mkdir(parents=True)
-    manifest.write_bytes(
-        b"\0".join((b"dotgen-install-config-dir-v1", os.fsencode(str(live)), b"settings.json", b"AGENTS.md")) + b"\0"
-    )
+    manifest.write_bytes(b"\0".join((b"dotgen-install-config-dir-v1", os.fsencode(str(live)), b"settings.json", b"AGENTS.md")) + b"\0")
     script = root / "deploy-pi.sh"
     script.write_text(
         f"""set -euo pipefail
 source {shlex.quote(str(bundle / "os_shim.sh"))}
 export HOME={shlex.quote(str(home))}
 export XDG_STATE_HOME={shlex.quote(str(state))}
-export DOTGEN_MODE=deploy
 install_config_dir {shlex.quote(str(bundle / "config" / "pi" / "agent"))} "$HOME/.pi/agent" pi-agent settings.json
 install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "pi.json"))} "$HOME/.pi/agent/settings.json" 0600
 """

@@ -8,10 +8,6 @@ pkg_installed() {
 }
 
 install_package() {
-  if [ "$DOTGEN_MODE" = diff ]; then
-    pkg_installed "$1" || printf '+ INSTALL pkg %s\n' "$1"
-    return 0
-  fi
   if pkg_installed "$1"; then
     return 0
   fi
@@ -36,12 +32,6 @@ remove_packages() {
       installed+=("$p")
     fi
   done
-  if [ "$DOTGEN_MODE" = diff ]; then
-    for p in "${installed[@]}"; do
-      printf '%s\n' "- REMOVE pkg $p"
-    done
-    return 0
-  fi
   [ "${#installed[@]}" -eq 0 ] && return 0
   sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y "${installed[@]}"
 }
@@ -56,10 +46,6 @@ add_repo() {
   case "$kind" in
     apt)
       local id="${2:-}" src="${3:-}" key="${4:-}"
-      if [ "$DOTGEN_MODE" = diff ]; then
-        [ -f "/etc/apt/sources.list.d/$id.list" ] || printf '+ ADD REPO %s (%s)\n' "$id" "$kind"
-        return 0
-      fi
       sudo install -d -m 0755 /etc/apt/keyrings
       if [ -n "$key" ]; then
         curl -fsSL "$key" | sudo gpg --dearmor --yes -o "/etc/apt/keyrings/$id.gpg"
@@ -146,15 +132,6 @@ exit "$status"' EXIT
         local key_changed=1 source_changed=1
         [ -f "$key_target" ] && cmp -s "$key_tmp" "$key_target" && key_changed=0
         [ -f "$source_target" ] && cmp -s "$source_tmp" "$source_target" && source_changed=0
-        if [ "$DOTGEN_MODE" = diff ]; then
-          if [ "$key_changed" -eq 1 ]; then
-            [ -f "$key_target" ] && printf '~ CHANGE REPO KEY %s\n' "$key_target" || printf '+ ADD REPO KEY %s\n' "$key_target"
-          fi
-          if [ "$source_changed" -eq 1 ]; then
-            [ -f "$source_target" ] && printf '~ CHANGE REPO SOURCE %s\n' "$source_target" || printf '+ ADD REPO SOURCE %s\n' "$source_target"
-          fi
-          return 0
-        fi
         [ "$key_changed" -eq 0 ] && [ "$source_changed" -eq 0 ] && return 0
         sudo install -d -m 0755 /etc/apt/keyrings /etc/apt/sources.list.d || return 1
         if [ "$key_changed" -eq 1 ]; then
@@ -177,15 +154,10 @@ exit "$status"' EXIT
 }
 
 update_pkg_index() {
-  [ "$DOTGEN_MODE" = diff ] && return 0
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
 }
 
 service_enable() {
-  if [ "$DOTGEN_MODE" = diff ]; then
-    systemctl is-enabled --quiet "$1" 2>/dev/null || printf '+ ENABLE service %s\n' "$1"
-    return 0
-  fi
   sudo systemctl enable --now "$1"
 }
 
@@ -195,13 +167,6 @@ service_mask() {
     return 1
   fi
   local unit state
-  if [ "$DOTGEN_MODE" = diff ]; then
-    for unit in "$@"; do
-      state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
-      [ "$state" = masked ] || printf '~ MASK service %s\n' "$unit"
-    done
-    return 0
-  fi
   sudo systemctl mask --now "$@" || return 1
   for unit in "$@"; do
     state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
@@ -226,29 +191,12 @@ ensure_dir() {
 
 link_file() {
   local src="$1" dst="$2"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -L "$dst" ]; then
-      printf '+ LINK   %s -> %s\n' "$dst" "$src"
-    elif [ "$(readlink "$dst")" != "$src" ]; then
-      printf '~ RELINK %s -> %s (was %s)\n' "$dst" "$src" "$(readlink "$dst")"
-    fi
-    return 0
-  fi
   ensure_dir "$(dirname "$dst")"
   ln -sf "$src" "$dst"
 }
 
 install_config() {
   local src="$1" dst="$2"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -e "$dst" ]; then
-      printf '+ NEW    %s\n' "$dst"
-    elif ! cmp -s "$src" "$dst"; then
-      printf '~ CHANGE %s\n' "$dst"
-      diff -u "$dst" "$src" || true
-    fi
-    return 0
-  fi
   ensure_dir "$(dirname "$dst")"
   install -m 0644 "$src" "$dst"
 }
@@ -363,14 +311,6 @@ exit "$status"' EXIT
   if [ -f "$dst" ] && cmp -s "$candidate" "$dst" && [ "$(find "$dst" -prune -perm "$mode" -exec printf x \; 2>/dev/null)" = x ]; then
     exit 0
   fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ -f "$dst" ]; then
-      printf '~ CHANGE %s\n' "$dst"
-    else
-      printf '+ NEW    %s\n' "$dst"
-    fi
-    exit 0
-  fi
 
   ensure_dir "$parent" || exit 1
   target=/
@@ -407,7 +347,7 @@ exit "$status"' EXIT
 
 install_config_dir() {
   if [ "$#" -eq 2 ]; then
-    local src="$1" dst="$2" rel drift=0 conflict=0
+    local src="$1" dst="$2" rel conflict=0
     if [ ! -d "$src" ]; then
       error "install_config_dir: missing source directory: $src"
       return 1
@@ -428,18 +368,8 @@ install_config_dir() {
         if [ -e "$dst/$rel" ] && [ ! -f "$dst/$rel" ]; then
           error "install_config_dir: $dst/$rel exists but is not a regular file"
           conflict=1
-        elif [ ! -f "$dst/$rel" ] || ! cmp -s "$src/$rel" "$dst/$rel"; then
-          drift=1
         fi
       done < <(cd "$src" && find . -type f -print0)
-    fi
-    if [ "$DOTGEN_MODE" = diff ]; then
-      if [ ! -d "$dst" ]; then
-        printf '+ COPY   %s\n' "$dst"
-      elif [ "$conflict" = 1 ] || [ "$drift" = 1 ]; then
-        printf '~ SYNC   %s\n' "$dst"
-      fi
-      return 0
     fi
     if [ "$conflict" = 1 ]; then
       return 1
@@ -454,10 +384,10 @@ install_config_dir() {
   fi
   (
     local src="$1" dst="$2" identity="$3" normalized part rel target state manifest
-    local inventory_dirs inventory_files inventory_other manifest_tmp publish_tmp record preserve
+    local inventory_dirs inventory_files inventory_other publish_tmp record preserve
     local -a dst_parts=() files=() dirs=() old_files=() components=() preserves=("${@:4}")
-    local drift=0 manifest_changed=0 i j seen preserved
-    trap 'rm -f -- "${inventory_dirs:-}" "${inventory_files:-}" "${inventory_other:-}" "${manifest_tmp:-}" "${publish_tmp:-}"' EXIT
+    local i j seen preserved
+    trap 'rm -f -- "${inventory_dirs:-}" "${inventory_files:-}" "${inventory_other:-}" "${publish_tmp:-}"' EXIT
 
     if [[ ! "$identity" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || [ "$identity" = . ] || [ "$identity" = .. ]; then
       error "install_config_dir: invalid managed identity: $identity"
@@ -553,8 +483,6 @@ install_config_dir() {
           [ "${old_files[i]}" != "${old_files[j]}" ] || { error "install_config_dir: duplicate manifest path: ${old_files[i]}"; return 1; }
         done
       done
-    else
-      manifest_changed=1
     fi
 
     target=/
@@ -574,7 +502,6 @@ install_config_dir() {
       target="$dst/$rel"
       [ -L "$target" ] && { error "install_config_dir: symlink destination path: $target"; return 1; }
       [ ! -e "$target" ] || [ -f "$target" ] || { error "install_config_dir: $target exists but is not a regular file"; return 1; }
-      if [ ! -f "$target" ] || ! cmp -s "$src/$rel" "$target"; then drift=1; fi
     done
     for rel in "${old_files[@]}"; do
       preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
@@ -584,25 +511,7 @@ install_config_dir() {
       target="$dst/$rel"
       [ ! -e "$target" ] && [ ! -L "$target" ] && continue
       [ -f "$target" ] && [ ! -L "$target" ] || { error "install_config_dir: retired managed path is not a regular file: $target"; return 1; }
-      drift=1
     done
-    if [ -f "$manifest" ]; then
-      manifest_tmp="$(mktemp "${TMPDIR:-/tmp}/dotgen-config-manifest.XXXXXX")" || return 1
-      printf '%s\0' dotgen-install-config-dir-v1 "$dst" "${files[@]}" >"$manifest_tmp" || return 1
-      cmp -s "$manifest" "$manifest_tmp" || manifest_changed=1
-      rm -f -- "$manifest_tmp"; manifest_tmp=""
-    fi
-    if [ "$DOTGEN_MODE" = diff ]; then
-      if [ ! -d "$dst" ]; then printf '+ COPY   %s\n' "$dst"
-      elif [ "$drift" = 1 ] || [ "$manifest_changed" = 1 ]; then printf '~ SYNC   %s\n' "$dst"; fi
-      for rel in "${old_files[@]}"; do
-        preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
-        [ "$preserved" = 0 ] || continue
-        seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
-        [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && printf '%s\n' "- DELETE $dst/$rel"
-      done
-      return 0
-    fi
     for rel in "${old_files[@]}"; do
       preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
       [ "$preserved" = 0 ] || continue
@@ -673,14 +582,6 @@ install_config_template() (
   if ! envsubst "$subst_spec" < "$src" > "$rendered"; then
     exit 1
   fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -e "$dst" ]; then
-      printf '+ NEW    %s (templated)\n' "$dst"
-    elif ! cmp -s "$rendered" "$dst" || [ "$(find "$dst" -prune -perm "$mode" -exec printf x \; 2>/dev/null)" != x ]; then
-      printf '~ CHANGE %s (templated)\n' "$dst"
-    fi
-    exit 0
-  fi
   ensure_dir "$(dirname "$dst")"
   staging="$(mktemp "$(dirname "$dst")/.dotgen-template.XXXXXX")"
   if ! install -m "$mode" "$rendered" "$staging"; then
@@ -697,10 +598,6 @@ install_script() {
   local name="$1" url="$2" tmp
   shift 2
   if bin_exists "$name"; then
-    return 0
-  fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    printf '+ INSTALL script %s (%s)\n' "$name" "$url"
     return 0
   fi
   tmp="$(mktemp)"
@@ -724,12 +621,6 @@ download_bin() {
   if [ "$#" -gt 2 ]; then shift 3; else shift 2; fi
   if [ -n "$expected" ]; then
     bin_version_matches "$HOME/bin/$name" "$expected" "$@" && return 0
-  elif [ "$DOTGEN_MODE" = diff ] && [ -x "$HOME/bin/$name" ]; then
-    return 0
-  fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    printf '+ INSTALL bin %s (%s)\n' "$name" "$url"
-    return 0
   fi
   ensure_dir "$HOME/bin"
   curl -fsSL "$url" -o "$HOME/bin/$name"
@@ -741,12 +632,6 @@ download_tar_bin() {
   if [ "$#" -gt 3 ]; then shift 4; else shift "$#"; fi
   if [ -n "$expected" ]; then
     bin_version_matches "$HOME/bin/$name" "$expected" "$@" && return 0
-  elif [ "$DOTGEN_MODE" = diff ] && [ -x "$HOME/bin/$name" ]; then
-    return 0
-  fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    printf '+ INSTALL bin %s (%s)\n' "$name" "$url"
-    return 0
   fi
   ensure_dir "$HOME/bin"
   curl -fsSL "$url" | tar -xzO "$inner" > "$HOME/bin/$name"
@@ -755,10 +640,6 @@ download_tar_bin() {
 
 download_script() {
   local name="$1" url="$2"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    [ -x "$HOME/bin/$name" ] || printf '+ INSTALL script %s (%s)\n' "$name" "$url"
-    return 0
-  fi
   ensure_dir "$HOME/bin"
   curl -fsSL "$url" -o "$HOME/bin/$name"
   chmod +x "$HOME/bin/$name"
@@ -766,10 +647,6 @@ download_script() {
 
 download_tar() {
   local dir="$1" url="$2" strip="${3:-1}"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    [ -d "$dir" ] || printf '+ INSTALL tar %s (%s)\n' "$dir" "$url"
-    return 0
-  fi
   ensure_dir "$dir"
   curl -fsSL "$url" | tar -xz -C "$dir" --strip-components="$strip"
 }
@@ -791,12 +668,6 @@ ask() {
 
 install_npm_global() {
   local fnm_bin
-  if [ "$DOTGEN_MODE" = diff ]; then
-    printf '+ INSTALL npm'
-    printf ' %s' "$@"
-    printf '\n'
-    return 0
-  fi
   if ! bin_exists npm; then
     fnm_bin="$HOME/.local/share/fnm/fnm"
     if [ -x "$fnm_bin" ]; then
@@ -812,10 +683,6 @@ install_npm_global() {
 
 component_begin() {
   local name="$1"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    printf -- '--- %s ---\n' "$name"
-    return 0
-  fi
 
   # Save original stdio
   if [ -z "${_ORIG_STDOUT:-}" ]; then
@@ -831,9 +698,6 @@ component_begin() {
 
 component_end() {
   local name="$1" rc="$2"
-  if [ "$DOTGEN_MODE" = diff ]; then
-    return 0
-  fi
 
   # Restore stdio
   exec 1>&3 2>&4

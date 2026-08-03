@@ -114,9 +114,7 @@ _setup_rootless_docker() {
   [ "$(id -u "$user")" = "$uid" ] && [ "$(id -g "$user")" = "$gid" ] || { _docker_fail "account identity lookup mismatch"; return 1; }
 
   install_package uidmap || return 1
-  if [ "$DOTGEN_MODE" = deploy ]; then
-    for tool in newuidmap newgidmap getsubids; do bin_exists "$tool" || { _docker_fail "$tool is missing after uidmap installation; remediate uidmap"; return 1; }; done
-  fi
+  for tool in newuidmap newgidmap getsubids; do bin_exists "$tool" || { _docker_fail "$tool is missing after uidmap installation; remediate uidmap"; return 1; }; done
   _docker_validate_subids /etc/subuid "$user" "$uid" "$uid" uid || return 1
   _docker_validate_subids /etc/subgid "$user" "$gid" "$gid" gid || return 1
 
@@ -142,7 +140,6 @@ _setup_rootless_docker() {
   remove_packages docker.io docker-compose docker-doc podman-docker containerd runc || return 1
   update_pkg_index || return 1
   install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || return 1
-  [ "$DOTGEN_MODE" = diff ] && return 0
   service_mask docker.service docker.socket || return 1
   _docker_verify_rootful || return 1
   _docker_load_iptables_module || return 1

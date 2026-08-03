@@ -6,15 +6,13 @@ from dotgen.fragment import Fragment
 _SETUP = """\
 install_package unzip
 install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"
-if [ "$DOTGEN_MODE" = deploy ]; then
-  fnm_bin="$HOME/.local/share/fnm/fnm"
-  if [ ! -x "$fnm_bin" ]; then
-    error "fnm installer completed; fnm unavailable"
-    exit 1
-  fi
-  eval "$("$fnm_bin" env --shell bash)"
-  "$fnm_bin" install --lts --use
+fnm_bin="$HOME/.local/share/fnm/fnm"
+if [ ! -x "$fnm_bin" ]; then
+  error "fnm installer completed; fnm unavailable"
+  exit 1
 fi
+eval "$("$fnm_bin" env --shell bash)"
+"$fnm_bin" install --lts --use
 """
 
 _BASHRC = """\

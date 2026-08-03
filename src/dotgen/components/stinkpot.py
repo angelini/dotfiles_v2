@@ -100,18 +100,6 @@ _SETUP = r"""stinkpot_install() {
     fi
   fi
 
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -f "$installed" ] || [ -L "$installed" ] || [ ! -x "$installed" ]; then
-      printf '+ INSTALL %s\n' "$installed"
-    elif ! cmp -s "$src" "$installed"; then
-      printf '~ CHANGE %s\n' "$installed"
-    fi
-    if [ ! -e "$marker" ]; then
-      printf '+ MIGRATE %s\n' "$legacy"
-    fi
-    return 0
-  fi
-
   if ! ensure_dir "$HOME/bin"; then
     error "unable to create binary directory: $HOME/bin"
     return 1

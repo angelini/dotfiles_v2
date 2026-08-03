@@ -17,45 +17,40 @@ SETUP_HEADER = """\
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOTGEN_MODE="${1-}"
-case "$DOTGEN_MODE" in
-  diff|deploy) ;;
+case "${1-}" in
+  deploy) ;;
   -h|--help|help)
-    printf 'usage: %s {diff|deploy}\\n' "$0"
-    printf '  diff   show pending changes (read-only)\\n'
+    printf 'usage: %s deploy\\n' "$0"
     printf '  deploy apply changes (overwrites configs)\\n'
     exit 0 ;;
   "")
-    printf 'usage: %s {diff|deploy}\\n' "$0" >&2; exit 2 ;;
+    printf 'usage: %s deploy\\n' "$0" >&2; exit 2 ;;
   *)
-    printf 'unknown mode: %s\\nusage: %s {diff|deploy}\\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
+    printf 'unknown mode: %s\\nusage: %s deploy\\n' "${1-}" "$0" >&2; exit 2 ;;
 esac
-export DOTGEN_MODE
 source "$DIR/os_shim.sh"
-if [ "$DOTGEN_MODE" = deploy ]; then
-  if [ "$(id -u)" -eq 0 ]; then
-    error "deploy must run as a regular user, not root"
-    exit 2
-  fi
-  if ! bin_exists sudo; then
-    error "deploy requires sudo"
-    exit 2
-  fi
-  if ! sudo -v; then
-    error "unable to authenticate with sudo"
-    exit 2
-  fi
-  bin_exists envsubst || install_package gettext
-  if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
-    error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
-    error "copy from: $DIR/config/dotgen/secrets.env.template"
-    exit 2
-  fi
+if [ "$(id -u)" -eq 0 ]; then
+  error "deploy must run as a regular user, not root"
+  exit 2
 fi
-[ "$DOTGEN_MODE" = deploy ] && update_pkg_index
+if ! bin_exists sudo; then
+  error "deploy requires sudo"
+  exit 2
+fi
+if ! sudo -v; then
+  error "unable to authenticate with sudo"
+  exit 2
+fi
+bin_exists envsubst || install_package gettext
+if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
+  error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+  error "copy from: $DIR/config/dotgen/secrets.env.template"
+  exit 2
+fi
+update_pkg_index
 """
 
-SETUP_FOOTER = 'if [ "$DOTGEN_MODE" = deploy ]; then\n  log "setup complete"\nfi\n'
+SETUP_FOOTER = 'log "setup complete"\n'
 
 ALIAS_HEADER = "# alias.sh — sourced by ~/.bashrc\n"
 

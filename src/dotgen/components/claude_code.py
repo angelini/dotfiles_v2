@@ -30,10 +30,8 @@ _register_serena_mcp() {
 }
 install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"
 install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600
-if [ "$DOTGEN_MODE" = deploy ]; then
-  _install_serena
-  _register_serena_mcp
-fi
+_install_serena
+_register_serena_mcp
 """
 
 

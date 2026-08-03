@@ -1,42 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOTGEN_MODE="${1-}"
-case "$DOTGEN_MODE" in
-  diff|deploy) ;;
+case "${1-}" in
+  deploy) ;;
   -h|--help|help)
-    printf 'usage: %s {diff|deploy}\n' "$0"
-    printf '  diff   show pending changes (read-only)\n'
+    printf 'usage: %s deploy\n' "$0"
     printf '  deploy apply changes (overwrites configs)\n'
     exit 0 ;;
   "")
-    printf 'usage: %s {diff|deploy}\n' "$0" >&2; exit 2 ;;
+    printf 'usage: %s deploy\n' "$0" >&2; exit 2 ;;
   *)
-    printf 'unknown mode: %s\nusage: %s {diff|deploy}\n' "$DOTGEN_MODE" "$0" >&2; exit 2 ;;
+    printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2; exit 2 ;;
 esac
-export DOTGEN_MODE
 source "$DIR/os_shim.sh"
-if [ "$DOTGEN_MODE" = deploy ]; then
-  if [ "$(id -u)" -eq 0 ]; then
-    error "deploy must run as a regular user, not root"
-    exit 2
-  fi
-  if ! bin_exists sudo; then
-    error "deploy requires sudo"
-    exit 2
-  fi
-  if ! sudo -v; then
-    error "unable to authenticate with sudo"
-    exit 2
-  fi
-  bin_exists envsubst || install_package gettext
-  if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
-    error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
-    error "copy from: $DIR/config/dotgen/secrets.env.template"
-    exit 2
-  fi
+if [ "$(id -u)" -eq 0 ]; then
+  error "deploy must run as a regular user, not root"
+  exit 2
 fi
-[ "$DOTGEN_MODE" = deploy ] && update_pkg_index
+if ! bin_exists sudo; then
+  error "deploy requires sudo"
+  exit 2
+fi
+if ! sudo -v; then
+  error "unable to authenticate with sudo"
+  exit 2
+fi
+bin_exists envsubst || install_package gettext
+if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
+  error "deploy requires ${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+  error "copy from: $DIR/config/dotgen/secrets.env.template"
+  exit 2
+fi
+update_pkg_index
 
 # --- core_utils ---
 component_begin "core_utils"
@@ -144,18 +139,6 @@ if (
         error "invalid legacy Bash history file: $legacy"
         return 1
       fi
-    fi
-
-    if [ "$DOTGEN_MODE" = diff ]; then
-      if [ ! -f "$installed" ] || [ -L "$installed" ] || [ ! -x "$installed" ]; then
-        printf '+ INSTALL %s\n' "$installed"
-      elif ! cmp -s "$src" "$installed"; then
-        printf '~ CHANGE %s\n' "$installed"
-      fi
-      if [ ! -e "$marker" ]; then
-        printf '+ MIGRATE %s\n' "$legacy"
-      fi
-      return 0
     fi
 
     if ! ensure_dir "$HOME/bin"; then
@@ -361,15 +344,13 @@ if (
   set -e
   install_package unzip
   install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"
-  if [ "$DOTGEN_MODE" = deploy ]; then
-    fnm_bin="$HOME/.local/share/fnm/fnm"
-    if [ ! -x "$fnm_bin" ]; then
-      error "fnm installer completed; fnm unavailable"
-      exit 1
-    fi
-    eval "$("$fnm_bin" env --shell bash)"
-    "$fnm_bin" install --lts --use
+  fnm_bin="$HOME/.local/share/fnm/fnm"
+  if [ ! -x "$fnm_bin" ]; then
+    error "fnm installer completed; fnm unavailable"
+    exit 1
   fi
+  eval "$("$fnm_bin" env --shell bash)"
+  "$fnm_bin" install --lts --use
 ); then
   component_end "node_fnm" 0
 else
@@ -433,6 +414,4 @@ else
   _rc=$?; component_end "dotfiles_deploy" "$_rc"; exit "$_rc"
 fi
 
-if [ "$DOTGEN_MODE" = deploy ]; then
-  log "setup complete"
-fi
+log "setup complete"

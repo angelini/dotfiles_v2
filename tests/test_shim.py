@@ -41,23 +41,6 @@ def test_function_set_identical_across_oses() -> None:
         assert found == canonical, f"{os.value} differs: missing={canonical - found} extra={found - canonical}"
 
 
-_MODE_AWARE = (
-    "install_config",
-    "install_config_dir",
-    "link_file",
-    "install_script",
-    "install_package",
-    "remove_packages",
-    "install_cask",
-    "add_repo",
-    "update_pkg_index",
-    "service_enable",
-    "service_mask",
-    "download_bin",
-    "download_tar_bin",
-)
-
-
 def _function_body(text: str, name: str) -> str:
     start = text.index(f"{name}() {{")
     depth = 0
@@ -71,42 +54,14 @@ def _function_body(text: str, name: str) -> str:
     raise AssertionError(f"unbalanced braces in {name}")
 
 
-_SIDE_EFFECT_TOKENS = (
-    "apt-get",
-    "brew ",
-    "curl ",
-    "sudo ",
-    "install -",
-    "ln -",
-    "tee ",
-    "tar ",
-    "systemctl ",
-)
-
-
-def test_mode_aware_helpers_branch_on_diff(shim_text: str) -> None:
-    for fn in _MODE_AWARE:
-        body = _function_body(shim_text, fn)
-        if '"$DOTGEN_MODE" = diff' in body:
-            continue
-        # OK if this OS's body is a stub (e.g. install_cask on linux)
-        assert not any(t in body for t in _SIDE_EFFECT_TOKENS), f"{fn} has side effects without a diff-mode branch:\n{body}"
-
-
-def _run_shim_fn(tmp_path: Path, shim_text: str, mode: str, call: str) -> str:
+def _run_shim_fn(tmp_path: Path, shim_text: str, call: str) -> str:
     script = tmp_path / "run.sh"
-    script.write_text(f"{shim_text}\nDOTGEN_MODE={mode}\n{call}\n")
+    script.write_text(f"{shim_text}\n{call}\n")
     return subprocess.check_output(["bash", str(script)]).decode()
 
 
-def test_component_begin_prints_in_diff_mode(tmp_path: Path, shim_text: str) -> None:
-    out = _run_shim_fn(tmp_path, shim_text, "diff", "component_begin aws")
-    assert out == "--- aws ---\n"
-
-
-def test_component_begin_silent_in_deploy_mode(tmp_path: Path, shim_text: str) -> None:
-    out = _run_shim_fn(tmp_path, shim_text, "deploy", "component_begin aws")
-    # In deploy mode it might print a progress line, which is fine
+def test_component_begin_uses_compact_progress(tmp_path: Path, shim_text: str) -> None:
+    out = _run_shim_fn(tmp_path, shim_text, "component_begin aws")
     assert "---" not in out
 
 
@@ -126,7 +81,6 @@ def _write_executable(path: Path, body: str) -> None:
 
 def _run_template(
     tmp_path: Path,
-    mode: str,
     src: str,
     vars_list: str,
     *,
@@ -140,10 +94,7 @@ def _run_template(
     src_path.write_text(src)
     dst_path = tmp_path / "dst"
     script = tmp_path / "run.sh"
-    exports = [
-        f"export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}",
-        f"export DOTGEN_MODE={shlex.quote(mode)}",
-    ]
+    exports = [f"export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}"]
     if tmpdir is not None:
         tmpdir.mkdir(exist_ok=True)
         exports.append(f"export TMPDIR={shlex.quote(str(tmpdir))}")
@@ -163,7 +114,6 @@ def test_install_config_template_renders_with_default_mode_and_cleans_up(tmp_pat
     tmpdir = tmp_path / "tmp"
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="name=${GIT_USER_NAME}\nemail=${GIT_USER_EMAIL}\n",
         vars_list="GIT_USER_NAME GIT_USER_EMAIL",
         secrets='GIT_USER_NAME="Alice"\nGIT_USER_EMAIL="a@example.com"\n',
@@ -182,7 +132,6 @@ def test_install_config_template_installs_explicit_mode_and_repairs_drift(tmp_pa
     dst.chmod(0o644)
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="token=${TOKEN}\n",
         vars_list="TOKEN",
         secrets='TOKEN="new-secret"\n',
@@ -196,7 +145,6 @@ def test_install_config_template_installs_explicit_mode_and_repairs_drift(tmp_pa
 def test_install_config_template_missing_secrets(tmp_path: Path) -> None:
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="name=${GIT_USER_NAME}\nemail=${GIT_USER_EMAIL}\n",
         vars_list="GIT_USER_NAME GIT_USER_EMAIL",
         secrets='GIT_USER_NAME="Alice"\n',
@@ -209,7 +157,6 @@ def test_install_config_template_missing_secrets(tmp_path: Path) -> None:
 def test_install_config_template_whitelist_preserves_unrelated(tmp_path: Path) -> None:
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="name=${GIT_USER_NAME}\npath=$PATH\n",
         vars_list="GIT_USER_NAME",
         secrets='GIT_USER_NAME="Alice"\n',
@@ -220,65 +167,10 @@ def test_install_config_template_whitelist_preserves_unrelated(tmp_path: Path) -
     assert "$PATH" in out
 
 
-def test_install_config_template_diff_reports_absent_target_and_cleans_up(tmp_path: Path) -> None:
-    tmpdir = tmp_path / "tmp"
-    res = _run_template(
-        tmp_path,
-        mode="diff",
-        src="name=${GIT_USER_NAME}\n",
-        vars_list="GIT_USER_NAME",
-        secrets='GIT_USER_NAME="Alice"\n',
-        requested_mode="0600",
-        tmpdir=tmpdir,
-    )
-    assert res.returncode == 0, res.stderr
-    assert res.stdout == f"+ NEW    {tmp_path / 'dst'} (templated)\n"
-    assert not (tmp_path / "dst").exists()
-    assert _template_artifacts(tmp_path, tmpdir) == []
-
-
-def test_install_config_template_diff_detects_mode_only_drift_without_writing(tmp_path: Path) -> None:
-    dst = tmp_path / "dst"
-    dst.write_text("token=new-secret\n")
-    dst.chmod(0o644)
-    res = _run_template(
-        tmp_path,
-        mode="diff",
-        src="token=${TOKEN}\n",
-        vars_list="TOKEN",
-        secrets='TOKEN="new-secret"\n',
-        requested_mode="0600",
-    )
-    assert res.returncode == 0, res.stderr
-    assert res.stdout == f"~ CHANGE {dst} (templated)\n"
-    assert dst.read_text() == "token=new-secret\n"
-    assert dst.stat().st_mode & 0o777 == 0o644
-
-
-def test_install_config_template_diff_redacts_content_drift(tmp_path: Path) -> None:
-    dst = tmp_path / "dst"
-    dst.write_text("token=old-secret-sentinel\n")
-    dst.chmod(0o600)
-    res = _run_template(
-        tmp_path,
-        mode="diff",
-        src="token=${TOKEN}\n",
-        vars_list="TOKEN",
-        secrets='TOKEN="new-secret-sentinel"\n',
-        requested_mode="0600",
-    )
-    assert res.returncode == 0, res.stderr
-    assert res.stdout == f"~ CHANGE {dst} (templated)\n"
-    assert "old-secret-sentinel" not in res.stdout + res.stderr
-    assert "new-secret-sentinel" not in res.stdout + res.stderr
-    assert dst.read_text() == "token=old-secret-sentinel\n"
-
-
 def test_install_config_template_rejects_invalid_mode_before_creating_temps(tmp_path: Path) -> None:
     tmpdir = tmp_path / "tmp"
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="token=${TOKEN}\n",
         vars_list="TOKEN",
         secrets='TOKEN="secret"\n',
@@ -303,7 +195,6 @@ def test_install_config_template_rejects_directory_targets_without_leaking(tmp_p
     tmpdir = tmp_path / "tmp"
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="token=${TOKEN}\n",
         vars_list="TOKEN",
         secrets='TOKEN="directory-secret-sentinel"\n',
@@ -335,7 +226,6 @@ def test_install_config_template_rechecks_directory_target_after_staging(tmp_pat
     )
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="token=${TOKEN}\n",
         vars_list="TOKEN",
         secrets='TOKEN="staged-secret-sentinel"\n',
@@ -358,7 +248,6 @@ def test_install_config_template_cleans_up_after_envsubst_failure(tmp_path: Path
     _write_executable(bin_dir / "envsubst", "#!/usr/bin/env bash\nexit 41\n")
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="token=${TOKEN}\n",
         vars_list="TOKEN",
         secrets='TOKEN="secret"\n',
@@ -380,7 +269,6 @@ def test_install_config_template_install_failure_is_atomic_and_cleans_up(tmp_pat
     _write_executable(bin_dir / "install", '#!/usr/bin/env bash\nprintf partial > "${@: -1}"\nexit 42\n')
     res = _run_template(
         tmp_path,
-        mode="deploy",
         src="token=${TOKEN}\n",
         vars_list="TOKEN",
         secrets='TOKEN="new-secret"\n',
@@ -410,7 +298,6 @@ def test_install_config_template_preserves_caller_traps(tmp_path: Path, envsubst
     script.write_text(
         f"""{_macos_shim()}
 export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}
-export DOTGEN_MODE=deploy
 {path_export}trap ':' EXIT
 trap ':' HUP
 trap ':' INT
@@ -452,7 +339,6 @@ def test_install_config_template_signals_clean_up_and_preserve_caller_traps(tmp_
     script.write_text(
         f"""{_macos_shim()}
 export XDG_CONFIG_HOME={shlex.quote(str(tmp_path))}
-export DOTGEN_MODE=deploy
 export TMPDIR={shlex.quote(str(tmpdir))}
 export PATH={shlex.quote(str(bin_dir))}:$PATH
 export READY_MARKER={shlex.quote(str(ready))}
@@ -489,7 +375,7 @@ def test_install_config_template_missing_secrets_file(tmp_path: Path) -> None:
     src_path.write_text("name=${GIT_USER_NAME}\n")
     dst_path = tmp_path / "dst"
     script = tmp_path / "run.sh"
-    script.write_text(f"{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE=deploy\ninstall_config_template {src_path} {dst_path} 'GIT_USER_NAME'\n")
+    script.write_text(f"{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\ninstall_config_template {src_path} {dst_path} 'GIT_USER_NAME'\n")
     res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
     assert res.returncode != 0
     assert "missing secrets file" in res.stderr
@@ -498,7 +384,6 @@ def test_install_config_template_missing_secrets_file(tmp_path: Path) -> None:
 
 def _run_json_patch(
     tmp_path: Path,
-    mode: str,
     patch: Path,
     dst: Path,
     *,
@@ -510,7 +395,7 @@ def _run_json_patch(
 ) -> subprocess.CompletedProcess[str]:
     script = tmp_path / "run-json-patch.sh"
     mode_arg = f" {shlex.quote(requested_mode)}" if requested_mode is not None else ""
-    script.write_text(f"set -uo pipefail\n{_macos_shim()}\n{prelude}\nexport DOTGEN_MODE={shlex.quote(mode)}\ninstall_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))}{mode_arg}\n")
+    script.write_text(f"set -uo pipefail\n{_macos_shim()}\n{prelude}\ninstall_json_patch {shlex.quote(str(patch))} {shlex.quote(str(dst))}{mode_arg}\n")
     env = os_module.environ.copy()
     if tmpdir is not None:
         tmpdir.mkdir(exist_ok=True)
@@ -533,7 +418,7 @@ def test_install_json_patch_creates_secure_destination_and_cleans_up(tmp_path: P
     tmpdir = root / "tmp"
     patch.write_text('{"managed":true}')
 
-    result = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir)
+    result = _run_json_patch(root, patch, dst, tmpdir=tmpdir)
 
     assert result.returncode == 0, result.stderr
     assert json.loads(dst.read_text()) == {"managed": True}
@@ -548,7 +433,7 @@ def test_install_json_patch_merge_semantics(tmp_path: Path) -> None:
     patch.write_text('{"nested":{"managed":2,"new":null},"array":[3],"leaf":{"value":1},"kind":"changed"}')
     dst.write_text('{"nested":{"managed":1,"keep":true},"array":[1,2],"leaf":"scalar","kind":{"old":true},"unmanaged":"keep"}')
 
-    result = _run_json_patch(root, "deploy", patch, dst)
+    result = _run_json_patch(root, patch, dst)
 
     assert result.returncode == 0, result.stderr
     assert json.loads(dst.read_text()) == {
@@ -567,7 +452,7 @@ def test_install_json_patch_empty_patch_preserves_values(tmp_path: Path) -> None
     patch.write_text("{}\n")
     dst.write_text('{"z":1,"nested":{"value":true}}\n')
 
-    result = _run_json_patch(root, "deploy", patch, dst)
+    result = _run_json_patch(root, patch, dst)
 
     assert result.returncode == 0, result.stderr
     assert json.loads(dst.read_text()) == {"z": 1, "nested": {"value": True}}
@@ -598,7 +483,7 @@ def test_install_json_patch_rejects_invalid_json_objects(tmp_path: Path, patch_t
     dst.write_text(live_text)
     before = dst.read_bytes()
 
-    result = _run_json_patch(root, "deploy", patch, dst)
+    result = _run_json_patch(root, patch, dst)
 
     assert result.returncode != 0
     assert message in result.stderr
@@ -614,8 +499,8 @@ def test_install_json_patch_rejects_missing_jq_and_invalid_mode_before_temps(tmp
     patch.write_text("{}\n")
     empty_bin.mkdir()
 
-    missing = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir, bin_dir=empty_bin, extra_env={"PATH": str(empty_bin)})
-    invalid = _run_json_patch(root, "deploy", patch, dst, requested_mode="600", tmpdir=tmpdir)
+    missing = _run_json_patch(root, patch, dst, tmpdir=tmpdir, bin_dir=empty_bin, extra_env={"PATH": str(empty_bin)})
+    invalid = _run_json_patch(root, patch, dst, requested_mode="600", tmpdir=tmpdir)
 
     assert missing.returncode != 0 and "jq not installed" in missing.stderr
     assert invalid.returncode != 0 and "invalid mode" in invalid.stderr
@@ -643,7 +528,7 @@ def test_install_json_patch_rejects_non_regular_paths(tmp_path: Path, kind: str)
     else:
         dst.symlink_to(real_dst)
 
-    result = _run_json_patch(root, "deploy", patch, dst)
+    result = _run_json_patch(root, patch, dst)
 
     assert result.returncode != 0
     assert "non-symlink file" in result.stderr
@@ -658,49 +543,11 @@ def test_install_json_patch_rejects_destination_ancestor_symlink(tmp_path: Path)
     real_parent.mkdir()
     linked_parent.symlink_to(real_parent, target_is_directory=True)
 
-    result = _run_json_patch(root, "deploy", patch, linked_parent / "settings.json")
+    result = _run_json_patch(root, patch, linked_parent / "settings.json")
 
     assert result.returncode != 0
     assert "symlink destination ancestor" in result.stderr
     assert not (real_parent / "settings.json").exists()
-
-
-def test_install_json_patch_diff_is_immutable_and_reports_content_drift(tmp_path: Path) -> None:
-    root = tmp_path.resolve()
-    patch = root / "patch.json"
-    dst = root / "settings.json"
-    patch.write_text('{"managed":2}\n')
-    dst.write_text('{"managed":1,"keep":true}\n')
-    dst.chmod(0o600)
-    before = dst.read_bytes()
-
-    changed = _run_json_patch(root, "diff", patch, dst)
-    absent = _run_json_patch(root, "diff", patch, root / "absent.json")
-
-    assert changed.returncode == 0, changed.stderr
-    assert changed.stdout == f"~ CHANGE {dst}\n"
-    assert absent.returncode == 0, absent.stderr
-    assert absent.stdout == f"+ NEW    {root / 'absent.json'}\n"
-    assert dst.read_bytes() == before
-    assert dst.stat().st_mode & 0o777 == 0o600
-    assert not (root / "absent.json").exists()
-
-
-def test_install_json_patch_diff_reports_mode_only_drift(tmp_path: Path) -> None:
-    root = tmp_path.resolve()
-    patch = root / "patch.json"
-    dst = root / "settings.json"
-    patch.write_text("{}\n")
-    dst.write_text('{\n  "managed": true\n}\n')
-    dst.chmod(0o644)
-    before = dst.read_bytes()
-
-    result = _run_json_patch(root, "diff", patch, dst)
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == f"~ CHANGE {dst}\n"
-    assert dst.read_bytes() == before
-    assert dst.stat().st_mode & 0o777 == 0o644
 
 
 def test_install_json_patch_repairs_mode_then_reruns_without_replacement(tmp_path: Path) -> None:
@@ -711,9 +558,9 @@ def test_install_json_patch_repairs_mode_then_reruns_without_replacement(tmp_pat
     dst.write_text('{\n  "managed": true\n}\n')
     dst.chmod(0o644)
 
-    first = _run_json_patch(root, "deploy", patch, dst)
+    first = _run_json_patch(root, patch, dst)
     inode = dst.stat().st_ino
-    second = _run_json_patch(root, "deploy", patch, dst)
+    second = _run_json_patch(root, patch, dst)
 
     assert first.returncode == 0, first.stderr
     assert dst.stat().st_mode & 0o777 == 0o600
@@ -740,7 +587,7 @@ def test_install_json_patch_failures_are_atomic_and_clean(tmp_path: Path, failur
     else:
         _write_executable(bin_dir / "install", '#!/usr/bin/env bash\nprintf partial > "${@: -1}"\nexit 42\n')
 
-    result = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir, bin_dir=bin_dir)
+    result = _run_json_patch(root, patch, dst, tmpdir=tmpdir, bin_dir=bin_dir)
 
     assert result.returncode != 0
     assert dst.read_bytes() == before
@@ -757,7 +604,6 @@ def test_install_json_patch_preserves_caller_traps(tmp_path: Path) -> None:
     script = root / "run-json-traps.sh"
     script.write_text(
         f"""{_macos_shim()}
-export DOTGEN_MODE=deploy
 trap ':' EXIT
 trap ':' HUP
 trap ':' INT
@@ -797,7 +643,6 @@ def test_install_json_patch_signal_cleans_up_and_preserves_caller_traps(tmp_path
     script = root / "run-json-signal.sh"
     script.write_text(
         f"""{_macos_shim()}
-export DOTGEN_MODE=deploy
 export TMPDIR={shlex.quote(str(tmpdir))}
 export PATH={shlex.quote(str(bin_dir))}:$PATH
 export READY_MARKER={shlex.quote(str(ready))}
@@ -843,7 +688,7 @@ def test_install_json_patch_rechecks_destination_before_publication(tmp_path: Pa
         '#!/usr/bin/env bash\ncp "$3" "$4"\nchmod "$2" "$4"\nmkdir "$MUTATE_DST"\n',
     )
 
-    result = _run_json_patch(root, "deploy", patch, dst, tmpdir=tmpdir, bin_dir=bin_dir, extra_env={"MUTATE_DST": str(dst)})
+    result = _run_json_patch(root, patch, dst, tmpdir=tmpdir, bin_dir=bin_dir, extra_env={"MUTATE_DST": str(dst)})
 
     assert result.returncode != 0
     assert "destination is not a regular" in result.stderr
@@ -855,7 +700,7 @@ def test_install_json_patch_rechecks_destination_before_publication(tmp_path: Pa
 def test_load_secrets_idempotent(tmp_path: Path) -> None:
     _write_secrets(tmp_path, 'COUNTER="$((${COUNTER:-0}+1))"\n')
     script = tmp_path / "run.sh"
-    script.write_text(f'{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nexport DOTGEN_MODE=deploy\nload_secrets\nload_secrets\nprintf "%s" "$COUNTER"\n')
+    script.write_text(f'{_macos_shim()}\nexport XDG_CONFIG_HOME={tmp_path}\nload_secrets\nload_secrets\nprintf "%s" "$COUNTER"\n')
     res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
     assert res.stdout == "1"
@@ -866,7 +711,6 @@ def test_debian_shim_uses_sudo_for_package_install(tmp_path: Path) -> None:
     script = tmp_path / "run.sh"
     script.write_text(
         f"""{shim}
-DOTGEN_MODE=deploy
 pkg_installed() {{ return 1; }}
 sudo() {{ printf 'sudo %s\\n' "$*"; }}
 install_package mypkg
@@ -887,20 +731,7 @@ def test_debian_privileged_helpers_require_sudo() -> None:
     assert 'sudo systemctl mask --now "$@"' in _function_body(shim, "service_mask")
 
 
-def test_debian_remove_packages_and_macos_stubs(tmp_path: Path) -> None:
-    debian = OSShim(OS.DEBIAN).render()
-    script = tmp_path / "run.sh"
-    script.write_text(
-        f"""set -euo pipefail
-{debian}
-DOTGEN_MODE=diff
-pkg_installed() {{ [ "$1" = installed ]; }}
-remove_packages absent installed
-"""
-    )
-    res = subprocess.run(["bash", str(script)], capture_output=True, text=True)
-    assert res.returncode == 0, res.stderr
-    assert res.stdout == "- REMOVE pkg installed\n"
+def test_macos_remove_packages_and_service_mask_are_stubs() -> None:
     macos = OSShim(OS.MACOS).render()
     assert "debian only" in _function_body(macos, "remove_packages")
     assert "debian only" in _function_body(macos, "service_mask")
@@ -917,7 +748,6 @@ def test_download_bin_reuses_matching_version_and_replaces_mismatch(tmp_path: Pa
         f"""set -euo pipefail
 {_macos_shim()}
 export HOME={shlex.quote(str(home))}
-export DOTGEN_MODE=deploy
 export CALLS={shlex.quote(str(calls))}
 curl() {{
   printf x >> "$CALLS"
@@ -933,8 +763,6 @@ curl() {{
 download_bin tool https://example.test/tool v2.0.0 version --short
 download_bin tool https://example.test/tool v2.0.0 version --short
 if bin_version_matches "$HOME/bin/tool" v2.0 version --short; then exit 9; fi
-DOTGEN_MODE=diff
-download_bin tool https://example.test/tool v3.0.0 version --short
 """
     )
 
@@ -943,7 +771,7 @@ download_bin tool https://example.test/tool v3.0.0 version --short
     assert result.returncode == 0, result.stderr
     assert calls.read_text() == "x"
     assert subprocess.check_output([target, "version", "--short"], text=True) == "tool v2.0.0\n"
-    assert result.stdout == "+ INSTALL bin tool (https://example.test/tool)\n"
+    assert result.stdout == ""
 
 
 def test_download_tar_bin_reuses_matching_version(tmp_path: Path) -> None:
@@ -964,7 +792,6 @@ def test_download_tar_bin_reuses_matching_version(tmp_path: Path) -> None:
         f"""set -euo pipefail
 {_macos_shim()}
 export HOME={shlex.quote(str(home))}
-export DOTGEN_MODE=deploy
 export ARCHIVE={shlex.quote(str(archive))}
 export CALLS={shlex.quote(str(calls))}
 curl() {{
@@ -994,11 +821,8 @@ def test_npm_install_activates_fnm_and_batches_packages(tmp_path: Path) -> None:
     script.write_text(
         f"""set -euo pipefail
 {_macos_shim()}
-export DOTGEN_MODE=deploy
 export CALLS={shlex.quote(str(calls))}
 npm() {{ printf '%s\\n' "$*" >> "$CALLS"; }}
-install_npm_global pkg-one @scope/pkg-two
-DOTGEN_MODE=diff
 install_npm_global pkg-one @scope/pkg-two
 """
     )
@@ -1007,7 +831,7 @@ install_npm_global pkg-one @scope/pkg-two
 
     assert result.returncode == 0, result.stderr
     assert calls.read_text() == "install -g pkg-one @scope/pkg-two\n"
-    assert result.stdout == "+ INSTALL npm pkg-one @scope/pkg-two\n"
+    assert result.stdout == ""
 
 
 def _vendor_src(root: Path) -> Path:
@@ -1048,9 +872,9 @@ def _write_manifest(path: Path, records: list[bytes], trailing_nul: bool = True)
     path.write_bytes(b"\0".join(records) + (b"\0" if trailing_nul else b""))
 
 
-def _run_managed(tmp_path: Path, shim_text: str, mode: str, call: str, *, prelude: str = "") -> subprocess.CompletedProcess[str]:
+def _run_managed(tmp_path: Path, shim_text: str, call: str, *, prelude: str = "") -> subprocess.CompletedProcess[str]:
     script = tmp_path / "managed.sh"
-    script.write_text(f"set -euo pipefail\n{shim_text}\n{prelude}\nDOTGEN_MODE={mode}\n{call}\n")
+    script.write_text(f"set -euo pipefail\n{shim_text}\n{prelude}\n{call}\n")
     env = os_module.environ | {"XDG_STATE_HOME": str(tmp_path / "state")}
     return subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
 
@@ -1062,7 +886,7 @@ def test_install_config_dir_deploy_overlays_contents(tmp_path: Path, shim_text: 
     (dst / "git-like" / "HEAD").write_text("ref\n")
     (dst / "unmanaged.txt").write_text("keep\n")
 
-    out = _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    out = _run_shim_fn(tmp_path, shim_text, _call(src, dst))
 
     assert out == ""
     assert (dst / "a.txt").read_text() == "a\n"
@@ -1076,84 +900,18 @@ def test_install_config_dir_deploy_overlays_contents(tmp_path: Path, shim_text: 
 def test_install_config_dir_deploy_rerun_is_noop(tmp_path: Path, shim_text: str) -> None:
     src = _vendor_src(tmp_path)
     dst = tmp_path / "dst"
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    _run_shim_fn(tmp_path, shim_text, _call(src, dst))
     first = _tree(dst)
 
-    out = _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
+    out = _run_shim_fn(tmp_path, shim_text, _call(src, dst))
 
     assert out == ""
     assert _tree(dst) == first
 
 
-def test_install_config_dir_diff_reports_copy_when_absent(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-
-    out = _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst))
-
-    assert out == f"+ COPY   {dst}\n"
-    assert not dst.exists()
-
-
-def test_install_config_dir_diff_silent_when_bytes_equal(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
-
-    assert _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst)) == ""
-
-
-def test_install_config_dir_diff_reports_sync_and_leaves_target_alone(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
-    (dst / "nested dir" / "b file.txt").write_text("drifted\n")
-    before = _tree(dst)
-
-    out = _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst))
-
-    assert out == f"~ SYNC   {dst}\n"
-    assert _tree(dst) == before
-
-
-def test_install_config_dir_diff_ignores_mode_only_difference(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
-    (dst / "run.sh").chmod(0o644)
-
-    assert _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst)) == ""
-    assert not (dst / "run.sh").stat().st_mode & 0o111
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
-    assert (dst / "run.sh").stat().st_mode & 0o111
-
-
-def test_install_config_dir_diff_ignores_unmanaged_target_files(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
-    (dst / "extra.txt").write_text("extra\n")
-    (dst / "git-like").mkdir()
-    (dst / "git-like" / "HEAD").write_text("ref\n")
-
-    assert _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst)) == ""
-
-
-def test_install_config_dir_diff_reports_sync_when_shipped_file_missing(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    _run_shim_fn(tmp_path, shim_text, "deploy", _call(src, dst))
-    (dst / "a.txt").unlink()
-
-    out = _run_shim_fn(tmp_path, shim_text, "diff", _call(src, dst))
-
-    assert out == f"~ SYNC   {dst}\n"
-    assert not (dst / "a.txt").exists()
-
-
-def _run_shim_checked(tmp_path: Path, shim_text: str, mode: str, call: str) -> subprocess.CompletedProcess[str]:
+def _run_shim_checked(tmp_path: Path, shim_text: str, call: str) -> subprocess.CompletedProcess[str]:
     script = tmp_path / "run.sh"
-    script.write_text(f"set -euo pipefail\n{shim_text}\nDOTGEN_MODE={mode}\n{call}\n")
+    script.write_text(f"set -euo pipefail\n{shim_text}\n{call}\n")
     return subprocess.run(["bash", str(script)], capture_output=True, text=True)
 
 
@@ -1163,7 +921,7 @@ def test_install_config_dir_deploy_refuses_file_over_target_directory(tmp_path: 
     (dst / "a.txt").mkdir(parents=True)
     (dst / "a.txt" / "unmanaged.txt").write_text("keep\n")
 
-    res = _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst))
+    res = _run_shim_checked(tmp_path, shim_text, _call(src, dst))
 
     assert res.returncode != 0
     assert f"{dst}/a.txt" in res.stderr
@@ -1179,7 +937,7 @@ def test_install_config_dir_deploy_refuses_directory_over_target_file(tmp_path: 
     dst.mkdir()
     (dst / "nested dir").write_text("i am a file\n")
 
-    res = _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst))
+    res = _run_shim_checked(tmp_path, shim_text, _call(src, dst))
 
     assert res.returncode != 0
     assert f"{dst}/nested dir" in res.stderr
@@ -1187,29 +945,14 @@ def test_install_config_dir_deploy_refuses_directory_over_target_file(tmp_path: 
     assert not (dst / "a.txt").exists()
 
 
-def test_install_config_dir_diff_reports_sync_on_type_mismatch(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    (dst / "a.txt").mkdir(parents=True)
-    before = _tree(dst)
-
-    res = _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst))
-
-    assert res.returncode == 0
-    assert res.stdout == f"~ SYNC   {dst}\n"
-    assert f"{dst}/a.txt" in res.stderr
-    assert _tree(dst) == before
-
-
 def test_install_config_dir_fails_on_missing_source(tmp_path: Path, shim_text: str) -> None:
     src = tmp_path / "nope"
     dst = tmp_path / "dst"
 
-    for mode in ("deploy", "diff"):
-        res = _run_shim_checked(tmp_path, shim_text, mode, _call(src, dst))
-        assert res.returncode != 0, mode
-        assert "missing source directory" in res.stderr
-        assert not dst.exists()
+    res = _run_shim_checked(tmp_path, shim_text, _call(src, dst))
+    assert res.returncode != 0
+    assert "missing source directory" in res.stderr
+    assert not dst.exists()
 
 
 def test_install_config_dir_handles_empty_source(tmp_path: Path, shim_text: str) -> None:
@@ -1217,15 +960,10 @@ def test_install_config_dir_handles_empty_source(tmp_path: Path, shim_text: str)
     src.mkdir()
     dst = tmp_path / "dst"
 
-    assert _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst)).stdout == f"+ COPY   {dst}\n"
-    assert not dst.exists()
-
-    deployed = _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst))
-    assert deployed.returncode == 0, deployed.stderr
+    first = _run_shim_checked(tmp_path, shim_text, _call(src, dst))
+    assert first.returncode == 0, first.stderr
     assert dst.is_dir()
-
-    assert _run_shim_checked(tmp_path, shim_text, "diff", _call(src, dst)).stdout == ""
-    assert _run_shim_checked(tmp_path, shim_text, "deploy", _call(src, dst)).stdout == ""
+    assert _run_shim_checked(tmp_path, shim_text, _call(src, dst)).stdout == ""
 
 
 def test_install_config_dir_managed_publish_update_and_preservation(tmp_path: Path, shim_text: str) -> None:
@@ -1235,7 +973,7 @@ def test_install_config_dir_managed_publish_update_and_preservation(tmp_path: Pa
     (dst / "unmanaged.txt").write_text("keep\n")
     (dst / "git-like").mkdir()
     (dst / "git-like" / "HEAD").write_text("ref\n")
-    first = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst))
+    first = _run_managed(tmp_path, shim_text, _managed_call(src, dst))
     assert first.returncode == 0, first.stderr
     state = tmp_path / "state"
     manifest = _managed_manifest(state, "fixture")
@@ -1247,7 +985,7 @@ def test_install_config_dir_managed_publish_update_and_preservation(tmp_path: Pa
     assert (dst / "unmanaged.txt").read_text() == "keep\n"
     assert (dst / "git-like" / "HEAD").read_text() == "ref\n"
     before_manifest = manifest.read_bytes()
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     assert manifest.read_bytes() == before_manifest
 
     (dst / "a.txt").write_text("drifted\n")
@@ -1256,7 +994,7 @@ def test_install_config_dir_managed_publish_update_and_preservation(tmp_path: Pa
     (dst / "nested dir" / "b file.txt").unlink()
     (src / "new.txt").write_text("new\n")
     (dst / "run.sh").chmod(0o644)
-    updated = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst))
+    updated = _run_managed(tmp_path, shim_text, _managed_call(src, dst))
     assert updated.returncode == 0, updated.stderr
     assert not (dst / "a.txt").exists()
     assert not (dst / "nested dir" / "b file.txt").exists()
@@ -1273,44 +1011,23 @@ def test_install_config_dir_managed_releases_preserved_path(tmp_path: Path, shim
     settings_src = src / "settings.json"
     settings_src.write_text('{"managed":true}\n')
     dst = tmp_path / "dst"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     settings_dst = dst / "settings.json"
     settings_dst.write_text('{"managed":true,"unmanaged":"keep"}\n')
     settings_src.unlink()
     manifest = _managed_manifest(tmp_path / "state", "fixture")
 
-    released = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", "settings.json"))
+    released = _run_managed(tmp_path, shim_text, _managed_call(src, dst, "fixture", "settings.json"))
 
     assert released.returncode == 0, released.stderr
     assert settings_dst.read_text() == '{"managed":true,"unmanaged":"keep"}\n'
     assert b"settings.json" not in _manifest_records(manifest)[2:]
     manifest_bytes = manifest.read_bytes()
     settings_inode = settings_dst.stat().st_ino
-    rerun = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", "settings.json"))
+    rerun = _run_managed(tmp_path, shim_text, _managed_call(src, dst, "fixture", "settings.json"))
     assert rerun.returncode == 0, rerun.stderr
     assert manifest.read_bytes() == manifest_bytes
     assert settings_dst.stat().st_ino == settings_inode
-
-
-def test_install_config_dir_preserved_path_diff_migrates_manifest_without_deletion(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    settings_src = src / "settings.json"
-    settings_src.write_text("managed\n")
-    dst = tmp_path / "dst"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
-    settings_dst = dst / "settings.json"
-    settings_dst.write_text("mutable\n")
-    settings_src.unlink()
-    manifest = _managed_manifest(tmp_path / "state", "fixture")
-    before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-
-    result = _run_managed(tmp_path, shim_text, "diff", _managed_call(src, dst, "fixture", "settings.json"))
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == f"~ SYNC   {dst}\n"
-    assert "DELETE" not in result.stdout
-    assert _tree(dst) == before_tree
-    assert manifest.read_bytes() == before_manifest
 
 
 def test_install_config_dir_preserved_path_does_not_disable_other_retired_deletions(tmp_path: Path, shim_text: str) -> None:
@@ -1318,11 +1035,11 @@ def test_install_config_dir_preserved_path_does_not_disable_other_retired_deleti
     (src / "settings.json").write_text("mutable\n")
     (src / "retired.txt").write_text("retired\n")
     dst = tmp_path / "dst"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     (src / "settings.json").unlink()
     (src / "retired.txt").unlink()
 
-    result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", "settings.json"))
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, dst, "fixture", "settings.json"))
 
     assert result.returncode == 0, result.stderr
     assert (dst / "settings.json").read_text() == "mutable\n"
@@ -1334,7 +1051,7 @@ def test_install_config_dir_rejects_invalid_preserved_paths(tmp_path: Path, shim
     src = _vendor_src(tmp_path)
     dst = tmp_path / "dst"
 
-    result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, "fixture", preserved))
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, dst, "fixture", preserved))
 
     assert result.returncode != 0
     assert "invalid preserved path" in result.stderr
@@ -1351,7 +1068,7 @@ def test_install_config_dir_rejects_duplicate_and_inventory_preserved_paths(tmp_
     )
 
     for call in calls:
-        result = _run_managed(tmp_path, shim_text, "deploy", call)
+        result = _run_managed(tmp_path, shim_text, call)
         assert result.returncode != 0
         assert "preserved path" in result.stderr
         assert not dst.exists()
@@ -1367,7 +1084,7 @@ def test_install_config_dir_two_argument_overlay_never_uses_managed_state(tmp_pa
     manifest.parent.mkdir(parents=True)
     manifest.symlink_to(tmp_path / "missing")
     script = tmp_path / "overlay.sh"
-    script.write_text(f"set -euo pipefail\n{shim_text}\nDOTGEN_MODE=diff\n{_call(src, dst)}\nDOTGEN_MODE=deploy\n{_call(src, dst)}\n")
+    script.write_text(f"set -euo pipefail\n{shim_text}\n{_call(src, dst)}\n")
     result = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=os_module.environ | {"XDG_STATE_HOME": str(state)})
     assert result.returncode == 0, result.stderr
     assert (dst / "retired.txt").read_text() == "keep\n"
@@ -1379,17 +1096,17 @@ def test_install_config_dir_managed_identity_and_destination_binding_fail_closed
     state = tmp_path / "state"
     for identity in ("", ".", "..", "Upper", "a/b", r"a\\b", "a b", "a\nb", "-a", "_a", "a" * 65):
         dst = tmp_path / f"bad-{len(identity)}"
-        result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst, identity))
+        result = _run_managed(tmp_path, shim_text, _managed_call(src, dst, identity))
         assert result.returncode != 0
         assert "invalid managed identity" in result.stderr
         assert not dst.exists()
         assert not _managed_manifest(state, identity).exists()
     first = tmp_path / "dst-one"
     second = tmp_path / "dst-two"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, first)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, first)).returncode == 0
     manifest = _managed_manifest(state, "fixture")
     before_tree, before_manifest = _tree(first), manifest.read_bytes()
-    result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, second))
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, second))
     assert result.returncode != 0
     assert "destination mismatch" in result.stderr
     assert not second.exists()
@@ -1400,7 +1117,7 @@ def test_install_config_dir_managed_identity_and_destination_binding_fail_closed
 def test_install_config_dir_managed_manifest_schema_and_paths_fail_before_mutation(tmp_path: Path, shim_text: str) -> None:
     src = _vendor_src(tmp_path)
     dst = tmp_path / "dst"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     manifest = _managed_manifest(tmp_path / "state", "fixture")
     good = [b"dotgen-install-config-dir-v1", os_module.fsencode(str(dst)), b"a.txt"]
     malformed = (
@@ -1416,31 +1133,29 @@ def test_install_config_dir_managed_manifest_schema_and_paths_fail_before_mutati
         [good[0], good[1], b"a//b"],
     )
     for records in malformed:
-        for mode in ("diff", "deploy"):
-            (dst / "sentinel").write_text("keep\n")
-            _write_manifest(manifest, list(records))
-            before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-            result = _run_managed(tmp_path, shim_text, mode, _managed_call(src, dst))
-            assert result.returncode != 0
-            assert "install_config_dir:" in result.stderr
-            assert _tree(dst) == before_tree
-            assert manifest.read_bytes() == before_manifest
-    for mode in ("diff", "deploy"):
-        _write_manifest(manifest, good, trailing_nul=False)
+        (dst / "sentinel").write_text("keep\n")
+        _write_manifest(manifest, list(records))
         before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-        result = _run_managed(tmp_path, shim_text, mode, _managed_call(src, dst))
+        result = _run_managed(tmp_path, shim_text, _managed_call(src, dst))
         assert result.returncode != 0
-        assert result.stdout == ""
-        assert "invalid manifest schema" in result.stderr
+        assert "install_config_dir:" in result.stderr
         assert _tree(dst) == before_tree
         assert manifest.read_bytes() == before_manifest
+    _write_manifest(manifest, good, trailing_nul=False)
+    before_tree, before_manifest = _tree(dst), manifest.read_bytes()
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, dst))
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "invalid manifest schema" in result.stderr
+    assert _tree(dst) == before_tree
+    assert manifest.read_bytes() == before_manifest
 
 
 def test_install_config_dir_managed_normalizes_destination_componentwise(tmp_path: Path, shim_text: str) -> None:
     src = _vendor_src(tmp_path)
     raw_dst = tmp_path / "physical root" / "discard" / ".." / "managed dir"
     expected_dst = tmp_path / "physical root" / "managed dir"
-    deploy = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, raw_dst))
+    deploy = _run_managed(tmp_path, shim_text, _managed_call(src, raw_dst))
     assert deploy.returncode == 0, deploy.stderr
     assert (expected_dst / "a.txt").read_bytes() == (src / "a.txt").read_bytes()
     assert not (tmp_path / "physical root" / "discard").exists()
@@ -1449,9 +1164,6 @@ def test_install_config_dir_managed_normalizes_destination_componentwise(tmp_pat
         b"dotgen-install-config-dir-v1",
         os_module.fsencode(str(expected_dst)),
     ]
-    diff = _run_managed(tmp_path, shim_text, "diff", _managed_call(src, raw_dst))
-    assert diff.returncode == 0, diff.stderr
-    assert diff.stdout == ""
 
 
 def test_install_config_dir_managed_normalized_destination_refuses_symlink_ancestor(tmp_path: Path, shim_text: str) -> None:
@@ -1462,14 +1174,13 @@ def test_install_config_dir_managed_normalized_destination_refuses_symlink_ances
     linked_parent.symlink_to(real_parent, target_is_directory=True)
     raw_dst = linked_parent / "discard" / ".." / "managed"
     manifest = _managed_manifest(tmp_path / "state", "symlink-ancestor")
-    for mode in ("diff", "deploy"):
-        result = _run_managed(tmp_path, shim_text, mode, _managed_call(src, raw_dst, "symlink-ancestor"))
-        assert result.returncode != 0
-        assert result.stdout == ""
-        assert "symlink destination ancestor" in result.stderr
-        assert str(linked_parent) in result.stderr
-        assert not (real_parent / "managed").exists()
-        assert not manifest.exists()
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, raw_dst, "symlink-ancestor"))
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "symlink destination ancestor" in result.stderr
+    assert str(linked_parent) in result.stderr
+    assert not (real_parent / "managed").exists()
+    assert not manifest.exists()
 
 
 def test_install_config_dir_managed_unusual_filename_round_trip(tmp_path: Path, shim_text: str) -> None:
@@ -1477,19 +1188,12 @@ def test_install_config_dir_managed_unusual_filename_round_trip(tmp_path: Path, 
     weird = "delimiter\n\t\\*?["
     (src / weird).write_text("weird\n")
     dst = tmp_path / "dst"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     assert (dst / weird).read_text() == "weird\n"
     manifest = _managed_manifest(tmp_path / "state", "fixture")
     assert os_module.fsencode(weird) in _manifest_records(manifest)
     (src / weird).unlink()
-    before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-    result = _run_managed(tmp_path, shim_text, "diff", _managed_call(src, dst))
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.count("- DELETE ") == 1
-    assert weird in result.stdout
-    assert _tree(dst) == before_tree
-    assert manifest.read_bytes() == before_manifest
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     assert not (dst / weird).exists()
     assert (dst / "nested dir").is_dir()
 
@@ -1499,16 +1203,15 @@ def test_install_config_dir_managed_symlink_and_type_conflicts_are_atomic(tmp_pa
         root = tmp_path / f"case-{len(list(tmp_path.iterdir()))}"
         src = _vendor_src(root)
         dst = root / "dst"
-        assert _run_managed(root, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+        assert _run_managed(root, shim_text, _managed_call(src, dst)).returncode == 0
         manifest = _managed_manifest(root / "state", "fixture")
         prepare(src, dst)
         before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-        for mode in ("diff", "deploy"):
-            result = _run_managed(root, shim_text, mode, _managed_call(src, dst))
-            assert result.returncode != 0
-            assert "install_config_dir:" in result.stderr
-            assert _tree(dst) == before_tree
-            assert manifest.read_bytes() == before_manifest
+        result = _run_managed(root, shim_text, _managed_call(src, dst))
+        assert result.returncode != 0
+        assert "install_config_dir:" in result.stderr
+        assert _tree(dst) == before_tree
+        assert manifest.read_bytes() == before_manifest
 
     def file_over_dir(src: Path, dst: Path) -> None:
         (dst / "a.txt").unlink()
@@ -1527,7 +1230,7 @@ def test_install_config_dir_managed_symlink_and_type_conflicts_are_atomic(tmp_pa
         assert_conflict(prepare)
     src = _vendor_src(tmp_path / "source-symlink")
     (src / "link").symlink_to("a.txt")
-    result = _run_managed(tmp_path / "source-symlink", shim_text, "deploy", _managed_call(src, tmp_path / "source-symlink" / "dst"))
+    result = _run_managed(tmp_path / "source-symlink", shim_text, _managed_call(src, tmp_path / "source-symlink" / "dst"))
     assert result.returncode != 0
     assert "source contains non-file entry" in result.stderr
 
@@ -1537,16 +1240,16 @@ def test_install_config_dir_managed_copy_interruption_reruns_from_old_manifest(t
     dst = tmp_path / "dst"
     (dst / "unmanaged" / "empty").mkdir(parents=True)
     (dst / "unmanaged.txt").write_text("keep\n")
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
+    assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     (src / "a.txt").unlink()
     (src / "run.sh").write_text("changed\n")
     (src / "new.txt").write_text("new\n")
     manifest = _managed_manifest(tmp_path / "state", "fixture")
     old_manifest = manifest.read_bytes()
-    result = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst), prelude="cp() { return 71; }")
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, dst), prelude="cp() { return 71; }")
     assert result.returncode != 0
     assert manifest.read_bytes() == old_manifest
-    rerun = _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst))
+    rerun = _run_managed(tmp_path, shim_text, _managed_call(src, dst))
     assert rerun.returncode == 0, rerun.stderr
     assert not (dst / "a.txt").exists()
     assert (dst / "run.sh").read_text() == "changed\n"
@@ -1556,32 +1259,6 @@ def test_install_config_dir_managed_copy_interruption_reruns_from_old_manifest(t
     assert b"new.txt" in _manifest_records(manifest)
 
 
-def test_install_config_dir_managed_diff_reports_inventory_without_mutation(tmp_path: Path, shim_text: str) -> None:
-    src = _vendor_src(tmp_path)
-    dst = tmp_path / "dst"
-    assert _run_managed(tmp_path, shim_text, "deploy", _managed_call(src, dst)).returncode == 0
-    (src / "a.txt").unlink()
-    (dst / "a.txt").write_text("retired drift\n")
-    (dst / "nested dir" / "b file.txt").write_text("changed\n")
-    (src / "new.txt").write_text("new\n")
-    (dst / "run.sh").chmod(0o644)
-    manifest = _managed_manifest(tmp_path / "state", "fixture")
-    before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-    result = _run_managed(tmp_path, shim_text, "diff", _managed_call(src, dst))
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.count(f"~ SYNC   {dst}") == 1
-    assert result.stdout.count(f"- DELETE {dst}/a.txt") == 1
-    assert "mode" not in result.stdout
-    assert _tree(dst) == before_tree
-    assert manifest.read_bytes() == before_manifest
-    _write_manifest(manifest, [b"bad", os_module.fsencode(str(dst))])
-    before_tree, before_manifest = _tree(dst), manifest.read_bytes()
-    malformed = _run_managed(tmp_path, shim_text, "diff", _managed_call(src, dst))
-    assert malformed.returncode != 0
-    assert _tree(dst) == before_tree
-    assert manifest.read_bytes() == before_manifest
-
-
 def _debian_shim_at(tmp_path: Path) -> str:
     shim = OSShim(OS.DEBIAN).render()
     return shim.replace("/etc/apt/keyrings", str(tmp_path / "keyrings")).replace("/etc/apt/sources.list.d", str(tmp_path / "sources"))
@@ -1589,7 +1266,6 @@ def _debian_shim_at(tmp_path: Path) -> str:
 
 def _run_debian_harness(
     tmp_path: Path,
-    mode: str,
     call: str,
     *,
     installed: str = "",
@@ -1633,7 +1309,7 @@ esac
     for name in ("sudo", "curl", "gpg", "systemctl", "apt-get"):
         (fake / name).symlink_to("command")
     script = tmp_path / "run.sh"
-    script.write_text("set -euo pipefail\n" + _debian_shim_at(tmp_path) + "\nDOTGEN_MODE=" + mode + '\npkg_installed() { [[ " $INSTALLED " == *" $1 "* ]]; }\n' + call + "\n")
+    script.write_text("set -euo pipefail\n" + _debian_shim_at(tmp_path) + "\n" + 'pkg_installed() { [[ " $INSTALLED " == *" $1 "* ]]; }\n' + call + "\n")
     env = {
         **os_module.environ,
         "PATH": f"{fake}:{os_module.environ['PATH']}",
@@ -1653,9 +1329,8 @@ esac
 _DEB822 = "Types: deb\nURIs: https://example.test\nSuites: trixie\nComponents: stable\nArchitectures: amd64\nSigned-By: {key}\n"
 
 
-@pytest.mark.parametrize("mode", ["diff", "deploy"])
 @pytest.mark.parametrize("key_state, source_state", [("absent", "absent"), ("drift", "equal"), ("equal", "drift"), ("drift", "drift"), ("equal", "equal")])
-def test_deb822_repository_status_matrix_is_independent_and_atomic(tmp_path: Path, mode: str, key_state: str, source_state: str) -> None:
+def test_deb822_repository_status_matrix_is_independent_and_atomic(tmp_path: Path, key_state: str, source_state: str) -> None:
     key = tmp_path / "keyrings/docker.asc"
     source = tmp_path / "sources/docker.sources"
     key.parent.mkdir()
@@ -1667,27 +1342,17 @@ def test_deb822_repository_status_matrix_is_independent_and_atomic(tmp_path: Pat
             path.write_text(content if state == "equal" else "drift\n")
             os_module.utime(path, ns=(1_000_000_000, 1_000_000_000))
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (key, source) if path.exists()}
-    result = _run_debian_harness(tmp_path, mode, f'add_repo apt-deb822 docker "{stanza}" https://key.test')
+    result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 docker "{stanza}" https://key.test')
     assert result.returncode == 0, result.stderr
-    if mode == "diff":
-        expected: list[str] = []
-        for label, path, state in (("KEY", key, key_state), ("SOURCE", source, source_state)):
-            if state != "equal":
-                verb = "ADD" if state == "absent" else "CHANGE"
-                expected.append(f"{'+' if verb == 'ADD' else '~'} {verb} REPO {label} {path}")
-        assert result.stdout.splitlines() == expected
-        assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (key, source) if path.exists()} == before
-        assert not (tmp_path / "state/commands").exists() or "sudo" not in (tmp_path / "state/commands").read_text()
-    else:
-        assert key.read_text() == fixture and source.read_text() == stanza
-        assert key.stat().st_mode & 0o777 == 0o644 and source.stat().st_mode & 0o777 == 0o644
-        commands = (tmp_path / "state/commands").read_text()
-        for path, state in ((key, key_state), (source, source_state)):
-            if state == "equal":
-                assert path.stat().st_mtime_ns == before[path][1]
-                assert f"<{path}>" not in commands
-            else:
-                assert f"mv> <-f> <{path.parent}/.docker.{path.suffix[1:]}." in commands
+    assert key.read_text() == fixture and source.read_text() == stanza
+    assert key.stat().st_mode & 0o777 == 0o644 and source.stat().st_mode & 0o777 == 0o644
+    commands = (tmp_path / "state/commands").read_text()
+    for path, state in ((key, key_state), (source, source_state)):
+        if state == "equal":
+            assert path.stat().st_mtime_ns == before[path][1]
+            assert f"<{path}>" not in commands
+        else:
+            assert f"mv> <-f> <{path.parent}/.docker.{path.suffix[1:]}." in commands
     assert not list((tmp_path / "temps").iterdir())
 
 
@@ -1703,7 +1368,7 @@ def test_deb822_repository_status_matrix_is_independent_and_atomic(tmp_path: Pat
     ],
 )
 def test_deb822_rejects_malformed_source_and_cleans_temps(tmp_path: Path, identifier: str, stanza: str) -> None:
-    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 {identifier} "{stanza}" https://key.test')
+    result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 {identifier} "{stanza}" https://key.test')
     assert result.returncode != 0
     assert not list((tmp_path / "temps").iterdir())
     assert not (tmp_path / "keyrings/docker.asc").exists()
@@ -1717,7 +1382,7 @@ def test_deb822_rejects_legacy_collisions_before_privileged_writes(tmp_path: Pat
     legacy = parent / legacy_name
     legacy.write_text("administrator owned")
     stanza = _DEB822.format(key=tmp_path / "keyrings/docker.asc")
-    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 docker "{stanza}" https://key.test')
+    result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 docker "{stanza}" https://key.test')
     assert result.returncode != 0 and legacy.read_text() == "administrator owned"
     assert not (tmp_path / "state/commands").exists()
 
@@ -1730,7 +1395,7 @@ def test_deb822_rejects_legacy_collisions_before_privileged_writes(tmp_path: Pat
     ],
 )
 def test_deb822_rejects_duplicate_and_wrong_signed_by_without_writes(tmp_path: Path, stanza: str) -> None:
-    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 docker "{stanza.format(key=tmp_path / "keyrings/docker.asc")}" https://key.test')
+    result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 docker "{stanza.format(key=tmp_path / "keyrings/docker.asc")}" https://key.test')
     assert result.returncode != 0
     assert not (tmp_path / "state/commands").exists()
 
@@ -1740,7 +1405,7 @@ def test_deb822_rejects_unsafe_target_without_writes(tmp_path: Path) -> None:
     target.parent.mkdir()
     target.symlink_to(tmp_path / "outside")
     stanza = _DEB822.format(key=target)
-    result = _run_debian_harness(tmp_path, "deploy", f'add_repo apt-deb822 docker "{stanza}" https://key.test')
+    result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 docker "{stanza}" https://key.test')
     assert result.returncode != 0
     assert target.is_symlink() and not (tmp_path / "state/commands").exists()
 
@@ -1748,36 +1413,26 @@ def test_deb822_rejects_unsafe_target_without_writes(tmp_path: Path) -> None:
 @pytest.mark.parametrize("gpg_ok, curl_ok", [(False, True), (True, False)])
 def test_deb822_bad_or_unavailable_key_cleans_temps(tmp_path: Path, gpg_ok: bool, curl_ok: bool) -> None:
     stanza = _DEB822.format(key=tmp_path / "keyrings/docker.asc")
-    result = _run_debian_harness(tmp_path, "diff", f'add_repo apt-deb822 docker "{stanza}" https://key.test', gpg_ok=gpg_ok, curl_ok=curl_ok)
+    result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 docker "{stanza}" https://key.test', gpg_ok=gpg_ok, curl_ok=curl_ok)
     assert result.returncode != 0
     assert not list((tmp_path / "temps").iterdir())
 
 
 def test_remove_packages_uses_one_exact_batched_deploy_transaction(tmp_path: Path) -> None:
-    result = _run_debian_harness(tmp_path, "diff", "remove_packages absent second present", installed="present second")
-    assert result.returncode == 0 and result.stdout.splitlines() == ["- REMOVE pkg second", "- REMOVE pkg present"]
-    assert not (tmp_path / "state/commands").exists()
-    result = _run_debian_harness(tmp_path, "deploy", "remove_packages absent second present", installed="present second")
+    result = _run_debian_harness(tmp_path, "remove_packages absent second present", installed="present second")
     assert result.returncode == 0, result.stderr
     commands = (tmp_path / "state/commands").read_text()
     assert commands.splitlines() == ["sudo <DEBIAN_FRONTEND=noninteractive> <apt-get> <remove> <-y> <second> <present>"]
     assert "purge" not in commands and "/var/lib" not in commands
     before = commands
-    result = _run_debian_harness(tmp_path, "deploy", "remove_packages absent", installed="present")
+    result = _run_debian_harness(tmp_path, "remove_packages absent", installed="present")
     assert result.returncode == 0 and (tmp_path / "state/commands").read_text() == before
 
 
-def test_service_mask_logs_state_verifies_and_diff_is_immutable(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    state.mkdir()
-    (state / "docker.socket.enabled").write_text("masked\n")
-    (state / "docker.socket.active").write_text("inactive\n")
-    result = _run_debian_harness(tmp_path, "diff", "service_mask docker.service docker.socket")
-    assert result.returncode == 0 and result.stdout == "~ MASK service docker.service\n"
-    assert (state / "docker.socket.enabled").read_text() == "masked\n"
-    assert not (state / "commands").exists()
-    result = _run_debian_harness(tmp_path, "deploy", "service_mask docker.service docker.socket")
+def test_service_mask_logs_state_and_verifies(tmp_path: Path) -> None:
+    result = _run_debian_harness(tmp_path, "service_mask docker.service docker.socket")
     assert result.returncode == 0, result.stderr
+    state = tmp_path / "state"
     assert (state / "docker.service.enabled").read_text().strip() == "masked"
     assert (state / "docker.service.active").read_text().strip() == "inactive"
     assert (state / "commands").read_text().splitlines() == ["sudo <systemctl> <mask> <--now> <docker.service> <docker.socket>"]
@@ -1785,23 +1440,18 @@ def test_service_mask_logs_state_verifies_and_diff_is_immutable(tmp_path: Path) 
 
 @pytest.mark.parametrize("bad", ["enabled", "active"])
 def test_service_mask_rejects_failed_post_mask_verification(tmp_path: Path, bad: str) -> None:
-    result = _run_debian_harness(tmp_path, "deploy", "service_mask docker.service docker.socket", mask_bad=bad)
+    result = _run_debian_harness(tmp_path, "service_mask docker.service docker.socket", mask_bad=bad)
     assert result.returncode != 0
     assert "docker.socket" in result.stderr
 
 
-def test_macos_rejects_new_debian_helpers_and_legacy_paths_regressions(tmp_path: Path) -> None:
+def test_macos_rejects_debian_helpers(tmp_path: Path) -> None:
     macos = OSShim(OS.MACOS).render()
-    calls = (
-        ("diff", "add_repo apt-deb822 docker source key"),
-        ("deploy", "add_repo apt-deb822 docker source key"),
-        ("deploy", "remove_packages docker.io"),
-        ("deploy", "service_mask docker.service"),
-    )
-    for mode, call in calls:
+    for call in (
+        "add_repo apt-deb822 docker source key",
+        "remove_packages docker.io",
+        "service_mask docker.service",
+    ):
         script = tmp_path / "run.sh"
-        script.write_text(f"set -euo pipefail\n{macos}\nDOTGEN_MODE={mode}\n{call}\n")
+        script.write_text(f"set -euo pipefail\n{macos}\n{call}\n")
         assert subprocess.run(["bash", str(script)], capture_output=True, text=True).returncode != 0
-    assert _run_shim_fn(tmp_path, macos, "diff", "add_repo tap homebrew/core") == "+ ADD REPO homebrew/core (tap)\n"
-    debian = OSShim(OS.DEBIAN).render()
-    assert _run_shim_fn(tmp_path, debian, "diff", "add_repo apt example 'deb https://example.test stable main' https://key.test") == "+ ADD REPO example (apt)\n"

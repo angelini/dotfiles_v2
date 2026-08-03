@@ -31,16 +31,19 @@ def test_no_arg_exits_with_usage(built_macos: Path) -> None:
     assert "usage:" in r.stderr
 
 
-def test_unknown_mode_exits_with_usage(built_macos: Path) -> None:
-    r = _run(built_macos / "setup.sh", "garbage")
+def test_diff_mode_is_rejected(built_macos: Path) -> None:
+    r = _run(built_macos / "setup.sh", "diff")
     assert r.returncode == 2
-    assert "unknown mode: garbage" in r.stderr
+    assert "unknown mode: diff" in r.stderr
+    assert "usage:" in r.stderr
 
 
-def test_help_prints_usage_and_exits_zero(built_macos: Path) -> None:
+def test_help_prints_deploy_only_usage_and_exits_zero(built_macos: Path) -> None:
     r = _run(built_macos / "setup.sh", "--help")
     assert r.returncode == 0
     assert "usage:" in r.stdout
+    assert "deploy" in r.stdout
+    assert "diff" not in r.stdout
 
 
 def test_deploy_rejects_root(tmp_path: Path, built_macos: Path) -> None:

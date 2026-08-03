@@ -154,14 +154,6 @@ install_tmuxinator_helper() {
       return 1
     fi
   fi
-  if [ "$DOTGEN_MODE" = diff ]; then
-    if [ ! -e "$dst" ]; then
-      printf '+ INSTALL %s\n' "$dst"
-    elif ! cmp -s "$src" "$dst" || [ "$(stat -c '%a' "$dst")" != 755 ]; then
-      printf '~ CHANGE %s\n' "$dst"
-    fi
-    return 0
-  fi
   if [ -e "$dst" ] && cmp -s "$src" "$dst" && [ "$(stat -c '%a' "$dst")" = 755 ]; then
     return 0
   fi

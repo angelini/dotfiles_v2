@@ -486,9 +486,8 @@ def test_install_script_used_for_curl_installers() -> None:
         assert "curl " not in body, f"{name} still has raw curl invocation"
 
 
-def test_node_fnm_activates_latest_lts_during_deploy() -> None:
+def test_node_fnm_activates_latest_lts_during_setup() -> None:
     frag = NodeFnm().render(ENVIRONMENTS["debian"])
-    assert 'if [ "$DOTGEN_MODE" = deploy ]; then' in frag.setup
     assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in frag.setup
     assert "exit 1" in frag.setup
     assert 'eval "$("$fnm_bin" env --shell bash)"' in frag.setup
