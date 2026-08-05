@@ -201,6 +201,7 @@ _run_macos() {
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     sandbox-exec \
     -D "HOME=$HOME" \
+    -D "HOME_PARENT=$(dirname "$HOME")" \
     -D "TMPDIR=${TMPDIR:-/tmp}" \
     -D "TRANSFORMERS_CACHE=$transformers_cache_target" \
     -f "$profile" \
@@ -258,9 +259,13 @@ _pi_macos_sb_template = r"""(version 1)
 (allow signal)
 (allow sysctl*)
 (allow mach-lookup)
+(allow file-ioctl)
 
 (allow file-read-data (literal "/"))
-(allow file-read* file-write* (subpath (param "TMPDIR")))
+(allow file-read* file-write*
+  (subpath (param "TMPDIR"))
+  (subpath "/tmp")
+  (subpath "/private/tmp"))
 (allow file-read* file-write-data
   (literal "/dev/null")
   (literal "/dev/zero"))
@@ -289,7 +294,8 @@ __MACOS_RW_DIRS__)
 
 (allow file-read-metadata
   (literal "/")
-  (literal (param "HOME"))
+  (literal (param "HOME_PARENT"))
+  (subpath (param "HOME"))
   (literal "/private")
   (literal "/private/tmp")
   (literal "/private/var")

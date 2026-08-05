@@ -108,8 +108,10 @@ def test_bash_base_git_aliases() -> None:
 def test_bash_base_macos_changes_shell_and_loads_orbstack() -> None:
     macos = BashBase().render(ENVIRONMENTS["macos"])
     assert 'sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"' in macos.setup
+    assert 'eval "$(/opt/homebrew/bin/brew shellenv)"' in macos.bashrc
     assert '[ -r "$HOME/.orbstack/shell/init.bash" ] && source "$HOME/.orbstack/shell/init.bash"' in macos.bashrc
     assert ".orbstack/shell/init.bash" not in BashBase().render(ENVIRONMENTS["debian"]).bashrc
+    assert "brew shellenv" not in BashBase().render(ENVIRONMENTS["debian"]).bashrc
 
 
 def test_bash_base_uses_only_in_memory_history_and_updates_title() -> None:
@@ -233,6 +235,7 @@ def test_starship_emits_config_and_init() -> None:
     assert any(c.dest == "starship/starship.toml" for c in frag.configs)
     assert "starship init bash" in frag.bashrc
     cfg = next(c for c in frag.configs if c.dest == "starship/starship.toml").content
+    assert 'format = "$directory$git_branch$git_status$kubernetes$line_break$character"' in cfg
     assert "[kubernetes]" in cfg
     assert "context_pattern" in cfg
     for disabled in ("[gcloud]", "[aws]", "[docker_context]", "[dotnet]"):
@@ -682,6 +685,9 @@ def test_pi_agent_sandbox_configs() -> None:
     cache_bind = '--bind "$transformers_cache" "$transformers_cache_target"'
     assert script.content.index(fnm_bind) < script.content.index(cache_bind)
     assert '-D "TRANSFORMERS_CACHE=$transformers_cache_target"' in script.content
+    assert '-D "HOME_PARENT=$(dirname "$HOME")"' in script.content
+    assert '(literal (param "HOME_PARENT"))' in profile.content
+    assert '(subpath (param "HOME"))' in profile.content
     assert '(subpath (param "TRANSFORMERS_CACHE"))' in profile.content
     assert 'runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' in script.content
     assert '--ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells"' in script.content

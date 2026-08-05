@@ -21,7 +21,7 @@ _DISABLED_MODULES: tuple[str, ...] = ("gcloud", "aws", "docker_context", "dotnet
 
 _TOML = tomli_w.dumps(
     {
-        "format": "$directory$git_branch$git_status$kubernetes$character",
+        "format": "$directory$git_branch$git_status$kubernetes$line_break$character",
         "add_newline": False,
         "kubernetes": {
             "disabled": False,

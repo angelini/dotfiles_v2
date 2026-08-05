@@ -23,6 +23,9 @@ PYEOF
 """
 
 _BASHRC_MACOS = """\
+if [ -d "/opt/homebrew/bin" ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
 [ -r "$HOME/.orbstack/shell/init.bash" ] && source "$HOME/.orbstack/shell/init.bash"
 """
 
