@@ -4,37 +4,11 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotgen.components.agent_config import _agent_config_root, managed_settings  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.agent_config import _agent_config_root, managed_settings, pi_models  # pyright: ignore[reportPrivateUsage]
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 from dotgen.vendor import GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
-
-_MODELS_JSON = (
-    json.dumps(
-        {
-            "providers": {
-                "google": {
-                    "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
-                    "api": "google-generative-ai",
-                    "apiKey": "GEMINI_API_KEY",
-                    "models": [
-                        {
-                            "id": "gemini-3-flash-preview",
-                            "name": "Gemini 3 Flash",
-                            "input": ["text", "image"],
-                            "contextWindow": 1048576,
-                            "maxTokens": 65536,
-                            "reasoning": True,
-                        }
-                    ],
-                }
-            }
-        },
-        indent=2,
-    )
-    + "\n"
-)
 
 _WEB_SEARCH_JSON = json.dumps({"provider": "exa"}, indent=2) + "\n"
 
@@ -105,6 +79,7 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
         ".gitconfig",
         ".gitignore_global",
         ".config/git/config",
+        ".config/gcloud/application_default_credentials.json",
         ".config/pi/sandbox/pi-macos.sb",
     ),
     hidden_dirs=(
@@ -113,7 +88,6 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
         ".aws",
         ".azure",
         ".config/dotgen",
-        ".config/gcloud",
         ".kube",
         ".claude",
         ".local/share/stinkpot",
@@ -221,7 +195,8 @@ _run_macos() {
     "SHELL=${SHELL:-/bin/bash}" \
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
-    "GEMINI_API_KEY=${GEMINI_API_KEY:-}" \
+    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
+    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     sandbox-exec \
@@ -243,7 +218,8 @@ _run_linux() {
     "SHELL=${SHELL:-/bin/bash}" \
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
-    "GEMINI_API_KEY=${GEMINI_API_KEY:-}" \
+    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
+    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     bwrap \
@@ -394,7 +370,7 @@ class PiAgent:
             alias=_ALIAS,
             configs=(
                 ConfigFile(dest="managed-settings/pi.json", content=managed_settings("pi"), mode=0o600),
-                ConfigFile(dest="pi/agent/models.json", content=_MODELS_JSON, mode=0o600),
+                ConfigFile(dest="pi/agent/models.json", content=pi_models(), mode=0o600),
                 ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
                 ConfigFile(dest="pi/agent/plannotator.json", content=_PLANNOTATOR_JSON),
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
@@ -422,5 +398,5 @@ class PiAgent:
                     exclude_globs=("package-lock.json", "pi-system-audit-plan.md", "*.test.ts"),
                 ),
             ),
-            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GEMINI_API_KEY"}),
+            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GCP_PROJECT_ID"}),
         )

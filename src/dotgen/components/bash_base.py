@@ -22,6 +22,10 @@ PYEOF
 }
 """
 
+_BASHRC_MACOS = """\
+[ -r "$HOME/.orbstack/shell/init.bash" ] && source "$HOME/.orbstack/shell/init.bash"
+"""
+
 _ALIASES_COMMON = r"""alias klear='clear && printf "\033[3J"'
 alias rgc='rg -C 30'
 alias ip='curl -s ifconfig.me'
@@ -63,6 +67,6 @@ class BashBase:
         setup = _BASH_MACOS_SETUP if env.os is OS.MACOS else ""
         return Fragment(
             setup=setup,
-            bashrc=_BASHRC,
+            bashrc=_BASHRC + (_BASHRC_MACOS if env.os is OS.MACOS else ""),
             alias=_ALIASES_COMMON + _ALIAS_LS,
         )

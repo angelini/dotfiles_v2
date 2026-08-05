@@ -18,6 +18,7 @@ from dotgen.components.kubectl import Kubectl
 from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
+from dotgen.components.orbstack import OrbStack
 from dotgen.components.pi_agent import PiAgent
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
@@ -62,7 +63,7 @@ _SHARED: tuple[Component, ...] = (
 
 _DEBIAN_FULL: tuple[Component, ...] = (Tmuxinator(), Docker())
 
-_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), Supacode())
+_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), Supacode(), OrbStack())
 
 _DOCKER_SKIP = {
     "fonts",

@@ -170,8 +170,53 @@ def test_production_builder_rejects_archive_links(tmp_path: Path) -> None:
 def test_production_builder_fails_closed_on_source_checksum(tmp_path: Path) -> None:
     archive = _archive()
     artifact = _declaration(archive)
-    with ProductionArtifactBuilder(downloader=lambda _url: archive + b"changed", runner=_runner([])) as builder, pytest.raises(ArtifactBuildError, match="source checksum mismatch"):
+    downloads = 0
+    delays: list[float] = []
+
+    def changed_download(_url: str) -> bytes:
+        nonlocal downloads
+        downloads += 1
+        return archive + b"changed"
+
+    with ProductionArtifactBuilder(downloader=changed_download, runner=_runner([]), sleeper=delays.append) as builder, pytest.raises(ArtifactBuildError, match="source checksum mismatch"):
         builder.materialize((artifact,), tmp_path)
+    assert downloads == 1
+    assert delays == []
+    assert not (tmp_path / "artifacts").exists()
+
+
+def test_production_builder_retries_until_source_checksum_matches(tmp_path: Path) -> None:
+    archive = _archive()
+    responses: list[bytes | Exception] = [OSError("transient"), b"error code: 520\n", archive]
+    delays: list[float] = []
+
+    def download(_url: str) -> bytes:
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    with ProductionArtifactBuilder(downloader=download, runner=_runner([]), sleeper=delays.append) as builder:
+        builder.materialize((_declaration(archive),), tmp_path)
+
+    assert responses == []
+    assert delays == [0.25, 0.5]
+    assert (tmp_path / "artifacts/stinkpot/linux-amd64/stinkpot").is_file()
+
+
+def test_production_builder_reports_final_mixed_retry_failure(tmp_path: Path) -> None:
+    archive = _archive()
+    responses: list[bytes | Exception] = [b"error code: 520\n", OSError("offline-1"), OSError("offline-2"), OSError("offline-3"), OSError("offline-4")]
+
+    def download(_url: str) -> bytes:
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    with ProductionArtifactBuilder(downloader=download, runner=_runner([]), sleeper=lambda _delay: None) as builder, pytest.raises(ArtifactBuildError, match="failed to download.*offline-4"):
+        builder.materialize((_declaration(archive),), tmp_path)
+    assert responses == []
     assert not (tmp_path / "artifacts").exists()
 
 
@@ -192,7 +237,7 @@ def test_production_builder_reports_download_and_corrupt_archive_failures(tmp_pa
     def failed_download(_url: str) -> bytes:
         raise OSError("offline")
 
-    with ProductionArtifactBuilder(downloader=failed_download, runner=_runner([])) as builder, pytest.raises(ArtifactBuildError, match="failed to download"):
+    with ProductionArtifactBuilder(downloader=failed_download, runner=_runner([]), sleeper=lambda _delay: None) as builder, pytest.raises(ArtifactBuildError, match="failed to download"):
         builder.materialize((_declaration(archive),), tmp_path)
 
     corrupt = b"not a tar archive"

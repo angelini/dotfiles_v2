@@ -216,6 +216,8 @@ bind -X | grep '__stinkpot_search' || true
 """
     env = os.environ.copy()
     env["HOME"] = str(home)
+    host_bins = {str(Path.home() / "bin"), str(Path.home() / ".local/bin")}
+    env["PATH"] = os.pathsep.join(entry for entry in env["PATH"].split(os.pathsep) if entry not in host_bins)
     return subprocess.run(["bash", "--noprofile", "--norc", "-i", "-c", command], env=env, capture_output=True, text=True)
 
 

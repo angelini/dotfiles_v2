@@ -5,6 +5,7 @@ from dotgen.fragment import ConfigFile, Fragment
 
 # Ensure macOS login shells read .bashrc
 _BASH_PROFILE = '[ -r "$HOME/.bashrc" ] && source "$HOME/.bashrc"\n'
+_PRIVATE_ALIAS_OVERLAY = '[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"\n'
 
 _SETUP = """\
 install_config "$DIR/.bashrc" "$HOME/.bashrc"
@@ -23,5 +24,6 @@ class DotfilesDeploy:
     def render(self, env: Environment) -> Fragment:
         return Fragment(
             setup=_SETUP,
+            alias=_PRIVATE_ALIAS_OVERLAY,
             configs=(ConfigFile(dest="bash/bash_profile", content=_BASH_PROFILE),),
         )

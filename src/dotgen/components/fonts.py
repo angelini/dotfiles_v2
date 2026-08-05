@@ -20,8 +20,17 @@ if [ ! -d "$HOME/.local/share/fonts/UbuntuMono" ]; then
 fi
 """
 
+_SETUP_MACOS = """\
+if [ ! -f "$HOME/Library/Fonts/Ubuntu-Regular.ttf" ]; then
+  install_cask font-ubuntu
+fi
+if [ ! -f "$HOME/Library/Fonts/UbuntuMonoNerdFont-Regular.ttf" ]; then
+  install_cask font-ubuntu-mono-nerd-font
+fi
+"""
+
 _SETUP_BY_OS: dict[OS, str] = {
-    OS.MACOS: "install_cask font-ubuntu\ninstall_cask font-ubuntu-mono-nerd-font\n",
+    OS.MACOS: _SETUP_MACOS,
     OS.DEBIAN: _SETUP_DEBIAN,
 }
 

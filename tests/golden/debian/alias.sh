@@ -38,9 +38,6 @@ ta() {
 
 # --- kubectl ---
 alias kc='kubectl'
-alias kca='kubectl get all'
-alias kcn='kubectl config use-context'
-alias kcr='kubectl config current-context'
 alias kx='kubectx'
 alias kns='kubens'
 
@@ -49,7 +46,10 @@ pod_names() {
 }
 
 k8s_secrets() {
-  kubectl get secrets "$@" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+  local ns="${1}"
+  local secret="${2}"
+  kubectl -n "${ns}" get secret "${secret}" -o json \
+    | jq '.data | to_entries | map({key: .key, value: .value|@base64d}) | from_entries'
 }
 
 k8s_env() {
@@ -74,4 +74,27 @@ pi() {
 pi-unsafe() {
   command pi "$@"
 }
+
+# --- gcloud ---
+alias gcp='gcloud config configurations activate default'
+
+get_project_roles() {
+  local account="${1}"
+  local project
+  project="$(gcloud config get project)"
+  gcloud projects get-iam-policy "${project}" \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role)" \
+    --filter="bindings.members:${account}"
+}
+
+get_sa_bindings() {
+  local account="${1}"
+  gcloud iam service-accounts get-iam-policy "${account}" \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role, bindings.members)"
+}
+
+# --- dotfiles_deploy ---
+[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"
 

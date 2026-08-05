@@ -6,11 +6,14 @@ from dotgen.types import OS
 
 _CONFIG = """\
 theme = Tomorrow
+background-opacity = 1
+background-blur = false
 shell-integration = bash
 working-directory = home
 window-inherit-working-directory = false
 tab-inherit-working-directory = false
 scrollback-limit = 100_000_000
+unfocused-split-opacity = 1
 bell-features = no-audio, no-system, no-attention, no-title
 shell-integration-features = ssh-env,ssh-terminfo
 keybind = shift+enter=text:\\x0a

@@ -29,6 +29,26 @@ done
 unset _f
 """
 
+_ALIASES = r"""alias gcp='gcloud config configurations activate default'
+
+get_project_roles() {
+  local account="${1}"
+  local project
+  project="$(gcloud config get project)"
+  gcloud projects get-iam-policy "${project}" \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role)" \
+    --filter="bindings.members:${account}"
+}
+
+get_sa_bindings() {
+  local account="${1}"
+  gcloud iam service-accounts get-iam-policy "${account}" \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role, bindings.members)"
+}
+"""
+
 
 @dataclass(frozen=True)
 class Gcloud:
@@ -41,4 +61,5 @@ class Gcloud:
         return Fragment(
             setup=_SETUP_BY_OS[env.os],
             bashrc=_BASHRC,
+            alias=_ALIASES,
         )

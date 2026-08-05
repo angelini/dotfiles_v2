@@ -5,7 +5,7 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS
 
 _DEPS_BY_OS: dict[OS, tuple[str, ...]] = {
-    OS.MACOS: ("mercurial",),
+    OS.MACOS: (),
     OS.DEBIAN: ("curl", "git", "make", "bison", "gcc", "libc6-dev"),
 }
 
@@ -41,6 +41,6 @@ class GoLang:
         return env.os in _DEPS_BY_OS
 
     def render(self, env: Environment) -> Fragment:
-        deps = " ".join(_DEPS_BY_OS[env.os])
-        body = f"install_packages {deps}\n{_INSTALL_GO}"
-        return Fragment(setup=body, bashrc=_BASHRC)
+        deps = _DEPS_BY_OS[env.os]
+        dependency_setup = f"install_packages {' '.join(deps)}\n" if deps else ""
+        return Fragment(setup=dependency_setup + _INSTALL_GO, bashrc=_BASHRC)

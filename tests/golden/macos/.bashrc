@@ -24,6 +24,7 @@ import sys, datetime as d
 print(d.datetime.fromtimestamp(int(sys.argv[1])).isoformat())
 PYEOF
 }
+[ -r "$HOME/.orbstack/shell/init.bash" ] && source "$HOME/.orbstack/shell/init.bash"
 
 # --- stinkpot ---
 if bin_exists stinkpot; then

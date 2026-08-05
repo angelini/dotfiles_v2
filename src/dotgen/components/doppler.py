@@ -16,7 +16,7 @@ install_package doppler
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.DEBIAN: _SETUP_DEBIAN,
-    OS.MACOS: "install_packages gnupg dopplerhq/cli/doppler\n",
+    OS.MACOS: "install_package gnupg\nif ! bin_exists doppler; then\n  install_package dopplerhq/cli/doppler\nfi\n",
 }
 
 

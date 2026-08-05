@@ -23,7 +23,7 @@ _register_serena_mcp() {
   if ! bin_exists claude; then
     return 0
   fi
-  if claude mcp list 2>/dev/null | grep -q '^serena'; then
+  if [ -f "$HOME/.claude.json" ] && jq -e '.mcpServers.serena // empty' "$HOME/.claude.json" >/dev/null 2>&1; then
     return 0
   fi
   claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true

@@ -6,7 +6,7 @@ import pytest
 
 from dotgen.component import Component
 from dotgen.components import agent_config as agent_config_module
-from dotgen.components.agent_config import _agent_config_root, managed_settings  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.agent_config import _agent_config_root, managed_settings, pi_models  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
@@ -26,6 +26,7 @@ from dotgen.components.kubectl import Kubectl
 from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
+from dotgen.components.orbstack import OrbStack
 from dotgen.components.pi_agent import _PI_PACKAGES, SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
@@ -76,7 +77,7 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, Supacode, PiAgent])
+@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, Supacode, OrbStack, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
@@ -104,9 +105,11 @@ def test_bash_base_git_aliases() -> None:
     assert expected <= set(aliases)
 
 
-def test_bash_base_macos_changes_shell_with_sudo() -> None:
-    setup = BashBase().render(ENVIRONMENTS["macos"]).setup
-    assert 'sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"' in setup
+def test_bash_base_macos_changes_shell_and_loads_orbstack() -> None:
+    macos = BashBase().render(ENVIRONMENTS["macos"])
+    assert 'sudo chsh -s /opt/homebrew/bin/bash "$(whoami)"' in macos.setup
+    assert '[ -r "$HOME/.orbstack/shell/init.bash" ] && source "$HOME/.orbstack/shell/init.bash"' in macos.bashrc
+    assert ".orbstack/shell/init.bash" not in BashBase().render(ENVIRONMENTS["debian"]).bashrc
 
 
 def test_bash_base_uses_only_in_memory_history_and_updates_title() -> None:
@@ -198,6 +201,8 @@ def test_git_setup_ignores_local_agent_state() -> None:
 def test_fonts_per_os_packages() -> None:
     macos = Fonts().render(ENVIRONMENTS["macos"]).setup
     debian = Fonts().render(ENVIRONMENTS["debian"]).setup
+    assert 'if [ ! -f "$HOME/Library/Fonts/Ubuntu-Regular.ttf" ]' in macos
+    assert 'if [ ! -f "$HOME/Library/Fonts/UbuntuMonoNerdFont-Regular.ttf" ]' in macos
     assert "font-ubuntu" in macos and "font-ubuntu-mono-nerd-font" in macos
     assert "fontconfig" in debian
     assert Fonts().applies_to(ENVIRONMENTS["debian"])
@@ -253,6 +258,19 @@ def test_kubectl_per_os_branching() -> None:
     assert 'download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens" "v0.11.0" --version' in debian
     assert 'download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}" "0.27.0" --version' in debian
     assert "kubie generate-completion" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
+    aliases = Kubectl().render(ENVIRONMENTS["macos"]).alias
+    assert "alias kca=" not in aliases
+    assert "alias kcn=" not in aliases
+    assert "alias kcr=" not in aliases
+    assert 'kubectl -n "${ns}" get secret "${secret}" -o json' in aliases
+    assert "@base64d" in aliases
+
+
+def test_gcloud_retains_selected_public_helpers() -> None:
+    aliases = Gcloud().render(ENVIRONMENTS["macos"]).alias
+    assert "alias gcp='gcloud config configurations activate default'" in aliases
+    assert "get_project_roles()" in aliases
+    assert "get_sa_bindings()" in aliases
 
 
 def test_claude_code_settings() -> None:
@@ -279,7 +297,9 @@ def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     assert 'install_config "$DIR/config/claude/hooks/serena-reminder.sh"' not in setup
     assert "chmod" not in setup
     assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
-    assert "claude mcp add serena" in setup
+    assert "claude mcp list" not in setup
+    assert "jq -e '.mcpServers.serena // empty'" in setup
+    assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
 
 
 def test_claude_code_runs_after_python_tools() -> None:
@@ -298,10 +318,13 @@ def test_python_tools_per_os_build_deps() -> None:
         assert "install_script uv https://astral.sh/uv/install.sh" in s
 
 
-def test_go_lang_only_macos() -> None:
+def test_go_lang_has_no_macos_package_dependency() -> None:
     assert GoLang().applies_to(ENVIRONMENTS["debian"])
     assert GoLang().applies_to(ENVIRONMENTS["macos"])
-    assert 'GO_VERSION="1.25.5"' in GoLang().render(ENVIRONMENTS["macos"]).setup
+    macos = GoLang().render(ENVIRONMENTS["macos"]).setup
+    assert 'GO_VERSION="1.25.5"' in macos
+    assert "mercurial" not in macos
+    assert "install_packages" not in macos
 
 
 def test_aws_emits_config_with_secure_mode() -> None:
@@ -338,8 +361,8 @@ def test_environment_component_distribution() -> None:
         "fonts",
     }
     assert shared_names.issubset(debian_names & macos_names)
-    assert {"ghostty", "zed", "supacode"}.isdisjoint(debian_names)
-    assert {"ghostty", "zed", "supacode"}.issubset(macos_names)
+    assert {"ghostty", "zed", "supacode", "orbstack"}.isdisjoint(debian_names)
+    assert {"ghostty", "zed", "supacode", "orbstack"}.issubset(macos_names)
     assert "node_fnm" in {c.name for c in ENVIRONMENTS["debian-docker"].components}
 
 
@@ -362,7 +385,9 @@ def test_doppler_is_full_only_and_renders_per_os() -> None:
     assert debian.index("update_pkg_index") < debian.index("install_package doppler")
 
     macos = doppler.render(ENVIRONMENTS["macos"]).setup
-    assert macos == "install_packages gnupg dopplerhq/cli/doppler\n"
+    assert "install_package gnupg" in macos
+    assert "if ! bin_exists doppler" in macos
+    assert "install_package dopplerhq/cli/doppler" in macos
 
 
 def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None:
@@ -426,6 +451,9 @@ def test_ghostty_macos_only_and_emits_config() -> None:
     frag = Ghostty().render(ENVIRONMENTS["macos"])
     cfg = next(c for c in frag.configs if c.dest == "ghostty/config").content
     assert "theme = Tomorrow" in cfg
+    assert "background-opacity = 1" in cfg
+    assert "background-blur = false" in cfg
+    assert "unfocused-split-opacity = 1" in cfg
     assert "shell-integration-features = ssh-env,ssh-terminfo" in cfg
     assert "scrollback-limit = 100_000_000" in cfg
     assert "keybind = shift+enter=text:\\x0a" in cfg
@@ -467,6 +495,12 @@ def test_supacode_macos_only_and_installs_cask() -> None:
     assert "install_cask supacode" in Supacode().render(ENVIRONMENTS["macos"]).setup
 
 
+def test_orbstack_macos_only_and_installs_cask() -> None:
+    assert OrbStack().applies_to(ENVIRONMENTS["macos"])
+    assert not OrbStack().applies_to(ENVIRONMENTS["debian"])
+    assert OrbStack().render(ENVIRONMENTS["macos"]).setup == "install_cask orbstack\n"
+
+
 def test_install_script_used_for_curl_installers() -> None:
     expected = {
         "starship": "install_script starship https://starship.rs/install.sh -y",
@@ -488,6 +522,7 @@ def test_install_script_used_for_curl_installers() -> None:
 
 def test_node_fnm_activates_latest_lts_during_setup() -> None:
     frag = NodeFnm().render(ENVIRONMENTS["debian"])
+    assert 'fnm_bin="$(command -v fnm 2>/dev/null || true)"' in frag.setup
     assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in frag.setup
     assert "exit 1" in frag.setup
     assert 'eval "$("$fnm_bin" env --shell bash)"' in frag.setup
@@ -495,11 +530,12 @@ def test_node_fnm_activates_latest_lts_during_setup() -> None:
     assert 'eval "$(fnm env --use-on-cd --shell bash)"' in frag.bashrc
 
 
-def test_dotfiles_deploy_emits_bashrc_and_alias_install() -> None:
+def test_dotfiles_deploy_emits_bashrc_alias_install_and_private_overlay() -> None:
     for env_name in ("debian", "macos"):
-        setup = DotfilesDeploy().render(ENVIRONMENTS[env_name]).setup
-        assert 'install_config "$DIR/.bashrc" "$HOME/.bashrc"' in setup
-        assert 'install_config "$DIR/alias.sh" "$HOME/.aliases"' in setup
+        fragment = DotfilesDeploy().render(ENVIRONMENTS[env_name])
+        assert 'install_config "$DIR/.bashrc" "$HOME/.bashrc"' in fragment.setup
+        assert 'install_config "$DIR/alias.sh" "$HOME/.aliases"' in fragment.setup
+        assert fragment.alias == '[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"\n'
 
 
 def test_dotfiles_deploy_runs_last_in_every_env() -> None:
@@ -527,7 +563,8 @@ def test_pi_agent_setup() -> None:
     assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
-    assert "GEMINI_API_KEY" in frag.secrets
+    assert "GEMINI_API_KEY" not in frag.secrets
+    assert "GCP_PROJECT_ID" in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
     assert "CONTEXT7_API_KEY" in frag.secrets
     settings = next(cf for cf in frag.configs if cf.dest == "managed-settings/pi.json")
@@ -597,9 +634,10 @@ def test_pi_agent_sandbox_configs() -> None:
         ".aws",
         ".azure",
         ".config/dotgen",
-        ".config/gcloud",
         ".kube",
     } <= set(SANDBOX_HOME_POLICY.hidden_dirs)
+    assert ".config/gcloud" not in SANDBOX_HOME_POLICY.hidden_dirs
+    assert ".config/gcloud/application_default_credentials.json" in SANDBOX_HOME_POLICY.readonly_files
     assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
     assert ".local/share/stinkpot" not in SANDBOX_HOME_POLICY.hidden_files
     assert ".local/share" in SANDBOX_HOME_POLICY.writable_dirs
@@ -651,13 +689,18 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "--unshare-net" not in script.content
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content
-    assert "GEMINI_API_KEY=${GEMINI_API_KEY:-}" in script.content
+    assert "GEMINI_API_KEY" not in script.content
+    assert "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" in script.content
+    assert "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" in script.content
     assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
     assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
     assert "__SANDBOX_" not in script.content
     assert "__MACOS_" not in profile.content
-    assert '"apiKey": "GEMINI_API_KEY"' in models.content
-    assert "${GEMINI_API_KEY}" not in models.content
+    parsed_models = json.loads(models.content)
+    vertex = parsed_models["providers"]["google-vertex"]
+    assert vertex["api"] == "google-vertex"
+    assert "apiKey" not in vertex
+    assert vertex["models"][0]["id"] == "gemini-3-flash-preview"
 
 
 _VENDOR_SRC = Path(__file__).parent / "fixtures" / "vendor_src"
@@ -684,6 +727,16 @@ def test_managed_settings_uses_override_and_canonicalizes(monkeypatch: pytest.Mo
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
 
     assert managed_settings("claude") == '{\n  "nested": {\n    "a": 1,\n    "b": 2\n  },\n  "z": 1\n}\n'
+
+
+def test_pi_models_uses_agent_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "agent-config"
+    models = root / "pi" / "agent" / "models.json"
+    models.parent.mkdir(parents=True)
+    models.write_text('{"providers":{"google-vertex":{"api":"google-vertex"}}}')
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
+
+    assert json.loads(pi_models()) == {"providers": {"google-vertex": {"api": "google-vertex"}}}
 
 
 @pytest.mark.parametrize("content", ["{bad", "[]", "null", '"value"', "{}\n{}\n", '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}'])
@@ -779,9 +832,15 @@ def test_agent_config_components_fail_clearly_for_missing_namespaces(monkeypatch
     (root / "settings").mkdir(parents=True)
     (root / "settings" / "claude.managed.json").write_text("{}\n")
     (root / "settings" / "pi.managed.json").write_text("{}\n")
+    models = root / "pi" / "agent" / "models.json"
+    models.parent.mkdir(parents=True)
+    models.write_text("{}\n")
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
     claude_vendor = ClaudeCode().render(ENVIRONMENTS["macos"]).vendors[0]
     pi_vendor = next(vendor for vendor in PiAgent().render(ENVIRONMENTS["macos"]).vendors if vendor.dest == "pi/agent")
+    models.unlink()
+    models.parent.rmdir()
+    (root / "pi").rmdir()
     for vendor in (claude_vendor, pi_vendor):
         with pytest.raises(FileNotFoundError, match=f"vendor source not found: {vendor.source}"):
             _vendor_dir(vendor, tmp_path / vendor.dest)

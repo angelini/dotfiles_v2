@@ -6,7 +6,10 @@ from dotgen.fragment import Fragment
 _SETUP = """\
 install_package unzip
 install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"
-fnm_bin="$HOME/.local/share/fnm/fnm"
+fnm_bin="$(command -v fnm 2>/dev/null || true)"
+if [ -z "$fnm_bin" ]; then
+  fnm_bin="$HOME/.local/share/fnm/fnm"
+fi
 if [ ! -x "$fnm_bin" ]; then
   error "fnm installer completed; fnm unavailable"
   exit 1

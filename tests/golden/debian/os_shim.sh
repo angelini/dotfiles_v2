@@ -385,7 +385,7 @@ install_config_dir() {
   (
     local src="$1" dst="$2" identity="$3" normalized part rel target state manifest
     local inventory_dirs inventory_files inventory_other publish_tmp record preserve
-    local -a dst_parts=() files=() dirs=() old_files=() components=() preserves=("${@:4}")
+    local -a dst_parts=() files=() dirs=() old_files=() replace_links=() components=() preserves=("${@:4}")
     local i j seen preserved
     trap 'rm -f -- "${inventory_dirs:-}" "${inventory_files:-}" "${inventory_other:-}" "${publish_tmp:-}"' EXIT
 
@@ -500,7 +500,10 @@ install_config_dir() {
     done
     for rel in "${files[@]}"; do
       target="$dst/$rel"
-      [ -L "$target" ] && { error "install_config_dir: symlink destination path: $target"; return 1; }
+      if [ -L "$target" ]; then
+        replace_links+=("$rel")
+        continue
+      fi
       [ ! -e "$target" ] || [ -f "$target" ] || { error "install_config_dir: $target exists but is not a regular file"; return 1; }
     done
     for rel in "${old_files[@]}"; do
@@ -519,6 +522,11 @@ install_config_dir() {
       [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && rm -f -- "$dst/$rel"
     done
     ensure_dir "$dst" || return 1
+    if [ "${#replace_links[@]}" -gt 0 ]; then
+      for rel in "${replace_links[@]}"; do
+        rm -f -- "$dst/$rel" || return 1
+      done
+    fi
     cp -Rp "$src"/. "$dst"/ || return 1
     ensure_dir "$state" || return 1
     publish_tmp="$(mktemp "$state/$identity.manifest.XXXXXX")" || return 1

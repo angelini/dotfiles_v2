@@ -329,7 +329,7 @@ if (
     if ! bin_exists claude; then
       return 0
     fi
-    if claude mcp list 2>/dev/null | grep -q '^serena'; then
+    if [ -f "$HOME/.claude.json" ] && jq -e '.mcpServers.serena // empty' "$HOME/.claude.json" >/dev/null 2>&1; then
       return 0
     fi
     claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
@@ -401,7 +401,10 @@ if (
   set -e
   install_package unzip
   install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"
-  fnm_bin="$HOME/.local/share/fnm/fnm"
+  fnm_bin="$(command -v fnm 2>/dev/null || true)"
+  if [ -z "$fnm_bin" ]; then
+    fnm_bin="$HOME/.local/share/fnm/fnm"
+  fi
   if [ ! -x "$fnm_bin" ]; then
     error "fnm installer completed; fnm unavailable"
     exit 1
@@ -460,7 +463,6 @@ fi
 component_begin "go_lang"
 if (
   set -e
-  install_packages mercurial
   GO_VERSION="1.25.5"
   GO_DIR="$HOME/.local/share/go"
   if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
@@ -508,7 +510,10 @@ fi
 component_begin "doppler"
 if (
   set -e
-  install_packages gnupg dopplerhq/cli/doppler
+  install_package gnupg
+  if ! bin_exists doppler; then
+    install_package dopplerhq/cli/doppler
+  fi
 ); then
   component_end "doppler" 0
 else
@@ -519,8 +524,12 @@ fi
 component_begin "fonts"
 if (
   set -e
-  install_cask font-ubuntu
-  install_cask font-ubuntu-mono-nerd-font
+  if [ ! -f "$HOME/Library/Fonts/Ubuntu-Regular.ttf" ]; then
+    install_cask font-ubuntu
+  fi
+  if [ ! -f "$HOME/Library/Fonts/UbuntuMonoNerdFont-Regular.ttf" ]; then
+    install_cask font-ubuntu-mono-nerd-font
+  fi
 ); then
   component_end "fonts" 0
 else
@@ -561,6 +570,17 @@ if (
   component_end "supacode" 0
 else
   _rc=$?; component_end "supacode" "$_rc"; exit "$_rc"
+fi
+
+# --- orbstack ---
+component_begin "orbstack"
+if (
+  set -e
+  install_cask orbstack
+); then
+  component_end "orbstack" 0
+else
+  _rc=$?; component_end "orbstack" "$_rc"; exit "$_rc"
 fi
 
 # --- git_setup ---

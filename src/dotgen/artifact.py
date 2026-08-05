@@ -10,6 +10,7 @@ import subprocess
 import tarfile
 import tempfile
 import threading
+import time
 import urllib.request
 from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager
@@ -30,12 +31,18 @@ class ArtifactBuilder(Protocol):
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 Downloader = Callable[[str], bytes]
+Sleeper = Callable[[float], None]
+
+_SOURCE_DOWNLOAD_ATTEMPTS = 5
+_SOURCE_RETRY_BASE_SECONDS = 0.25
+_TRANSIENT_SOURCE_BODIES = frozenset({b"error code: 520\n"})
 
 
 class ProductionArtifactBuilder:
-    def __init__(self, *, downloader: Downloader | None = None, runner: Runner = subprocess.run) -> None:
+    def __init__(self, *, downloader: Downloader | None = None, runner: Runner = subprocess.run, sleeper: Sleeper = time.sleep) -> None:
         self._downloader = downloader or _download
         self._runner = runner
+        self._sleeper = sleeper
         self._sources: dict[tuple[str, str], bytes] = {}
         self._builds: dict[tuple[object, ...], bytes] = {}
         self._verified_go_versions: set[str] = set()
@@ -115,15 +122,30 @@ class ProductionArtifactBuilder:
         cached = self._sources.get(key)
         if cached is not None:
             return cached
-        try:
-            archive = self._downloader(artifact.source_url)
-        except Exception as error:
-            raise ArtifactBuildError(f"failed to download {artifact.source_url}: {error}") from error
-        actual = hashlib.sha256(archive).hexdigest()
-        if actual != artifact.source_sha256:
-            raise ArtifactBuildError(f"source checksum mismatch for {artifact.source_url}: expected {artifact.source_sha256}, got {actual}")
-        self._sources[key] = archive
-        return archive
+
+        last_error: Exception | None = None
+        last_actual: str | None = None
+        for attempt in range(_SOURCE_DOWNLOAD_ATTEMPTS):
+            try:
+                archive = self._downloader(artifact.source_url)
+            except Exception as error:
+                last_error = error
+                last_actual = None
+            else:
+                actual = hashlib.sha256(archive).hexdigest()
+                if actual == artifact.source_sha256:
+                    self._sources[key] = archive
+                    return archive
+                if archive not in _TRANSIENT_SOURCE_BODIES:
+                    raise ArtifactBuildError(f"source checksum mismatch for {artifact.source_url}: expected {artifact.source_sha256}, got {actual}")
+                last_error = None
+                last_actual = actual
+            if attempt + 1 < _SOURCE_DOWNLOAD_ATTEMPTS:
+                self._sleeper(_SOURCE_RETRY_BASE_SECONDS * 2**attempt)
+
+        if last_actual is not None:
+            raise ArtifactBuildError(f"source checksum mismatch for {artifact.source_url} after {_SOURCE_DOWNLOAD_ATTEMPTS} attempts: expected {artifact.source_sha256}, got {last_actual}")
+        raise ArtifactBuildError(f"failed to download {artifact.source_url} after {_SOURCE_DOWNLOAD_ATTEMPTS} attempts: {last_error}") from last_error
 
     def _verify_go(self, version: str) -> None:
         if version in self._verified_go_versions:

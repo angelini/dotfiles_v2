@@ -1,0 +1,13 @@
+{
+  "providers": {
+    "google-vertex": {
+      "api": "google-vertex",
+      "baseUrl": "https://{location}-aiplatform.googleapis.com",
+      "models": [
+        {
+          "id": "gemini-fixture"
+        }
+      ]
+    }
+  }
+}

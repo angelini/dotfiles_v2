@@ -60,6 +60,22 @@ def _run_shim_fn(tmp_path: Path, shim_text: str, call: str) -> str:
     return subprocess.check_output(["bash", str(script)]).decode()
 
 
+def test_install_config_replaces_destination_symlink_without_touching_target(tmp_path: Path, shim_text: str) -> None:
+    src = tmp_path / "src"
+    target = tmp_path / "legacy-target"
+    dst = tmp_path / "dst"
+    src.write_text("generated\n")
+    target.write_text("legacy\n")
+    dst.symlink_to(target)
+
+    output = _run_shim_fn(tmp_path, shim_text, f"install_config {shlex.quote(str(src))} {shlex.quote(str(dst))}")
+
+    assert output == ""
+    assert not dst.is_symlink()
+    assert dst.read_text() == "generated\n"
+    assert target.read_text() == "legacy\n"
+
+
 def test_component_begin_uses_compact_progress(tmp_path: Path, shim_text: str) -> None:
     out = _run_shim_fn(tmp_path, shim_text, "component_begin aws")
     assert "---" not in out
@@ -124,6 +140,27 @@ def test_install_config_template_renders_with_default_mode_and_cleans_up(tmp_pat
     assert dst.read_text() == "name=Alice\nemail=a@example.com\n"
     assert dst.stat().st_mode & 0o777 == 0o644
     assert _template_artifacts(tmp_path, tmpdir) == []
+
+
+def test_install_config_template_replaces_destination_symlink_without_touching_target(tmp_path: Path) -> None:
+    target = tmp_path / "legacy-target"
+    dst = tmp_path / "dst"
+    target.write_text("legacy\n")
+    dst.symlink_to(target)
+
+    result = _run_template(
+        tmp_path,
+        src="token=${TOKEN}\n",
+        vars_list="TOKEN",
+        secrets='TOKEN="rendered"\n',
+        requested_mode="0600",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not dst.is_symlink()
+    assert dst.read_text() == "token=rendered\n"
+    assert dst.stat().st_mode & 0o777 == 0o600
+    assert target.read_text() == "legacy\n"
 
 
 def test_install_config_template_installs_explicit_mode_and_repairs_drift(tmp_path: Path) -> None:
@@ -1196,6 +1233,23 @@ def test_install_config_dir_managed_unusual_filename_round_trip(tmp_path: Path, 
     assert _run_managed(tmp_path, shim_text, _managed_call(src, dst)).returncode == 0
     assert not (dst / weird).exists()
     assert (dst / "nested dir").is_dir()
+
+
+def test_install_config_dir_managed_replaces_file_symlink_without_touching_target(tmp_path: Path, shim_text: str) -> None:
+    src = _vendor_src(tmp_path)
+    dst = tmp_path / "dst"
+    target = tmp_path / "legacy-target"
+    dst.mkdir()
+    target.write_text("legacy\n")
+    (dst / "a.txt").symlink_to(target)
+
+    result = _run_managed(tmp_path, shim_text, _managed_call(src, dst))
+
+    assert result.returncode == 0, result.stderr
+    assert not (dst / "a.txt").is_symlink()
+    assert (dst / "a.txt").read_text() == "a\n"
+    assert target.read_text() == "legacy\n"
+    assert set(_manifest_records(_managed_manifest(tmp_path / "state", "fixture"))[2:]) == {b"a.txt", b"nested dir/b file.txt", b"run.sh"}
 
 
 def test_install_config_dir_managed_symlink_and_type_conflicts_are_atomic(tmp_path: Path, shim_text: str) -> None:

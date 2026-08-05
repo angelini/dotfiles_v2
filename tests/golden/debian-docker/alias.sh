@@ -15,9 +15,6 @@ alias l='eza --long --all --group-directories-first --git'
 
 # --- kubectl ---
 alias kc='kubectl'
-alias kca='kubectl get all'
-alias kcn='kubectl config use-context'
-alias kcr='kubectl config current-context'
 alias kx='kubectx'
 alias kns='kubens'
 
@@ -26,7 +23,10 @@ pod_names() {
 }
 
 k8s_secrets() {
-  kubectl get secrets "$@" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+  local ns="${1}"
+  local secret="${2}"
+  kubectl -n "${ns}" get secret "${secret}" -o json \
+    | jq '.data | to_entries | map({key: .key, value: .value|@base64d}) | from_entries'
 }
 
 k8s_env() {
@@ -51,4 +51,7 @@ pi() {
 pi-unsafe() {
   command pi "$@"
 }
+
+# --- dotfiles_deploy ---
+[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"
 

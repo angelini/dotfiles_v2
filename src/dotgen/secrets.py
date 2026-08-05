@@ -10,7 +10,6 @@ SecretKey = Literal[
     "KUBE_CONTEXT",
     "EXA_API_KEY",
     "CONTEXT7_API_KEY",
-    "GEMINI_API_KEY",
 ]
 
 DESCRIPTIONS: dict[str, str] = {
@@ -23,7 +22,6 @@ DESCRIPTIONS: dict[str, str] = {
     "KUBE_CONTEXT": "Default kubectl context name",
     "EXA_API_KEY": "API key for Exa search",
     "CONTEXT7_API_KEY": "API key for Context7 code search",
-    "GEMINI_API_KEY": "API key for Google Generative AI",
 }
 
 
