@@ -7,8 +7,8 @@ _CONFIG = r"""set -g default-terminal "tmux-256color"
 set -as terminal-features ",xterm-ghostty:RGB:clipboard"
 set -as terminal-features ",xterm-256color:RGB:clipboard"
 set -as terminal-features ",xterm:RGB:clipboard"
-set -as terminal-overrides ",xterm-256color:Ms=\\E]52;c;%p2%s\\007"
-set -as terminal-overrides ",xterm:Ms=\\E]52;c;%p2%s\\007"
+set -as terminal-overrides ",xterm-256color:Ms=\\E]52;c%p1%s;%p2%s\\007"
+set -as terminal-overrides ",xterm:Ms=\\E]52;c%p1%s;%p2%s\\007"
 set -s set-clipboard on
 set -s escape-time 10
 set -g focus-events on
