@@ -257,6 +257,9 @@ _pi_macos_sb_template = r"""(version 1)
 
 (allow process*)
 (allow signal)
+(allow network*)
+(allow network-outbound
+  (literal "/private/var/run/mDNSResponder"))
 (allow sysctl*)
 (allow mach-lookup)
 (allow file-ioctl)
@@ -294,6 +297,8 @@ __MACOS_RW_DIRS__)
 
 (allow file-read-metadata
   (literal "/")
+  (literal "/etc")
+  (literal "/var")
   (literal (param "HOME_PARENT"))
   (subpath (param "HOME"))
   (literal "/private")

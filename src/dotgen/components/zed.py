@@ -22,7 +22,7 @@ _SETTINGS: dict[str, Any] = {
     "restore_on_startup": "empty_tab",
     "show_wrap_guides": True,
     "wrap_guides": [100],
-    "buffer_font_family": "Ubuntu",
+    "buffer_font_family": ".ZedMono",
     "buffer_font_size": 14.0,
     "ui_font_size": 16.0,
     "scroll_beyond_last_line": "vertical_scroll_margin",

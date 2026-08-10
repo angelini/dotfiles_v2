@@ -5,7 +5,7 @@ from dotgen.fragment import ConfigFile, Fragment
 
 # Ensure macOS login shells read .bashrc
 _BASH_PROFILE = '[ -r "$HOME/.bashrc" ] && source "$HOME/.bashrc"\n'
-_PRIVATE_ALIAS_OVERLAY = '[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"\n'
+_PRIVATE_ALIAS_OVERLAY = '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh"\n'
 
 _SETUP = """\
 install_config "$DIR/.bashrc" "$HOME/.bashrc"

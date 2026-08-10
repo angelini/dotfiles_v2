@@ -239,7 +239,7 @@ if (
   set -e
   ensure_dir "$HOME/.local/bin"
   install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
-  install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
+  install_config "$DIR/config/starship/starship.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml"
 ); then
   component_end "starship" 0
 else

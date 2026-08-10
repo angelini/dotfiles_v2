@@ -75,6 +75,7 @@ mosh-agent() {
 
 # --- kubectl ---
 alias kc='kubectl'
+alias kcn='kubectl ns'
 alias kx='kubectx'
 alias kns='kubens'
 
@@ -133,5 +134,5 @@ get_sa_bindings() {
 }
 
 # --- dotfiles_deploy ---
-[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"
+[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh"
 

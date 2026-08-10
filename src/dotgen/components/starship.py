@@ -8,7 +8,7 @@ from dotgen.fragment import ConfigFile, Fragment
 _SETUP = """\
 ensure_dir "$HOME/.local/bin"
 install_script starship https://starship.rs/install.sh -y -b "$HOME/.local/bin"
-install_config "$DIR/config/starship/starship.toml" "$HOME/.config/starship.toml"
+install_config "$DIR/config/starship/starship.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml"
 """
 
 _BASHRC = """\
@@ -22,7 +22,7 @@ _DISABLED_MODULES: tuple[str, ...] = ("gcloud", "aws", "docker_context", "dotnet
 _TOML = tomli_w.dumps(
     {
         "format": "$directory$git_branch$git_status$kubernetes$line_break$character",
-        "add_newline": False,
+        "add_newline": True,
         "kubernetes": {
             "disabled": False,
             "format": "[$symbol$context( \\($namespace\\))]($style) ",

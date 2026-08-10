@@ -110,6 +110,7 @@ fi
 """
 
 _ALIASES = r"""alias kc='kubectl'
+alias kcn='kubectl ns'
 alias kx='kubectx'
 alias kns='kubens'
 

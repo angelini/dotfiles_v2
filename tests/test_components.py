@@ -234,8 +234,10 @@ def test_starship_emits_config_and_init() -> None:
     frag = Starship().render(ENVIRONMENTS["macos"])
     assert any(c.dest == "starship/starship.toml" for c in frag.configs)
     assert "starship init bash" in frag.bashrc
+    assert 'install_config "$DIR/config/starship/starship.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml"' in frag.setup
     cfg = next(c for c in frag.configs if c.dest == "starship/starship.toml").content
     assert 'format = "$directory$git_branch$git_status$kubernetes$line_break$character"' in cfg
+    assert "add_newline = true" in cfg
     assert "[kubernetes]" in cfg
     assert "context_pattern" in cfg
     for disabled in ("[gcloud]", "[aws]", "[docker_context]", "[dotnet]"):
@@ -263,7 +265,7 @@ def test_kubectl_per_os_branching() -> None:
     assert "kubie generate-completion" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
     aliases = Kubectl().render(ENVIRONMENTS["macos"]).alias
     assert "alias kca=" not in aliases
-    assert "alias kcn=" not in aliases
+    assert "alias kcn='kubectl ns'" in aliases
     assert "alias kcr=" not in aliases
     assert 'kubectl -n "${ns}" get secret "${secret}" -o json' in aliases
     assert "@base64d" in aliases
@@ -487,6 +489,7 @@ def test_zed_macos_only_and_emits_configs() -> None:
     settings = next(c for c in frag.configs if c.dest == "zed/settings.json").content
     assert '"cli_default_open_behavior": "new_window"' in settings
     assert '"diff_view_style": "unified"' in settings
+    assert '"buffer_font_family": ".ZedMono"' in settings
     assert '"**/deploy/helm/templates/**/*.yaml"' in settings
     macos = Zed().render(ENVIRONMENTS["macos"]).setup
     assert "install_cask zed" in macos
@@ -538,7 +541,7 @@ def test_dotfiles_deploy_emits_bashrc_alias_install_and_private_overlay() -> Non
         fragment = DotfilesDeploy().render(ENVIRONMENTS[env_name])
         assert 'install_config "$DIR/.bashrc" "$HOME/.bashrc"' in fragment.setup
         assert 'install_config "$DIR/alias.sh" "$HOME/.aliases"' in fragment.setup
-        assert fragment.alias == '[ -r "$HOME/.config/dotgen/private-aliases.sh" ] && source "$HOME/.config/dotgen/private-aliases.sh"\n'
+        assert fragment.alias == '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh"\n'
 
 
 def test_dotfiles_deploy_runs_last_in_every_env() -> None:
@@ -693,6 +696,10 @@ def test_pi_agent_sandbox_configs() -> None:
     assert '--ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells"' in script.content
     assert '--setenv XDG_RUNTIME_DIR "$runtime_dir"' in script.content
     assert "--unshare-net" not in script.content
+    assert "(allow network*)" in profile.content
+    assert '(literal "/private/var/run/mDNSResponder")' in profile.content
+    assert '(literal "/etc")' in profile.content
+    assert '(literal "/var")' in profile.content
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content
     assert "GEMINI_API_KEY" not in script.content
