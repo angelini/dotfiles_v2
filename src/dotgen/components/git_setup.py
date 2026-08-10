@@ -12,8 +12,6 @@ _GITCONFIG = """\
     format = ssh
 [commit]
     gpgsign = true
-[tag]
-    gpgsign = true
 [core]
     editor = hx
     excludesFile = ~/.gitignore_global
