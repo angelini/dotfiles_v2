@@ -38,8 +38,13 @@ ta() {
 
 # --- mosh ---
 mosh-agent() {
+  local kill_session=0
+  if [ "${1-}" = -k ]; then
+    kill_session=1
+    shift
+  fi
   if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-    printf 'usage: mosh-agent <host> [project]\n' >&2
+    printf 'usage: mosh-agent [-k] <host> [project]\n' >&2
     return 2
   fi
   local host="$1" project="${2-}"
@@ -50,7 +55,11 @@ mosh-agent() {
       ;;
   esac
   if [ "$#" -eq 1 ]; then
-    command mosh -- "$host" tmux new-session -A -s dev
+    if [ "$kill_session" -eq 1 ]; then
+      command mosh -- "$host" tmux kill-session -t "=dev"
+    else
+      command mosh -- "$host" tmux new-session -A -s dev
+    fi
     return
   fi
   case "$project" in
@@ -59,7 +68,9 @@ mosh-agent() {
       return 2
       ;;
   esac
-  command mosh -- "$host" /usr/local/bin/dotgen-agent-session start "$project"
+  local action="start"
+  [ "$kill_session" -eq 0 ] || action="kill"
+  command mosh -- "$host" /usr/local/bin/dotgen-agent-session "$action" "$project"
 }
 
 # --- kubectl ---

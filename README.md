@@ -111,22 +111,25 @@ The setup preflights non-root execution and sudo authentication before making ch
 The normal `macos` and `debian` environments install tmux and mosh; full Debian also installs Tmuxinator, while `debian-docker` installs none of them. From Ghostty on the Mac, enter either the generic session or a project session:
 
 ```bash
-mosh-agent <ssh-config-host>              # plain session: dev
-mosh-agent <ssh-config-host> dotfiles_v2  # Tmuxinator project: dotfiles_v2
+mosh-agent <ssh-config-host>                 # plain session: dev
+mosh-agent <ssh-config-host> dotfiles_v2     # Tmuxinator project: dotfiles_v2
+mosh-agent -k <ssh-config-host>              # end the dev session
+mosh-agent -k <ssh-config-host> dotfiles_v2  # end the dotfiles_v2 session
 ```
 
 A project name maps to an existing real directory at `~/repos/<project>` on the server. Names accept only letters, digits, `_`, and `-`; `dev` is reserved for the generic session. On first use, the Debian helper creates `~/.config/tmuxinator/<project>.yml` from the managed template and starts the project. Later connections attach to the existing session without duplicating windows. The initial layout has a 50/50 `work` window with a shell on the left and `hx .` on the right, followed by a full-window `agents` window running `claude`.
 
-The generic form executes `tmux new-session -A -s dev`; the project form executes `/usr/local/bin/dotgen-agent-session start <project>`. Mosh uses the existing SSH authentication and then needs inbound UDP 60000–61000 to reach the Debian server. Dotgen does not open host firewalls, cloud security groups, or NAT rules. Use an OpenSSH config host alias for non-default usernames, identity files, or SSH ports. After deployment, perform one real project attachment from the Mac or iOS client; ordinary tests do not traverse the complete SSH-to-mosh-server remote-command path.
+The generic form executes `tmux new-session -A -s dev`; the project form executes `/usr/local/bin/dotgen-agent-session start <project>`. With `-k` they instead execute `tmux kill-session -t =dev` and `dotgen-agent-session kill <project>`; the kill path leaves the generated project config in place, so a later `mosh-agent <host> <project>` starts the same layout again. Mosh uses the existing SSH authentication and then needs inbound UDP 60000–61000 to reach the Debian server. Dotgen does not open host firewalls, cloud security groups, or NAT rules. Use an OpenSSH config host alias for non-default usernames, identity files, or SSH ports. After deployment, perform one real project attachment from the Mac or iOS client; ordinary tests do not traverse the complete SSH-to-mosh-server remote-command path.
 
 Generated project configurations are persistent and are never silently replaced by deployment or connection. To apply a newer managed template, first end the project session after saving its work, then reset its config on the server:
 
 ```bash
 dotgen-agent-session init <project>   # create config without starting tmux
+dotgen-agent-session kill <project>   # end the session, keep the config
 dotgen-agent-session reset <project>  # regenerate from the managed template
 ```
 
-Reset refuses while the exact project session exists. Tmuxinator does not reconcile config changes into a live session, and ending a session terminates every process in its panes.
+Reset refuses while the exact project session exists. Kill requires it: with no such session it exits 2 and changes nothing. Unlike the other actions, kill needs neither `~/repos/<project>` nor the managed template, so a stale session survives a deleted repository and can still be ended. Tmuxinator does not reconcile config changes into a live session, and ending a session terminates every process in its panes.
 
 Mosh keeps the active terminal responsive and reconnects after sleep, Wi-Fi loss, or a client IP change. Tmux is the persistence boundary: Claude Code, Pi, and other processes in the named session continue after the terminal or mosh client exits. A new `mosh-agent` invocation reattaches. Neither tool preserves a live process across a Debian reboot or tmux server failure.
 

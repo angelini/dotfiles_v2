@@ -22,7 +22,7 @@ _PROJECT_HELPER = r"""#!/usr/bin/env bash
 set -euo pipefail
 
 usage() {
-  printf 'usage: dotgen-agent-session {init|start|reset} <project>\n' >&2
+  printf 'usage: dotgen-agent-session {init|start|reset|kill} <project>\n' >&2
   exit 2
 }
 
@@ -35,12 +35,19 @@ die() {
 action="$1"
 project="$2"
 case "$action" in
-  init|start|reset) ;;
+  init|start|reset|kill) ;;
   *) usage ;;
 esac
 case "$project" in
   ""|-*|dev|*[!A-Za-z0-9_-]*) die "invalid project name: $project" ;;
 esac
+
+# kill touches no config, so it must keep working after the repo or template is gone
+if [ "$action" = kill ]; then
+  tmux has-session -t "=$project" 2>/dev/null || die "no active project session: $project"
+  tmux kill-session -t "=$project"
+  exit 0
+fi
 
 repos="$HOME/repos"
 root="$repos/$project"

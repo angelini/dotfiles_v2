@@ -27,16 +27,18 @@ set -g renumber-windows on
 set -g status-position bottom
 set -g status-justify left
 set -g status-interval 5
-set -g status-style "bg=#1d1f21,fg=#c5c8c6"
+set -g status-style "bg=#efefef,fg=#4d4d4c"
 set -g status-left-length 40
 set -g status-right-length 80
-set -g status-left "#[fg=#1d1f21,bg=#81a2be,bold] #S #[fg=#81a2be,bg=#1d1f21,nobold]"
-set -g status-right "#[fg=#8abeb7,bg=#1d1f21]#[fg=#1d1f21,bg=#8abeb7] #H #[fg=#81a2be,bg=#8abeb7]#[fg=#1d1f21,bg=#81a2be,bold] %a %H:%M "
+set -g status-left "#[fg=#ffffff,bg=#4271ae,bold] #S #[fg=#4271ae,bg=#efefef,nobold]"
+set -g status-right "#[fg=#3e999f,bg=#efefef]#[fg=#ffffff,bg=#3e999f] #H #[fg=#4271ae,bg=#3e999f]#[fg=#ffffff,bg=#4271ae,bold] %a %H:%M "
 setw -g window-status-separator ""
-setw -g window-status-format "#[fg=#969896,bg=#1d1f21] #I:#W#F "
-setw -g window-status-current-format "#[fg=#1d1f21,bg=#b294bb]#[fg=#1d1f21,bg=#b294bb,bold] #I:#W#F #[fg=#b294bb,bg=#1d1f21,nobold]"
-set -g message-style "bg=#f0c674,fg=#1d1f21,bold"
-set -g mode-style "bg=#81a2be,fg=#1d1f21,bold"
+setw -g window-status-format "#[fg=#8e908c,bg=#efefef] #I:#W#F "
+setw -g window-status-current-format "#[fg=#8959a8,bg=#efefef]#[fg=#ffffff,bg=#8959a8,bold] #I:#W#F #[fg=#8959a8,bg=#efefef,nobold]"
+set -g pane-border-style "fg=#d6d6d6"
+set -g pane-active-border-style "fg=#4271ae"
+set -g message-style "bg=#eab700,fg=#4d4d4c,bold"
+set -g mode-style "bg=#4271ae,fg=#ffffff,bold"
 bind r source-file ~/.tmux.conf \; display-message "tmux config reloaded"
 bind | split-window -h -c "#{pane_current_path}"
 bind - split-window -v -c "#{pane_current_path}"
@@ -124,6 +126,7 @@ def test_tmuxinator_render_contract() -> None:
     assert helper.content.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
     assert 'exec 9>"$lock"\nflock -x 9' in helper.content
     assert 'rm -f -- "$lock"' not in helper.content
+    assert "{init|start|reset|kill}" in helper.content
     assert "focused_pane" not in fragment.configs[0].content
     assert sum(line.startswith("  - ") for line in fragment.configs[0].content.splitlines()) == 2
 
@@ -287,6 +290,43 @@ def test_project_helper_reset_refuses_active_session(tmp_path: Path) -> None:
     assert not mux_log.exists()
 
 
+def test_project_helper_kill_stops_active_session_only(tmp_path: Path) -> None:
+    helper, home, env, tmux_log, mux_log = _prepare_project_helper(tmp_path)
+    config = home / ".config" / "tmuxinator" / "project.yml"
+    config.parent.mkdir(parents=True)
+    config.write_text("sentinel\n")
+
+    result = _run_project_helper(helper, {**env, "TMUX_HAS_SESSION_RC": "0"}, "kill", "project")
+
+    assert result.returncode == 0, result.stderr
+    assert config.read_text() == "sentinel\n"
+    assert tmux_log.read_bytes() == b"has-session\0-t\0=project\0\nkill-session\0-t\0=project\0\n"
+    assert not mux_log.exists()
+
+
+def test_project_helper_kill_reports_missing_session(tmp_path: Path) -> None:
+    helper, _, env, tmux_log, mux_log = _prepare_project_helper(tmp_path)
+
+    result = _run_project_helper(helper, env, "kill", "project")
+
+    assert result.returncode == 2
+    assert "no active project session" in result.stderr
+    assert tmux_log.read_bytes() == b"has-session\0-t\0=project\0\n"
+    assert not mux_log.exists()
+
+
+def test_project_helper_kill_survives_missing_repo_and_template(tmp_path: Path) -> None:
+    helper, home, env, tmux_log, mux_log = _prepare_project_helper(tmp_path)
+    (home / "repos" / "project").rmdir()
+    (home / ".config" / "dotgen" / "tmuxinator" / "default.yml").unlink()
+
+    result = _run_project_helper(helper, {**env, "TMUX_HAS_SESSION_RC": "0"}, "kill", "project")
+
+    assert result.returncode == 0, result.stderr
+    assert tmux_log.read_bytes() == b"has-session\0-t\0=project\0\nkill-session\0-t\0=project\0\n"
+    assert not mux_log.exists()
+
+
 def test_project_helper_refuses_first_init_session_collision(tmp_path: Path) -> None:
     helper, home, env, tmux_log, mux_log = _prepare_project_helper(tmp_path)
 
@@ -339,6 +379,9 @@ def test_project_helper_failed_reset_preserves_config(tmp_path: Path) -> None:
         ("start", "café"),
         ("unknown", "project"),
         ("start", "project", "extra"),
+        ("kill", "dev"),
+        ("kill", "bad.name"),
+        ("kill", "project", "extra"),
     ],
 )
 def test_project_helper_rejects_invalid_input_before_tools(tmp_path: Path, args: tuple[str, ...]) -> None:
@@ -442,6 +485,14 @@ def test_ta_rejects_invalid_input_before_tmux(tmp_path: Path, command: str) -> N
             'mosh-agent "user@dev host" project-1',
             b"--\0user@dev host\0/usr/local/bin/dotgen-agent-session\0start\0project-1\0\n",
         ),
+        (
+            "mosh-agent -k server",
+            b"--\0server\0tmux\0kill-session\0-t\0=dev\0\n",
+        ),
+        (
+            "mosh-agent -k server project-1",
+            b"--\0server\0/usr/local/bin/dotgen-agent-session\0kill\0project-1\0\n",
+        ),
     ],
 )
 def test_mosh_agent_preserves_remote_argv(tmp_path: Path, command: str, expected: bytes) -> None:
@@ -464,6 +515,12 @@ def test_mosh_agent_preserves_remote_argv(tmp_path: Path, command: str, expected
         "mosh-agent server bad/name",
         "mosh-agent server café",
         "mosh-agent server one extra",
+        "mosh-agent -k",
+        'mosh-agent -k ""',
+        "mosh-agent -k --bad",
+        "mosh-agent -k server dev",
+        "mosh-agent -k server bad.name",
+        "mosh-agent -k server one extra",
     ],
 )
 def test_mosh_agent_rejects_invalid_input_before_mosh(tmp_path: Path, command: str) -> None:
