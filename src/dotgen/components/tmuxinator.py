@@ -11,10 +11,6 @@ startup_pane: 0
 
 windows:
   - work:
-      layout: even-horizontal
-      panes:
-        - shell:
-        - editor: hx .
   - agents: claude
 """
 

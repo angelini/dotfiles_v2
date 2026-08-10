@@ -3,7 +3,6 @@
 0600  72dd8e8225b400124afecbf4aafc67277ec9e43aff1c085b8d12a2c16186fea8  managed-settings/pi.json
 0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0600  f330dbe84c0436a2b71181fa66421ef2ead8e2f8fed2860507a51b16755cf7f1  pi/agent/models.json
-0644  0544efa348e3b1ebf82871047d5a4ad096eb9f52c016e9f79a1d20818b1ee552  tmuxinator/default.yml
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
 0644  54a350f3be82db50bc82f4f973384e3420a613eed7792e4edfdafafb008027c0  git/gitconfig
 0644  76a246010494bbfc06de685273b00f9da01dafdf9085b7fa8c549e33c477ad39  helix/config.toml
@@ -13,6 +12,7 @@
 0644  a62ded06e54c0bfce18ee0bf022b20efb6c05ee3e30d426da2cc9b9a00abeed2  bash/bash_profile
 0644  abd247a9a2cf05cb44d5317bf50efcc6aa9a9ad0cbb21542be7fbc89b4b25a7d  tmux/tmux.conf
 0644  bb3fd9de59f59ba79c5e89b37cd33e320fba9acb459fe3f01a299b78ff126f80  git/gitignore_global
+0644  f9f3cc61dfe2bba162e2ba06109255d4ae35756693ced5a0fed8595ccb5aff15  tmuxinator/default.yml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
 0755  3536a130320bd631c92cb78eaf7629412d8ea895e58f096690e82a40c51b12bc  pi/sandbox/pi-sandbox.sh
 0755  8fc3401d60e1d9b79c1dc2c9e6ede758edb7232024cecc8b0324db8ec7d5c10a  tmuxinator/dotgen-agent-session
