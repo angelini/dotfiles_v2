@@ -18,6 +18,8 @@ _GITCONFIG = """\
     pager = delta
 [interactive]
     diffFilter = delta --color-only
+[delta]
+    true-color = always
 [push]
     default = current
 [pull]

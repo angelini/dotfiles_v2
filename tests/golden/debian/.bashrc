@@ -10,6 +10,8 @@ bin_exists() { command -v "$1" >/dev/null 2>&1; }
 # --- bash_base ---
 ulimit -n 65536
 
+export COLORTERM="${COLORTERM:-truecolor}"
+
 set_win_title() {
   printf '\033]0;%s@%s:%s\007' "${USER:-?}" "${HOSTNAME%%.*}" "${PWD/#$HOME/~}"
 }

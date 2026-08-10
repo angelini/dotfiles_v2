@@ -6,6 +6,8 @@ from dotgen.types import OS
 
 _BASHRC = r"""ulimit -n 65536
 
+export COLORTERM="${COLORTERM:-truecolor}"
+
 set_win_title() {
   printf '\033]0;%s@%s:%s\007' "${USER:-?}" "${HOSTNAME%%.*}" "${PWD/#$HOME/~}"
 }
