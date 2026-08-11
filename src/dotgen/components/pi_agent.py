@@ -155,9 +155,15 @@ _resolve_path() {
   cd "$1" 2>/dev/null && pwd -P
 }
 
+_fnm_default_bin() {
+  local bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"
+  [ -x "$bin/node" ] || return 1
+  printf '%s\n' "$bin"
+}
+
 main() {
   local repos="$HOME/repos" memory_dir="$HOME/.pi/memory"
-  local cwd real_repos pi_bin transformers_cache transformers_cache_target
+  local cwd real_repos node_bin pi_bin transformers_cache transformers_cache_target
   cwd="$(_resolve_path "$PWD")" || _die "cannot resolve current directory: $PWD"
   real_repos="$(_resolve_path "$repos")" || _die "missing repos directory: $repos"
   case "$cwd" in
@@ -165,7 +171,12 @@ main() {
     *) _die "run pi-sandbox from within $repos" ;;
   esac
 
-  pi_bin="$(command -v pi)" || _die "pi binary not found"
+  # fnm's use-on-cd repoints this shell's node version for the rest of its life, and npm
+  # globals are per-version, so pin the sandbox to the version the pi packages were installed for
+  node_bin="$(_fnm_default_bin)" || _die "fnm default node installation not found"
+  PATH="$node_bin:$PATH"
+
+  pi_bin="$(command -v pi)" || _die "pi binary not found in $node_bin"
   [ -x "$pi_bin" ] || _die "pi binary is not executable: $pi_bin"
   transformers_cache="$memory_dir/transformers-cache"
   transformers_cache_target="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"

@@ -882,6 +882,9 @@ def test_pi_agent_sandbox_configs() -> None:
     assert '(literal "/private/var/run/mDNSResponder")' in profile.content
     assert '(literal "/etc")' in profile.content
     assert '(literal "/var")' in profile.content
+    assert 'bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"' in script.content
+    assert 'node_bin="$(_fnm_default_bin)"' in script.content
+    assert script.content.index('PATH="$node_bin:$PATH"') < script.content.index('pi_bin="$(command -v pi)"')
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content
     assert "GEMINI_API_KEY" not in script.content
