@@ -24,6 +24,9 @@ _SHA256: dict[OS, dict[str, str]] = {
 _CONFIG = """\
 onboarding = false
 
+[theme]
+name = "catppuccin-latte"
+
 [update]
 channel = "stable"
 version_check = false

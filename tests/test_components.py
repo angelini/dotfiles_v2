@@ -266,7 +266,23 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert 'install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"' in fragment.setup
         assert 'install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"' in fragment.setup
         configs = {config.dest: config for config in fragment.configs}
-        assert configs["herdr/config.toml"].content == ('onboarding = false\n\n[update]\nchannel = "stable"\nversion_check = false\nmanifest_check = true\n\n[remote]\nmanage_ssh_config = true\n')
+        assert (
+            configs["herdr/config.toml"].content
+            == """\
+onboarding = false
+
+[theme]
+name = "catppuccin-latte"
+
+[update]
+channel = "stable"
+version_check = false
+manifest_check = true
+
+[remote]
+manage_ssh_config = true
+"""
+        )
         helper = configs["herdr/herd-agent"]
         assert helper.mode == 0o755
         assert 'exec "$herdr_bin" --remote "$1"' in helper.content
