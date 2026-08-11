@@ -95,8 +95,6 @@ class ProductionArtifactBuilder:
                     "CGO_ENABLED": "0",
                     "GOOS": artifact.goos,
                     "GOARCH": artifact.goarch,
-                    "GOMODCACHE": str(self._work_root / "gomodcache"),
-                    "GOCACHE": str(self._work_root / "gocache"),
                 }
             )
             command = [

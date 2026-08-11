@@ -4,8 +4,8 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment, GeneratedBinary
 from dotgen.types import OS
 
-_SOURCE_URL = "https://tangled.org/oppi.li/stinkpot/archive/cdf87ffcd36e96f3d49316d57fa17cc6ea8371df?format=tar.gz"
-_SOURCE_SHA256 = "3482ea0c2e729de6e24067d97e91eb969cde2c3a3d9610ca2f0f745b2b20ef32"
+_SOURCE_URL = "https://tangled.org/oppi.li/stinkpot/archive/8fa6de51adebb1ddeffbfb3b79c0885c2403575a?format=tar.gz"
+_SOURCE_SHA256 = "50383947fa4f42785066a7e368e42b2db5ff01c100e20a42116c87568508113d"
 _GO_VERSION = "1.26.4"
 
 _TARGETS: dict[OS, tuple[tuple[str, str], ...]] = {

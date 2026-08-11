@@ -137,8 +137,8 @@ def test_production_builder_downloads_once_builds_targets_and_writes_manifest(tm
         assert env["GOFLAGS"] == ""
         assert env["GOEXPERIMENT"] == ""
         assert "GOAMD64" not in env
-        assert not Path(env["GOMODCACHE"]).is_relative_to(tmp_path)
-        assert not Path(env["GOCACHE"]).is_relative_to(tmp_path)
+        assert "GOMODCACHE" not in env
+        assert "GOCACHE" not in env
 
     manifest = (tmp_path / "artifacts/stinkpot/SHA256SUMS").read_text().splitlines()
     assert manifest == sorted(set(manifest))

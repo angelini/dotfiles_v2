@@ -21,7 +21,7 @@ just clean              # rm -rf dist
 
 ### Stinkpot shell history
 
-Bundles cross-build [Stinkpot](https://tangled.org/oppi.li/stinkpot) from pinned commit `cdf87ffcd36e96f3d49316d57fa17cc6ea8371df` on the build host. The effective compiler must be exactly Go `1.26.4`; `GOTOOLCHAIN=go1.26.4+auto` allows a sufficiently recent Go launcher to fetch that toolchain and module dependencies on a cold build. Target machines do not need Go or network access for Stinkpot.
+Bundles cross-build [Stinkpot](https://tangled.org/oppi.li/stinkpot) from pinned commit `8fa6de51adebb1ddeffbfb3b79c0885c2403575a` on the build host. The effective compiler must be exactly Go `1.26.4`; `GOTOOLCHAIN=go1.26.4+auto` allows a sufficiently recent Go launcher to fetch that toolchain and module dependencies on a cold build. Builds use Go's standard module and build caches, while source extraction and compiler output remain isolated in temporary directories. Target machines do not need Go or network access for Stinkpot.
 
 The supported bundle matrix is Linux amd64 and arm64 in `debian` and `debian-docker`, and Darwin arm64 in `macos`. Darwin amd64 is deliberately unsupported and deployment fails rather than using Rosetta, another artifact, or a destination-side build. Binaries and checksums are packaged under `artifacts/stinkpot/`; setup verifies the selected artifact and atomically installs it as `~/bin/stinkpot`.
 

@@ -9,8 +9,8 @@ from dotgen.components.stinkpot import Stinkpot
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import _decorate  # pyright: ignore[reportPrivateUsage]
 
-_SOURCE_URL = "https://tangled.org/oppi.li/stinkpot/archive/cdf87ffcd36e96f3d49316d57fa17cc6ea8371df?format=tar.gz"
-_SOURCE_SHA256 = "3482ea0c2e729de6e24067d97e91eb969cde2c3a3d9610ca2f0f745b2b20ef32"
+_SOURCE_URL = "https://tangled.org/oppi.li/stinkpot/archive/8fa6de51adebb1ddeffbfb3b79c0885c2403575a?format=tar.gz"
+_SOURCE_SHA256 = "50383947fa4f42785066a7e368e42b2db5ff01c100e20a42116c87568508113d"
 
 
 def test_stinkpot_artifact_matrix_is_exact() -> None:
