@@ -16,7 +16,9 @@ SHIM_FUNCTIONS: tuple[str, ...] = (
     "service_enable",
     "service_mask",
     "bin_version_matches",
+    "sha256_file",
     "download_bin",
+    "download_bin_sha256",
     "download_tar_bin",
     "link_file",
     "ensure_dir",
@@ -484,6 +486,14 @@ bin_version_matches() {
   awk -v expected="$expected" '{ for (i = 1; i <= NF; i++) if ($i == expected) found = 1 } END { exit(found ? 0 : 1) }' <<< "$output"
 }
 
+sha256_file() {
+  case "$(detect_os)" in
+    debian) sha256sum "$1" | awk '{print $1}' ;;
+    macos) shasum -a 256 "$1" | awk '{print $1}' ;;
+    *) error "sha256_file: unsupported OS: $(detect_os)"; return 1 ;;
+  esac
+}
+
 download_bin() {
   local name="$1" url="$2" expected="${3:-}"
   if [ "$#" -gt 2 ]; then shift 3; else shift 2; fi
@@ -494,6 +504,46 @@ download_bin() {
   curl -fsSL "$url" -o "$HOME/bin/$name"
   chmod +x "$HOME/bin/$name"
 }
+
+download_bin_sha256() (
+  if [ "$#" -lt 4 ]; then
+    error "download_bin_sha256: expected name, URL, SHA-256, and version"
+    exit 2
+  fi
+  local name="$1" url="$2" checksum="$3" expected="$4"
+  local installed tmp="" actual
+  shift 4
+  if [ "${#checksum}" -ne 64 ] || [[ "$checksum" = *[!0-9a-f]* ]]; then
+    error "download_bin_sha256: invalid SHA-256 for $name"
+    exit 2
+  fi
+  installed="$HOME/bin/$name"
+  if [ -e "$installed" ] || [ -L "$installed" ]; then
+    if [ ! -f "$installed" ] || [ -L "$installed" ]; then
+      error "download_bin_sha256: unsafe destination for $name: $installed"
+      exit 1
+    fi
+  fi
+  if [ -x "$installed" ] && [ "$(sha256_file "$installed")" = "$checksum" ] && bin_version_matches "$installed" "$expected" "$@"; then
+    exit 0
+  fi
+  ensure_dir "$HOME/bin"
+  tmp="$(mktemp "$HOME/bin/.$name.XXXXXX")"
+  trap 'rm -f -- "$tmp"' EXIT
+  curl -fsSL "$url" -o "$tmp"
+  actual="$(sha256_file "$tmp")"
+  if [ "$actual" != "$checksum" ]; then
+    error "download_bin_sha256: checksum mismatch for $name"
+    exit 1
+  fi
+  chmod 0755 "$tmp"
+  if ! bin_version_matches "$tmp" "$expected" "$@"; then
+    error "download_bin_sha256: version mismatch for $name"
+    exit 1
+  fi
+  mv -f -- "$tmp" "$installed"
+  tmp=""
+)
 
 download_tar_bin() {
   local name="$1" url="$2" inner="${3:-$1}" expected="${4:-}"

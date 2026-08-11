@@ -52,6 +52,6 @@ clean:
     rm -rf dist
 
 shellcheck:
-    shellcheck -s bash --exclude=SC1090,SC1091 dist/*/*.sh dist/*/.bashrc dist/debian/config/tmuxinator/dotgen-agent-session
+    shellcheck -s bash --exclude=SC1090,SC1091 dist/*/*.sh dist/*/.bashrc dist/debian/config/tmuxinator/dotgen-agent-session dist/*/config/herdr/herd-agent
 
 ci: lint typecheck test build-all shellcheck

@@ -411,6 +411,10 @@ if (
   install_config "$DIR/.bashrc" "$HOME/.bashrc"
   install_config "$DIR/alias.sh" "$HOME/.aliases"
   install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
+  private_dotfiles_installer="$HOME/repos/dotfiles-private/install.sh"
+  if [ -r "$private_dotfiles_installer" ]; then
+    PATH="$HOME/.local/bin:$(printenv PATH)" bash "$private_dotfiles_installer"
+  fi
 ); then
   component_end "dotfiles_deploy" 0
 else

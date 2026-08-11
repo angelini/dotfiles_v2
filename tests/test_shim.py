@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os as os_module
 import re
@@ -809,6 +810,81 @@ if bin_version_matches "$HOME/bin/tool" v2.0 version --short; then exit 9; fi
     assert calls.read_text() == "x"
     assert subprocess.check_output([target, "version", "--short"], text=True) == "tool v2.0.0\n"
     assert result.stdout == ""
+
+
+@pytest.mark.parametrize("target_os", list(OS), ids=[os.value for os in OS])
+def test_download_bin_sha256_verifies_reuses_and_preserves_on_mismatch(tmp_path: Path, target_os: OS) -> None:
+    home = tmp_path / "home"
+    target = home / "bin" / "tool"
+    target.parent.mkdir(parents=True)
+    _write_executable(target, '#!/usr/bin/env bash\nprintf "tool v1.0.0\\n"\n')
+    payload = tmp_path / "payload"
+    payload.write_text('#!/usr/bin/env bash\n[ "$*" = "--version" ] || exit 7\nprintf "tool v2.0.0\\n"\n')
+    checksum = hashlib.sha256(payload.read_bytes()).hexdigest()
+    wrong_version_payload = tmp_path / "wrong-version-payload"
+    wrong_version_payload.write_text('#!/usr/bin/env bash\n[ "$*" = "--version" ] || exit 7\nprintf "tool v2.5.0\\n"\n')
+    wrong_version_checksum = hashlib.sha256(wrong_version_payload.read_bytes()).hexdigest()
+    calls = tmp_path / "curl-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{OSShim(target_os).render()}
+export HOME={shlex.quote(str(home))}
+export PAYLOAD={shlex.quote(str(payload))}
+export CALLS={shlex.quote(str(calls))}
+curl() {{
+  printf x >> "$CALLS"
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then
+      command cp "$PAYLOAD" "$2"
+      return 0
+    fi
+    shift
+  done
+  return 2
+}}
+download_bin_sha256 tool https://example.test/tool {checksum} v2.0.0 --version
+download_bin_sha256 tool https://example.test/tool {checksum} v2.0.0 --version
+PAYLOAD={shlex.quote(str(wrong_version_payload))}
+if download_bin_sha256 tool https://example.test/tool {wrong_version_checksum} v3.0.0 --version; then exit 9; fi
+printf tampered > "$PAYLOAD"
+if download_bin_sha256 tool https://example.test/tool {wrong_version_checksum} v3.0.0 --version; then exit 9; fi
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "xxx"
+    assert subprocess.check_output([target, "--version"], text=True) == "tool v2.0.0\n"
+    assert "version mismatch for tool" in result.stderr
+    assert "checksum mismatch for tool" in result.stderr
+    assert not list(target.parent.glob(".tool.*"))
+
+
+def test_download_bin_sha256_rejects_directory_destination(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = home / "bin" / "tool"
+    target.mkdir(parents=True)
+    payload = tmp_path / "payload"
+    payload.write_text('#!/usr/bin/env bash\nprintf "tool v2.0.0\\n"\n')
+    checksum = hashlib.sha256(payload.read_bytes()).hexdigest()
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{_macos_shim()}
+export HOME={shlex.quote(str(home))}
+curl() {{ command cp {shlex.quote(str(payload))} "$4"; }}
+download_bin_sha256 tool https://example.test/tool {checksum} v2.0.0 --version
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 1
+    assert "unsafe destination for tool" in result.stderr
+    assert target.is_dir()
+    assert not list(target.iterdir())
 
 
 def test_download_tar_bin_reuses_matching_version(tmp_path: Path) -> None:

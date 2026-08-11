@@ -13,6 +13,13 @@ install_config "$DIR/alias.sh" "$HOME/.aliases"
 install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
 """
 
+_PRIVATE_OVERLAY_SETUP = """\
+private_dotfiles_installer="$HOME/repos/dotfiles-private/install.sh"
+if [ -r "$private_dotfiles_installer" ]; then
+  PATH="$HOME/.local/bin:$(printenv PATH)" bash "$private_dotfiles_installer"
+fi
+"""
+
 
 @dataclass(frozen=True)
 class DotfilesDeploy:
@@ -23,7 +30,7 @@ class DotfilesDeploy:
 
     def render(self, env: Environment) -> Fragment:
         return Fragment(
-            setup=_SETUP,
+            setup=_SETUP + _PRIVATE_OVERLAY_SETUP,
             alias=_PRIVATE_ALIAS_OVERLAY,
             configs=(ConfigFile(dest="bash/bash_profile", content=_BASH_PROFILE),),
         )

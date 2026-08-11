@@ -1,5 +1,7 @@
 import json
+import os
 import shlex
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,7 @@ from dotgen.components.git_setup import GitSetup
 from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
+from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
@@ -61,6 +64,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
         Tmuxinator,
         GitSetup,
         Helix,
+        Herdr,
         Starship,
         Zoxide,
         Kubectl,
@@ -230,6 +234,126 @@ def test_helix_emits_config_and_editor_env(env: Environment) -> None:
     assert "EDITOR=hx" in frag.bashrc
 
 
+def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
+    herdr = Herdr()
+    assert herdr.applies_to(ENVIRONMENTS["debian"])
+    assert herdr.applies_to(ENVIRONMENTS["macos"])
+    assert not herdr.applies_to(ENVIRONMENTS["debian-docker"])
+
+    expected_assets = {
+        "debian": (
+            "herdr-linux-${arch}",
+            "b872ea7e40fa2cb17e857ac9b62b1bf26db7b403c622f5d2f3f5b35f6e9acd28",
+            "f647ac66468d9efbc642fe534fb284468f0aea60641606fc008dfc0d82a3ca87",
+        ),
+        "macos": (
+            "herdr-macos-${arch}",
+            "77cb5afd6c8fcaaaf3bc28e474ec01c209331ad08094e20d7f8aa9b0bb78d649",
+            "d53a9f93fccfdfcc55632927bf51002f5add0aa7990bcdf508ffbd84ac658178",
+        ),
+    }
+    for env_name, (asset, x86_sha, arm_sha) in expected_assets.items():
+        fragment = herdr.render(ENVIRONMENTS[env_name])
+        assert f"https://github.com/herdrdev/herdr/releases/download/v0.8.0/{asset}" in fragment.setup
+        assert f"x86_64) arch=x86_64; checksum={x86_sha}" in fragment.setup
+        assert f"aarch64|arm64) arch=aarch64; checksum={arm_sha}" in fragment.setup
+        assert "download_bin_sha256 herdr" in fragment.setup
+        assert '"0.8.0" --version' in fragment.setup
+        assert 'remote_bin="$HOME/.local/bin/herdr"' in fragment.setup
+        assert 'error "unsafe Herdr remote binary destination: $remote_bin"' in fragment.setup
+        assert 'link_file "$HOME/bin/herdr" "$remote_bin"' in fragment.setup
+        assert 'error "failed to publish Herdr remote binary: $remote_bin"' in fragment.setup
+        assert 'install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"' in fragment.setup
+        assert 'install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"' in fragment.setup
+        configs = {config.dest: config for config in fragment.configs}
+        assert configs["herdr/config.toml"].content == ('onboarding = false\n\n[update]\nchannel = "stable"\nversion_check = false\nmanifest_check = true\n\n[remote]\nmanage_ssh_config = true\n')
+        helper = configs["herdr/herd-agent"]
+        assert helper.mode == 0o755
+        assert 'exec "$herdr_bin" --remote "$1"' in helper.content
+        assert "ssh " not in helper.content
+
+    for env_name in ("debian", "macos"):
+        assert [component.name for component in ENVIRONMENTS[env_name].components].count("herdr") == 1
+    assert "herdr" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
+
+
+@pytest.mark.parametrize("destination_kind", ["directory", "fifo"])
+def test_herdr_setup_rejects_unsafe_remote_binary_destination(tmp_path: Path, destination_kind: str) -> None:
+    home = tmp_path / "home"
+    remote_bin = home / ".local/bin/herdr"
+    remote_bin.parent.mkdir(parents=True)
+    if destination_kind == "directory":
+        remote_bin.mkdir()
+    else:
+        os.mkfifo(remote_bin)
+    config_touched = tmp_path / "config-touched"
+    setup = Herdr().render(ENVIRONMENTS["macos"]).setup
+    script = tmp_path / "setup.sh"
+    script.write_text(
+        f"""set -euo pipefail
+error() {{ printf '%s\\n' "$*" >&2; }}
+detect_arch() {{ printf 'arm64\\n'; }}
+download_bin_sha256() {{ :; }}
+ensure_dir() {{ mkdir -p "$1"; }}
+link_file() {{ ln -sf "$1" "$2"; }}
+install_config() {{ : > "$CONFIG_TOUCHED"; }}
+DIR={shlex.quote(str(tmp_path / "bundle"))}
+{setup}
+"""
+    )
+
+    result = subprocess.run(
+        ["bash", str(script)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"HOME": str(home), "CONFIG_TOUCHED": str(config_touched), "PATH": "/usr/bin:/bin"},
+    )
+
+    assert result.returncode == 1
+    assert "unsafe Herdr remote binary destination" in result.stderr
+    assert not config_touched.exists()
+    if destination_kind == "directory":
+        assert remote_bin.is_dir()
+        assert not list(remote_bin.iterdir())
+    else:
+        assert remote_bin.stat().st_mode & 0o170000 == 0o010000
+
+
+def test_herd_agent_executes_managed_binary(tmp_path: Path) -> None:
+    helper = next(config for config in Herdr().render(ENVIRONMENTS["macos"]).configs if config.dest == "herdr/herd-agent")
+    home = tmp_path / "home"
+    bin_dir = home / ".local/bin"
+    bin_dir.mkdir(parents=True)
+    herdr = bin_dir / "herdr"
+    herdr.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$HERDR_ARGS"\n')
+    herdr.chmod(0o755)
+    script = tmp_path / "herd-agent"
+    script.write_text(helper.content)
+    script.chmod(helper.mode)
+    args_file = tmp_path / "args"
+    env = {"HOME": str(home), "HERDR_ARGS": str(args_file), "PATH": "/usr/bin:/bin"}
+
+    result = subprocess.run([script, "workbox"], check=False, capture_output=True, text=True, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text() == "--remote\nworkbox\n"
+
+    invalid = subprocess.run([script, "--bad"], check=False, capture_output=True, text=True, env=env)
+
+    assert invalid.returncode == 2
+    assert "usage: herd-agent <ssh-config-host>" in invalid.stderr
+    assert args_file.read_text() == "--remote\nworkbox\n"
+
+    herdr.unlink()
+    herdr.mkdir()
+    invalid_binary = subprocess.run([script, "workbox"], check=False, capture_output=True, text=True, env=env)
+
+    assert invalid_binary.returncode == 1
+    assert "managed Herdr binary is missing or invalid" in invalid_binary.stderr
+    assert args_file.read_text() == "--remote\nworkbox\n"
+
+
 def test_starship_emits_config_and_init() -> None:
     frag = Starship().render(ENVIRONMENTS["macos"])
     assert any(c.dest == "starship/starship.toml" for c in frag.configs)
@@ -348,6 +472,7 @@ def test_environment_component_distribution() -> None:
         "stinkpot",
         "tmux",
         "mosh",
+        "herdr",
         "helix",
         "starship",
         "zoxide",
@@ -537,11 +662,52 @@ def test_node_fnm_activates_latest_lts_during_setup() -> None:
 
 
 def test_dotfiles_deploy_emits_bashrc_alias_install_and_private_overlay() -> None:
-    for env_name in ("debian", "macos"):
-        fragment = DotfilesDeploy().render(ENVIRONMENTS[env_name])
+    for env in ENVIRONMENTS.values():
+        fragment = DotfilesDeploy().render(env)
         assert 'install_config "$DIR/.bashrc" "$HOME/.bashrc"' in fragment.setup
         assert 'install_config "$DIR/alias.sh" "$HOME/.aliases"' in fragment.setup
+        assert 'private_dotfiles_installer="$HOME/repos/dotfiles-private/install.sh"' in fragment.setup
+        assert '[ -r "$private_dotfiles_installer" ]' in fragment.setup
+        assert 'PATH="$HOME/.local/bin:$(printenv PATH)" bash "$private_dotfiles_installer"' in fragment.setup
         assert fragment.alias == '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh"\n'
+
+
+@pytest.mark.parametrize("env_name", ENVIRONMENTS)
+def test_dotfiles_deploy_refreshes_private_overlay_with_local_starship(tmp_path: Path, env_name: str) -> None:
+    home = tmp_path / "home"
+    bundle = tmp_path / "bundle"
+    for relative in (".bashrc", "alias.sh", "config/bash/bash_profile"):
+        path = bundle / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{relative}\n")
+
+    public_starship = home / ".config/starship.toml"
+    public_starship.parent.mkdir(parents=True)
+    public_starship.write_text("add_newline = true\n")
+
+    starship = home / ".local/bin/starship"
+    starship.parent.mkdir(parents=True)
+    starship.write_text("#!/usr/bin/env bash\nexit 0\n")
+    starship.chmod(0o755)
+
+    private_installer = home / "repos/dotfiles-private/install.sh"
+    private_installer.parent.mkdir(parents=True)
+    private_installer.write_text(
+        '#!/usr/bin/env bash\nset -euo pipefail\ncommand -v starship >/dev/null\ngrep -Fq \'add_newline = true\' "${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml"\n: > "$HOME/private-installer-ran"\n'
+    )
+
+    setup = DotfilesDeploy().render(ENVIRONMENTS[env_name]).setup
+    script = f'set -euo pipefail\nDIR=$1\ninstall_config() {{ mkdir -p "$(dirname "$2")"; cp "$1" "$2"; }}\n{setup}'
+    result = subprocess.run(
+        ["/bin/bash", "-c", script, "_", str(bundle)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (home / "private-installer-ran").is_file()
 
 
 def test_dotfiles_deploy_runs_last_in_every_env() -> None:

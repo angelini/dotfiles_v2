@@ -223,6 +223,39 @@ else
   _rc=$?; component_end "mosh" "$_rc"; exit "$_rc"
 fi
 
+# --- herdr ---
+component_begin "herdr"
+if (
+  set -e
+  _install_herdr() {
+    local arch checksum remote_bin
+    case "$(detect_arch)" in
+      x86_64) arch=x86_64; checksum=b872ea7e40fa2cb17e857ac9b62b1bf26db7b403c622f5d2f3f5b35f6e9acd28 ;;
+      aarch64|arm64) arch=aarch64; checksum=f647ac66468d9efbc642fe534fb284468f0aea60641606fc008dfc0d82a3ca87 ;;
+      *) error "unsupported arch for Herdr: $(detect_arch)"; return 1 ;;
+    esac
+    download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.0/herdr-linux-${arch}" "$checksum" "0.8.0" --version
+    ensure_dir "$HOME/.local/bin"
+    remote_bin="$HOME/.local/bin/herdr"
+    if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then
+      error "unsafe Herdr remote binary destination: $remote_bin"
+      return 1
+    fi
+    link_file "$HOME/bin/herdr" "$remote_bin"
+    if [ ! -f "$remote_bin" ] || [ ! -x "$remote_bin" ]; then
+      error "failed to publish Herdr remote binary: $remote_bin"
+      return 1
+    fi
+    install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
+    install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
+  }
+  _install_herdr
+); then
+  component_end "herdr" 0
+else
+  _rc=$?; component_end "herdr" "$_rc"; exit "$_rc"
+fi
+
 # --- helix ---
 component_begin "helix"
 if (
@@ -864,6 +897,10 @@ if (
   install_config "$DIR/.bashrc" "$HOME/.bashrc"
   install_config "$DIR/alias.sh" "$HOME/.aliases"
   install_config "$DIR/config/bash/bash_profile" "$HOME/.bash_profile"
+  private_dotfiles_installer="$HOME/repos/dotfiles-private/install.sh"
+  if [ -r "$private_dotfiles_installer" ]; then
+    PATH="$HOME/.local/bin:$(printenv PATH)" bash "$private_dotfiles_installer"
+  fi
 ); then
   component_end "dotfiles_deploy" 0
 else

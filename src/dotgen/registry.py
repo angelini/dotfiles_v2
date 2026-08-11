@@ -14,6 +14,7 @@ from dotgen.components.git_setup import GitSetup
 from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
+from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
@@ -40,6 +41,7 @@ _SHARED: tuple[Component, ...] = (
     Stinkpot(),
     Tmux(),
     Mosh(),
+    Herdr(),
     Helix(),
     Starship(),
     Shellcheck(),
@@ -78,6 +80,7 @@ _DOCKER_SKIP = {
     "doppler",
     "tmux",
     "mosh",
+    "herdr",
 }
 
 # GitSetup depends on Gh
