@@ -619,6 +619,8 @@ def test_gh_per_os_install() -> None:
     macos = Gh().render(ENVIRONMENTS["macos"]).setup
     assert "add_repo apt githubcli" in debian and "install_package gh" in debian
     assert "install_package gh" in macos and "add_repo" not in macos
+    for setup in (debian, macos):
+        assert "gh extension install github/gh-stack" in setup
 
 
 def test_zed_macos_only_and_emits_configs() -> None:

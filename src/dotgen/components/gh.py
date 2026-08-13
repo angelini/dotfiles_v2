@@ -19,7 +19,10 @@ _SETUP_BY_OS: dict[OS, str] = {
     OS.DEBIAN: (f'add_repo apt githubcli "{_DEB_LIST_LINE}" "{_DEB_KEY_URL}"\nupdate_pkg_index\ninstall_package gh\n'),
 }
 
-_SETUP_TAIL = 'install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"\n'
+_SETUP_TAIL = """\
+install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
+gh extension install github/gh-stack
+"""
 
 
 @dataclass(frozen=True)

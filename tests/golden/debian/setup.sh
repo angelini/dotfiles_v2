@@ -448,6 +448,7 @@ if (
   update_pkg_index
   install_package gh
   install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
+  gh extension install github/gh-stack
 ); then
   component_end "gh" 0
 else
