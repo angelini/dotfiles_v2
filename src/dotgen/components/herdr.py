@@ -27,6 +27,9 @@ onboarding = false
 [theme]
 name = "catppuccin-latte"
 
+[ui.sound]
+enabled = false
+
 [update]
 channel = "stable"
 version_check = false

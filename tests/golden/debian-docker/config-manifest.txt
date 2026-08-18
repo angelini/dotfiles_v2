@@ -4,7 +4,7 @@
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
 0644  54a350f3be82db50bc82f4f973384e3420a613eed7792e4edfdafafb008027c0  git/gitconfig
 0644  76a246010494bbfc06de685273b00f9da01dafdf9085b7fa8c549e33c477ad39  helix/config.toml
-0644  7b475f8084759694e3c04cb6c1f45da16dc652118abaab0e919210c627de1d90  pi/agent/plannotator.json
+0644  589b0beae0c025c70b667db1113f925c56be3656396a66eb30042f22f2e856df  pi/agent/plannotator.json
 0644  7ebb947e3cff48055fab1d7a1fab423c77af388459fa474697f835cdefd3de5d  starship/starship.toml
 0644  9a59a38c741fd08f5964b9233a9d7a411cd941b7fba371ddf088599d4c99841c  pi/sandbox/pi-macos.sb
 0644  a62ded06e54c0bfce18ee0bf022b20efb6c05ee3e30d426da2cc9b9a00abeed2  bash/bash_profile

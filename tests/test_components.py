@@ -275,6 +275,9 @@ onboarding = false
 [theme]
 name = "catppuccin-latte"
 
+[ui.sound]
+enabled = false
+
 [update]
 channel = "stable"
 version_check = false
@@ -783,6 +786,10 @@ def test_pi_agent_setup() -> None:
         "pi/sandbox/pi-macos.sb",
     }
     assert not [d for d in dests if d.startswith("pi-angelini/")]
+    plannotator = next(cf for cf in frag.configs if cf.dest == "pi/agent/plannotator.json")
+    phases = json.loads(plannotator.content)["phases"]
+    assert all("instructions" in phase for phase in phases.values())
+    assert all("systemPrompt" not in phase for phase in phases.values())
     agent_vendor, angelini_vendor = frag.vendors
     assert agent_vendor.source == _agent_config_root() / "pi" / "agent"
     assert agent_vendor.dest == "pi/agent"
