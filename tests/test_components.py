@@ -178,6 +178,7 @@ def test_git_setup_uses_delta_pager() -> None:
     gitconfig = next(c for c in configs if c.dest == "git/gitconfig").content
     assert "pager = delta" in gitconfig
     assert "diffFilter = delta --color-only" in gitconfig
+    assert "light = true" in gitconfig
 
 
 def test_npm_config_is_secure_and_exact_in_every_environment() -> None:

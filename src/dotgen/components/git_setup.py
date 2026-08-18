@@ -20,6 +20,7 @@ _GITCONFIG = """\
     diffFilter = delta --color-only
 [delta]
     true-color = always
+    light = true
 [push]
     default = current
 [pull]
