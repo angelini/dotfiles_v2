@@ -19,6 +19,7 @@ def _resource_text(relative_path: str) -> str:
     return (_RESOURCE_ROOT / relative_path).read_text()
 
 
+_PI_LAUNCHER_SH = _resource_text("pi.sh")
 _PLANNOTATOR_JSON = _resource_text("plannotator.json")
 
 
@@ -364,6 +365,7 @@ ensure_dir "$HOME/.local/bin"
 install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"
 install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600
 install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
+install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"
 install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
 install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
@@ -395,6 +397,7 @@ class PiAgent:
                 ConfigFile(dest="pi/agent/models.json", content=pi_models(), mode=0o600),
                 ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
                 ConfigFile(dest="pi/agent/plannotator.json", content=_PLANNOTATOR_JSON),
+                ConfigFile(dest="pi/launcher/pi.sh", content=_PI_LAUNCHER_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
             ),

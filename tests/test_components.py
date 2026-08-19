@@ -756,6 +756,7 @@ def test_pi_agent_setup() -> None:
     assert "pi-web-access" not in npm_lines[0]
     assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
+    assert 'install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GEMINI_API_KEY" not in frag.secrets
     assert "GCP_PROJECT_ID" in frag.secrets
@@ -782,6 +783,7 @@ def test_pi_agent_setup() -> None:
         "pi/agent/models.json",
         "pi/agent/web-search.json",
         "pi/agent/plannotator.json",
+        "pi/launcher/pi.sh",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
     }
@@ -813,6 +815,15 @@ def test_pi_agent_sandbox_aliases() -> None:
     frag = PiAgent().render(ENVIRONMENTS["macos"])
     assert 'pi-sandbox "$@"' in frag.alias
     assert 'command pi "$@"' in frag.alias
+
+
+def test_pi_agent_launcher_uses_fnm_default() -> None:
+    frag = PiAgent().render(ENVIRONMENTS["debian"])
+    launcher = next(cf for cf in frag.configs if cf.dest == "pi/launcher/pi.sh")
+    assert launcher.mode == 0o755
+    assert 'node_bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"' in launcher.content
+    assert 'export PATH="$node_bin:$PATH"' in launcher.content
+    assert 'exec "$pi_bin" "$@"' in launcher.content
 
 
 def test_pi_agent_bubblewrap_linux_only() -> None:
