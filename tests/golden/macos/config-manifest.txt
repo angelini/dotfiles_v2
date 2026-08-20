@@ -23,3 +23,4 @@
 dir  claude
 dir  pi-angelini
 dir  pi/agent
+dir  repositories/platform

@@ -62,6 +62,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
     angelini_call = 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"'
     claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"'
     claude_patch_call = 'install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600'
+    platform_call = 'install_config "$DIR/config/repositories/platform/CLAUDE.md" "$HOME/repos/platform/CLAUDE.md"'
     pi_mutable = ("models.json", "web-search.json", "plannotator.json")
 
     for env_name in ENVIRONMENTS:
@@ -111,6 +112,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
             assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
             assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
             assert setup.count(claude_patch_call) == 1
+            assert setup.count(platform_call) == 1
             assert 'install_config "$DIR/config/claude/settings.json"' not in setup
             assert not (config / "claude" / "settings.json").exists()
             managed_patch = config / "managed-settings" / "claude.json"
@@ -121,7 +123,11 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
                 assert (config / "claude" / path).is_dir()
             for path in (".credentials.json", "history.jsonl", "projects"):
                 assert not (config / "claude" / path).exists()
+            platform_instructions = config / "repositories" / "platform" / "CLAUDE.md"
+            canonical_instructions = Path(__file__).resolve().parents[2] / "agent-config" / "repositories" / "platform" / "CLAUDE.md"
+            assert platform_instructions.read_bytes() == canonical_instructions.read_bytes()
             assert manifest.count("dir  claude") == 1
+            assert manifest.count("dir  repositories/platform") == 1
             assert "  managed-settings/claude.json" in manifest
             assert "  claude/settings.json" not in manifest
             assert "  claude/CLAUDE.md" not in manifest
@@ -129,9 +135,12 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         else:
             assert claude_call not in setup
             assert claude_patch_call not in setup
+            assert platform_call not in setup
             assert not (config / "managed-settings" / "claude.json").exists()
+            assert not (config / "repositories" / "platform").exists()
             assert "managed-settings/claude.json" not in manifest
             assert "dir  claude" not in manifest
+            assert "dir  repositories/platform" not in manifest
 
     assert "claude" != "pi-agent"
     for env_name in ENVIRONMENTS:

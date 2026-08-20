@@ -30,6 +30,7 @@ _register_serena_mcp() {
 }
 install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"
 install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600
+install_config "$DIR/config/repositories/platform/CLAUDE.md" "$HOME/repos/platform/CLAUDE.md"
 _install_serena
 _register_serena_mcp
 """
@@ -51,6 +52,11 @@ class ClaudeCode:
                     source=_agent_config_root() / "claude",
                     dest="claude",
                     include_globs=("CLAUDE.md", "agents/*.md", "commands/review.md", "hooks/*", "skills/**"),
+                ),
+                VendorDir(
+                    source=_agent_config_root() / "repositories" / "platform",
+                    dest="repositories/platform",
+                    include_globs=("CLAUDE.md",),
                 ),
             ),
         )

@@ -445,6 +445,7 @@ def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     setup = ClaudeCode().render(ENVIRONMENTS["macos"]).setup
     assert setup.count('install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"') == 1
     assert setup.count('install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600') == 1
+    assert setup.count('install_config "$DIR/config/repositories/platform/CLAUDE.md" "$HOME/repos/platform/CLAUDE.md"') == 1
     assert 'install_config "$DIR/config/claude/settings.json" "$HOME/.claude/settings.json"' not in setup
     assert 'install_config "$DIR/config/claude/CLAUDE.md"' not in setup
     assert 'install_config "$DIR/config/claude/hooks/serena-reminder.sh"' not in setup
@@ -996,12 +997,15 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(_AGENT_CONFIG_SRC))
     claude = ClaudeCode().render(ENVIRONMENTS["macos"])
     pi = PiAgent().render(ENVIRONMENTS["macos"])
-    (claude_vendor,) = claude.vendors
+    claude_vendor = next(vendor for vendor in claude.vendors if vendor.dest == "claude")
+    platform_vendor = next(vendor for vendor in claude.vendors if vendor.dest == "repositories/platform")
     pi_vendor = next(vendor for vendor in pi.vendors if vendor.dest == "pi/agent")
 
     assert claude_vendor.source == _AGENT_CONFIG_SRC / "claude"
     assert claude_vendor.dest == "claude"
     assert claude_vendor.include_globs == ("CLAUDE.md", "agents/*.md", "commands/review.md", "hooks/*", "skills/**")
+    assert platform_vendor.source == _AGENT_CONFIG_SRC / "repositories" / "platform"
+    assert platform_vendor.include_globs == ("CLAUDE.md",)
     assert pi_vendor.source == _AGENT_CONFIG_SRC / "pi" / "agent"
     assert pi_vendor.dest == "pi/agent"
     assert pi_vendor.include_globs == (
@@ -1021,6 +1025,7 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
         "hooks/fixture-hook.sh",
         "skills/fixture/SKILL.md",
     }
+    assert set(_vendored(platform_vendor, tmp_path / "platform")) == {"CLAUDE.md"}
     assert set(_vendored(pi_vendor, tmp_path / "pi")) == {
         "AGENTS.md",
         "APPEND_SYSTEM.md",
@@ -1033,6 +1038,7 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     }
     assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
     assert "extensions/context7/cache/generated.json" not in _vendored(pi_vendor, tmp_path / "pi-again")
+    assert len(claude.vendors) == 2
     assert {config.dest for config in claude.configs} == {"managed-settings/claude.json"}
     claude_settings = claude.configs[0]
     assert claude_settings.mode == 0o600
@@ -1067,12 +1073,12 @@ def test_agent_config_components_fail_clearly_for_missing_namespaces(monkeypatch
     models.parent.mkdir(parents=True)
     models.write_text("{}\n")
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(root))
-    claude_vendor = ClaudeCode().render(ENVIRONMENTS["macos"]).vendors[0]
+    claude_vendors = ClaudeCode().render(ENVIRONMENTS["macos"]).vendors
     pi_vendor = next(vendor for vendor in PiAgent().render(ENVIRONMENTS["macos"]).vendors if vendor.dest == "pi/agent")
     models.unlink()
     models.parent.rmdir()
     (root / "pi").rmdir()
-    for vendor in (claude_vendor, pi_vendor):
+    for vendor in (*claude_vendors, pi_vendor):
         with pytest.raises(FileNotFoundError, match=f"vendor source not found: {vendor.source}"):
             _vendor_dir(vendor, tmp_path / vendor.dest)
 
