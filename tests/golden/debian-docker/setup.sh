@@ -50,154 +50,33 @@ else
   _rc=$?; component_end "core_utils" "$_rc"; exit "$_rc"
 fi
 
-# --- stinkpot ---
-component_begin "stinkpot"
+# --- fzf_bash_history ---
+component_begin "fzf_bash_history"
 if (
   set -e
-  stinkpot_install() {
-    local target rel root src manifest expected actual installed
-    local data_dir state_dir marker legacy db install_tmp marker_tmp
-    target="$(detect_os):$(detect_arch)"
-    case "$target" in
-      debian:x86_64) rel="linux-amd64/stinkpot" ;;
-      debian:aarch64|debian:arm64) rel="linux-arm64/stinkpot" ;;
-      macos:arm64|macos:aarch64) rel="darwin-arm64/stinkpot" ;;
-      macos:x86_64)
-        error "stinkpot does not support Darwin amd64"
-        return 1
-        ;;
-      *)
-        error "stinkpot does not support target $target"
-        return 1
-        ;;
-    esac
-
-    root="$DIR/artifacts/stinkpot"
-    src="$root/$rel"
-    manifest="$root/SHA256SUMS"
-    installed="$HOME/bin/stinkpot"
-    if [ ! -f "$src" ] || [ -L "$src" ] || [ ! -x "$src" ]; then
-      error "invalid bundled stinkpot executable: $src"
-      return 1
+  history_file="$HOME/.bash_history"
+  if [ -L "$history_file" ] || { [ -e "$history_file" ] && [ ! -f "$history_file" ]; }; then
+    error "unsafe Bash history path (expected a regular non-symlink file): $history_file"
+    exit 1
+  fi
+  if [ ! -e "$history_file" ]; then
+    if ! (umask 077; set -o noclobber; : > "$history_file") 2>/dev/null; then
+      error "unable to create Bash history file safely: $history_file"
+      exit 1
     fi
-    if [ ! -f "$manifest" ] || [ -L "$manifest" ]; then
-      error "invalid stinkpot checksum manifest: $manifest"
-      return 1
-    fi
-    if ! expected="$(awk -v wanted="$rel" '
-      NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 !~ /^[A-Za-z0-9._\/-]+$/ { bad = 1 }
-      $2 ~ /^\// || $2 ~ /(^|\/)\.\.(\/|$)/ { bad = 1 }
-      { seen[$2]++; if ($2 == wanted) checksum = $1 }
-      END {
-        for (path in seen) if (seen[path] != 1) bad = 1
-        if (bad || seen[wanted] != 1) exit 1
-        print checksum
-      }
-    ' "$manifest")"; then
-      error "malformed stinkpot checksum manifest: $manifest"
-      return 1
-    fi
-    case "${target%%:*}" in
-      debian)
-        if ! actual="$(sha256sum "$src" | awk '{print $1}')"; then
-          error "unable to checksum bundled stinkpot executable: $src"
-          return 1
-        fi
-        ;;
-      macos)
-        if ! actual="$(shasum -a 256 "$src" | awk '{print $1}')"; then
-          error "unable to checksum bundled stinkpot executable: $src"
-          return 1
-        fi
-        ;;
-    esac
-    if [ "$actual" != "$expected" ]; then
-      error "stinkpot checksum mismatch: $src"
-      return 1
-    fi
-
-    data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot"
-    state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot"
-    marker="$state_dir/bash-history-import-v1"
-    legacy="$HOME/.bash_history"
-    db="$data_dir/history.db"
-
-    if [ -L "$marker" ] || { [ -e "$marker" ] && [ ! -f "$marker" ]; }; then
-      error "invalid stinkpot migration marker: $marker"
-      return 1
-    fi
-    if [ ! -e "$marker" ]; then
-      if [ -L "$data_dir" ] || { [ -e "$data_dir" ] && [ ! -d "$data_dir" ]; }; then
-        error "invalid stinkpot data directory: $data_dir"
-        return 1
-      fi
-      if [ -L "$db" ] || { [ -e "$db" ] && [ ! -f "$db" ]; }; then
-        error "invalid stinkpot database: $db"
-        return 1
-      fi
-      if [ -L "$legacy" ] || { [ -e "$legacy" ] && [ ! -f "$legacy" ]; }; then
-        error "invalid legacy Bash history file: $legacy"
-        return 1
-      fi
-    fi
-
-    if ! ensure_dir "$HOME/bin"; then
-      error "unable to create binary directory: $HOME/bin"
-      return 1
-    fi
-    trap 'rm -f -- "${install_tmp:-}" "${marker_tmp:-}"' EXIT
-    if [ ! -f "$installed" ] || [ -L "$installed" ] || [ ! -x "$installed" ] || ! cmp -s "$src" "$installed"; then
-      if ! install_tmp="$(mktemp "$HOME/bin/.stinkpot.XXXXXX")"; then
-        error "unable to stage stinkpot in $HOME/bin"
-        return 1
-      fi
-      if ! install -m 0755 "$src" "$install_tmp"; then
-        error "unable to stage bundled stinkpot executable"
-        return 1
-      fi
-      if ! mv -f "$install_tmp" "$installed"; then
-        error "unable to atomically install stinkpot: $installed"
-        return 1
-      fi
-      install_tmp=""
-    fi
-
-    if [ -e "$marker" ]; then
-      return 0
-    fi
-
-    if ! (
-      umask 077
-      trap 'rm -f -- "${marker_tmp:-}"' EXIT
-      mkdir -p "$data_dir" || exit 1
-      chmod 0700 "$data_dir" || exit 1
-      "$installed" list >/dev/null || exit 1
-      if [ ! -f "$db" ] || [ -L "$db" ]; then
-        error "stinkpot did not initialize a regular database: $db"
-        exit 1
-      fi
-      chmod 0600 "$db" || exit 1
-      if [ -s "$legacy" ]; then
-        "$installed" import --file "$legacy" || exit 1
-        chmod 0600 "$db" || exit 1
-      fi
-      mkdir -p "$state_dir" || exit 1
-      chmod 0700 "$state_dir" || exit 1
-      marker_tmp="$(mktemp "$state_dir/.bash-history-import-v1.XXXXXX")" || exit 1
-      : > "$marker_tmp" || exit 1
-      chmod 0600 "$marker_tmp" || exit 1
-      mv -f "$marker_tmp" "$marker" || exit 1
-      marker_tmp=""
-    ); then
-      error "stinkpot Bash history migration failed"
-      return 1
-    fi
-  }
-  stinkpot_install
+  fi
+  if [ -L "$history_file" ] || [ ! -f "$history_file" ]; then
+    error "unsafe Bash history path (expected a regular non-symlink file): $history_file"
+    exit 1
+  fi
+  if ! chmod 0600 "$history_file"; then
+    error "unable to secure Bash history file: $history_file"
+    exit 1
+  fi
 ); then
-  component_end "stinkpot" 0
+  component_end "fzf_bash_history" 0
 else
-  _rc=$?; component_end "stinkpot" "$_rc"; exit "$_rc"
+  _rc=$?; component_end "fzf_bash_history" "$_rc"; exit "$_rc"
 fi
 
 # --- helix ---

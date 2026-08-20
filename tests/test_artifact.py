@@ -4,6 +4,7 @@ import os
 import stat
 import subprocess
 import tarfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -11,18 +12,19 @@ import pytest
 
 from dotgen import artifact as artifact_module
 from dotgen.artifact import ArtifactBuildError, FakeArtifactBuilder, ProductionArtifactBuilder
+from dotgen.environment import Environment
 from dotgen.fragment import Fragment, GeneratedBinary
-from dotgen.registry import ENVIRONMENTS
-from dotgen.render import build_all
+from dotgen.render import build_env
+from dotgen.types import OS, PkgMgr
 
 
 def _archive(*, unsafe_name: str | None = None, link: bool = False, missing_name: str | None = None) -> bytes:
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         for name, content in (
-            ("stinkpot/go.mod", b"module example.test/stinkpot\n"),
-            ("stinkpot/go.sum", b""),
-            ("stinkpot/main.go", b"package main\nfunc main() {}\n"),
+            ("sample-tool/go.mod", b"module example.test/sample-tool\n"),
+            ("sample-tool/go.sum", b""),
+            ("sample-tool/main.go", b"package main\nfunc main() {}\n"),
         ):
             if name.endswith(f"/{missing_name}"):
                 continue
@@ -35,7 +37,7 @@ def _archive(*, unsafe_name: str | None = None, link: bool = False, missing_name
             info.size = len(content)
             archive.addfile(info, io.BytesIO(content))
         if link:
-            info = tarfile.TarInfo("stinkpot/link")
+            info = tarfile.TarInfo("sample-tool/link")
             info.type = tarfile.SYMTYPE
             info.linkname = "main.go"
             archive.addfile(info)
@@ -45,9 +47,9 @@ def _archive(*, unsafe_name: str | None = None, link: bool = False, missing_name
 def _declaration(archive: bytes, *, goos: str = "linux", goarch: str = "amd64", dest: str | None = None) -> GeneratedBinary:
     target = f"{goos}-{goarch}"
     return GeneratedBinary(
-        name="stinkpot",
-        dest=dest or f"artifacts/stinkpot/{target}/stinkpot",
-        source_url="https://example.test/stinkpot.tar.gz",
+        name="sample-tool",
+        dest=dest or f"artifacts/sample-tool/{target}/sample-tool",
+        source_url="https://example.test/sample-tool.tar.gz",
         source_sha256=hashlib.sha256(archive).hexdigest(),
         go_version="1.26.4",
         goos=goos,
@@ -75,26 +77,38 @@ def test_generated_binary_duplicate_destinations_fail_merge() -> None:
         Fragment(artifacts=(artifact,)).merge(Fragment(artifacts=(artifact,)))
 
 
-def test_build_all_fake_builder_builds_unique_targets_and_packages_exact_matrix(tmp_path: Path) -> None:
+@dataclass(frozen=True)
+class SyntheticArtifactComponent:
+    name: str = "synthetic_artifact"
+
+    def applies_to(self, env: Environment) -> bool:
+        return True
+
+    def render(self, env: Environment) -> Fragment:
+        archive = _archive()
+        return Fragment(
+            artifacts=(
+                _declaration(archive),
+                _declaration(archive, goarch="arm64"),
+                _declaration(archive, goos="darwin", goarch="arm64"),
+            )
+        )
+
+
+def test_build_env_fake_builder_integrates_synthetic_artifacts(tmp_path: Path) -> None:
     builder = FakeArtifactBuilder()
-    build_all(tmp_path, artifact_builder=builder)
+    env = Environment("synthetic", OS.DEBIAN, PkgMgr.APT, components=(SyntheticArtifactComponent(),))
+
+    build_env(env, tmp_path, artifact_builder=builder)
 
     assert builder.builds == [
-        ("stinkpot", "linux", "amd64"),
-        ("stinkpot", "linux", "arm64"),
-        ("stinkpot", "darwin", "arm64"),
+        ("sample-tool", "linux", "amd64"),
+        ("sample-tool", "linux", "arm64"),
+        ("sample-tool", "darwin", "arm64"),
     ]
-    expected = {
-        "debian": {"linux-amd64", "linux-arm64"},
-        "debian-docker": {"linux-amd64", "linux-arm64"},
-        "macos": {"darwin-arm64"},
-    }
-    for env_name in ENVIRONMENTS:
-        target_root = tmp_path / env_name / "artifacts/stinkpot"
-        targets = {path.parent.name for path in target_root.glob("*/stinkpot")}
-        assert targets == expected[env_name]
-        assert (target_root / "SHA256SUMS").is_file()
-    assert not list(tmp_path.rglob("*darwin-amd64*"))
+    target_root = tmp_path / "artifacts/sample-tool"
+    assert {path.parent.name for path in target_root.glob("*/sample-tool")} == {"linux-amd64", "linux-arm64", "darwin-arm64"}
+    assert (target_root / "SHA256SUMS").is_file()
 
 
 def test_production_builder_downloads_once_builds_targets_and_writes_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -120,7 +134,7 @@ def test_production_builder_downloads_once_builds_targets_and_writes_manifest(tm
         second.mkdir()
         builder.materialize(artifacts, second)
 
-    assert downloads == ["https://example.test/stinkpot.tar.gz"]
+    assert downloads == ["https://example.test/sample-tool.tar.gz"]
     build_commands = [(command, env) for command, env in commands if command[:2] == ["go", "build"]]
     assert len(build_commands) == 2
     assert {(env["GOOS"], env["GOARCH"], env["CGO_ENABLED"]) for _, env in build_commands} == {
@@ -140,13 +154,13 @@ def test_production_builder_downloads_once_builds_targets_and_writes_manifest(tm
         assert "GOMODCACHE" not in env
         assert "GOCACHE" not in env
 
-    manifest = (tmp_path / "artifacts/stinkpot/SHA256SUMS").read_text().splitlines()
+    manifest = (tmp_path / "artifacts/sample-tool/SHA256SUMS").read_text().splitlines()
     assert manifest == sorted(set(manifest))
     assert len(manifest) == 2
     for artifact in artifacts:
         output = tmp_path / artifact.dest
         assert stat.S_IMODE(output.stat().st_mode) == 0o755
-        relative = Path(artifact.dest).relative_to("artifacts/stinkpot").as_posix()
+        relative = Path(artifact.dest).relative_to("artifacts/sample-tool").as_posix()
         assert f"{hashlib.sha256(output.read_bytes()).hexdigest()}  {relative}" in manifest
     assert not list((tmp_path / "artifacts").rglob("go.mod"))
     assert not list((tmp_path / "artifacts").rglob("go.sum"))
@@ -201,7 +215,7 @@ def test_production_builder_retries_until_source_checksum_matches(tmp_path: Path
 
     assert responses == []
     assert delays == [0.25, 0.5]
-    assert (tmp_path / "artifacts/stinkpot/linux-amd64/stinkpot").is_file()
+    assert (tmp_path / "artifacts/sample-tool/linux-amd64/sample-tool").is_file()
 
 
 def test_production_builder_reports_final_mixed_retry_failure(tmp_path: Path) -> None:

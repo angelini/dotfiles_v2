@@ -67,7 +67,7 @@ def test_tmux_and_mosh_apply_only_to_normal_environments() -> None:
         names = [component.name for component in ENVIRONMENTS[env_name].components]
         assert names.count("tmux") == 1
         assert names.count("mosh") == 1
-        assert names.index("stinkpot") < names.index("tmux") < names.index("mosh")
+        assert names.index("core_utils") < names.index("fzf_bash_history") < names.index("tmux") < names.index("mosh")
 
     docker_names = {component.name for component in ENVIRONMENTS["debian-docker"].components}
     assert {"tmux", "mosh"}.isdisjoint(docker_names)

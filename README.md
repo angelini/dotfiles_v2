@@ -19,17 +19,15 @@ just clean              # rm -rf dist
 
 `just ci` runs the full chain: `lint typecheck test build-all shellcheck`.
 
-### Stinkpot shell history
+### Native Bash and fzf history
 
-Bundles cross-build [Stinkpot](https://tangled.org/oppi.li/stinkpot) from pinned commit `8fa6de51adebb1ddeffbfb3b79c0885c2403575a` on the build host. The effective compiler must be exactly Go `1.26.4`; `GOTOOLCHAIN=go1.26.4+auto` allows a sufficiently recent Go launcher to fetch that toolchain and module dependencies on a cold build. Builds use Go's standard module and build caches, while source extraction and compiler output remain isolated in temporary directories. Target machines do not need Go or network access for Stinkpot.
+Interactive Bash stores plaintext history in `~/.bash_history` with `HISTSIZE=100000`, `HISTFILESIZE=100000`, `HISTCONTROL=ignoreboth`, and `histappend`. Setup creates the file with mode `0600` or tightens an existing regular file without truncating it; unsafe symlink and non-regular paths stop deployment. `ignoreboth` omits commands beginning with a space and immediate duplicates, but it is not secret detection or redaction. Pi continues to hide `.bash_history`.
 
-The supported bundle matrix is Linux amd64 and arm64 in `debian` and `debian-docker`, and Darwin arm64 in `macos`. Darwin amd64 is deliberately unsupported and deployment fails rather than using Rosetta, another artifact, or a destination-side build. Binaries and checksums are packaged under `artifacts/stinkpot/`; setup verifies the selected artifact and atomically installs it as `~/bin/stinkpot`.
+At every prompt, Bash appends new commands with `history -a` and loads peer additions with `history -n`. This gives already-running shells prompt-bound, best-effort sharing; simultaneous writers can still interleave, duplicate, or lose unflushed commands.
 
-On first deployment, setup initializes `${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db`, imports a non-empty regular `~/.bash_history`, and atomically records completion at `${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1`. The legacy history file remains unchanged. Bash then keeps only in-memory history, while Stinkpot provides cross-session persistence and `Ctrl-R` search.
+The package-managed standard `fzf --bash` integration supplies `Ctrl-R`, plus its deliberate `Ctrl-T` file picker and `Alt-C` directory picker bindings. `Ctrl-R` starts newest-first with exact newest-preserving deduplication and the current command line as its query; one `--no-sort` is added while retaining fzf's `Ctrl-R` toggle-sort action. A selection replaces or inserts into the command line without submitting it. If fzf is unavailable, shell startup warns once and leaves native `Ctrl-R` unchanged while persistent history and prompt synchronization remain active.
 
-Stinkpot stores plaintext command text, cwd, exit status, timestamps, and session IDs in SQLite/WAL files. Commands are unique by text: repeating one replaces its metadata, and search considers the newest 10,000 unique commands. There is no per-command ignore/redaction, retention, encryption, sync, exporter, or automatic schema recovery. Do not delete and re-import the database automatically: after migration, SQLite may contain commands absent from the preserved Bash file, and upstream has no exporter.
-
-Upstream is new, untagged, untested, and has no license file. Generated binaries and bundles are approved only for private deployment to machines under the owner's control. Do not commit the binaries or publish/redistribute bundles until licensing or explicit permission permits it.
+Legacy rollback data is intentionally inert and untouched: `~/bin/stinkpot`, `${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db` and its `-wal`/`-shm` siblings, and `${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1`. Database history is not imported into Bash, Pi still hides the legacy data directory, and permanent deletion is a manual owner action only.
 
 ## Prepare fresh Debian
 

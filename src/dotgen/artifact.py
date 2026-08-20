@@ -153,7 +153,7 @@ class ProductionArtifactBuilder:
         match = re.search(r"\bgo version go([^\s]+)", result.stdout)
         effective = match.group(1) if match else "unknown"
         if effective != version:
-            raise ArtifactBuildError(f"Stinkpot requires effective Go {version}, got {effective}; install a Go launcher that supports GOTOOLCHAIN=go{version}+auto")
+            raise ArtifactBuildError(f"generated artifact requires effective Go {version}, got {effective}; install a Go launcher that supports GOTOOLCHAIN=go{version}+auto")
         self._verified_go_versions.add(version)
 
     def _run(self, command: list[str], *, cwd: Path, env: dict[str, str], operation: str) -> subprocess.CompletedProcess[str]:
@@ -161,9 +161,11 @@ class ProductionArtifactBuilder:
             return self._runner(command, cwd=cwd, env=env, check=True, capture_output=True, text=True)
         except FileNotFoundError as error:
             raise ArtifactBuildError(f"failed to {operation}: Go launcher not found") from error
-        except subprocess.SubprocessError as error:
-            detail = (error.stderr or error.stdout or str(error)).strip() if isinstance(error, subprocess.CalledProcessError) else str(error)
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or error.stdout or str(error)).strip()
             raise ArtifactBuildError(f"failed to {operation}: {detail}") from error
+        except subprocess.SubprocessError as error:
+            raise ArtifactBuildError(f"failed to {operation}: {error}") from error
 
 
 class FakeArtifactBuilder:

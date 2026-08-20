@@ -175,7 +175,6 @@ def test_report_constants_pin_selected_commands_applications_and_mapping() -> No
         "btop",
         "cloc",
         "gpg",
-        "stinkpot",
         "tmux",
         "mosh",
         "hx",

@@ -17,6 +17,7 @@ from dotgen.components.docker import Docker
 from dotgen.components.doppler import Doppler
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
 from dotgen.components.fonts import Fonts
+from dotgen.components.fzf_bash_history import FzfBashHistory
 from dotgen.components.gcloud import Gcloud
 from dotgen.components.gh import Gh
 from dotgen.components.ghostty import Ghostty
@@ -35,7 +36,6 @@ from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
-from dotgen.components.stinkpot import Stinkpot
 from dotgen.components.supacode import Supacode
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
@@ -58,7 +58,7 @@ def env(request: pytest.FixtureRequest) -> Environment:
     [
         BashBase,
         CoreUtils,
-        Stinkpot,
+        FzfBashHistory,
         Tmux,
         Mosh,
         Tmuxinator,
@@ -118,12 +118,19 @@ def test_bash_base_macos_changes_shell_and_loads_orbstack() -> None:
     assert "brew shellenv" not in BashBase().render(ENVIRONMENTS["debian"]).bashrc
 
 
-def test_bash_base_uses_only_in_memory_history_and_updates_title() -> None:
+def test_bash_base_leaves_history_policy_to_dedicated_component_and_preserves_title_status() -> None:
     bashrc = BashBase().render(ENVIRONMENTS["macos"]).bashrc
     for forbidden in ("HISTSIZE", "HISTFILESIZE", "HISTCONTROL", "histappend", "history -a"):
         assert forbidden not in bashrc
     assert "set_win_title" in bashrc
+    assert 'return "$status"' in bashrc
     assert "PROMPT_COMMAND" in bashrc
+
+
+def test_fzf_bash_history_owns_persistent_history_policy() -> None:
+    bashrc = FzfBashHistory().render(ENVIRONMENTS["macos"]).bashrc
+    for expected in ("HISTFILE=~/.bash_history", "HISTSIZE=100000", "HISTFILESIZE=100000", "HISTCONTROL=ignoreboth", "shopt -s histappend", "history -a", "history -n", "fzf --bash"):
+        assert expected in bashrc
 
 
 def test_core_utils_per_os_fd_token() -> None:
@@ -494,7 +501,7 @@ def test_environment_component_distribution() -> None:
     shared_names = {
         "bash_base",
         "core_utils",
-        "stinkpot",
+        "fzf_bash_history",
         "tmux",
         "mosh",
         "herdr",
@@ -824,6 +831,11 @@ def test_pi_agent_setup() -> None:
     assert angelini_vendor.exclude_globs == ("package-lock.json", "pi-system-audit-plan.md", "*.test.ts")
 
 
+def test_history_paths_remain_hidden_from_pi() -> None:
+    assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
+    assert ".bash_history" in SANDBOX_HOME_POLICY.hidden_files
+
+
 def test_pi_agent_sandbox_aliases() -> None:
     frag = PiAgent().render(ENVIRONMENTS["macos"])
     assert 'pi-sandbox "$@"' in frag.alias
@@ -862,6 +874,7 @@ def test_pi_agent_sandbox_configs() -> None:
     assert ".config/gcloud/application_default_credentials.json" in SANDBOX_HOME_POLICY.readonly_files
     assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
     assert ".local/share/stinkpot" not in SANDBOX_HOME_POLICY.hidden_files
+    assert ".bash_history" in SANDBOX_HOME_POLICY.hidden_files
     assert ".local/share" in SANDBOX_HOME_POLICY.writable_dirs
     assert {
         ".docker/config.json",

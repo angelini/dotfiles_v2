@@ -41,10 +41,7 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
     env_name: str = request.param
     work = tmp_path_factory.mktemp(f"vm-{env_name}")
     build_env(ENVIRONMENTS[env_name], work / env_name)
-    artifact_root = work / env_name / "artifacts" / "stinkpot"
-    expected_targets = {"darwin-arm64"} if env_name == "macos" else {"linux-amd64", "linux-arm64"}
-    assert {path.parent.name for path in artifact_root.glob("*/stinkpot")} == expected_targets
-    assert (artifact_root / "SHA256SUMS").is_file()
+    assert not (work / env_name / "artifacts").exists()
 
     image_spec = str(work / env_name) if env_name == "debian-docker" else IMAGES[env_name]
 
@@ -63,7 +60,17 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
             handle.push(secrets_local, "/tmp/secrets.env")
             handle.run("mkdir -p /tmp/dotgen && tar xzf /tmp/dotgen.tar.gz -C /tmp/dotgen")
             handle.run('mkdir -p "$HOME/.config/dotgen" && mv /tmp/secrets.env "$HOME/.config/dotgen/secrets.env"')
-            handle.run("printf 'dotgen-stinkpot-legacy\\n' > \"$HOME/.bash_history\"")
+            handle.run(
+                r'''mkdir -p "$HOME/bin" "$HOME/.local/share/stinkpot" "$HOME/.local/state/dotgen/stinkpot"
+printf 'dotgen-bash-history-legacy\n' > "$HOME/.bash_history"
+printf 'legacy-binary\n' > "$HOME/bin/stinkpot"
+printf 'legacy-database\n' > "$HOME/.local/share/stinkpot/history.db"
+printf 'legacy-wal\n' > "$HOME/.local/share/stinkpot/history.db-wal"
+printf 'legacy-shm\n' > "$HOME/.local/share/stinkpot/history.db-shm"
+printf 'legacy-marker\n' > "$HOME/.local/state/dotgen/stinkpot/bash-history-import-v1"
+chmod 0600 "$HOME/.bash_history" "$HOME/.local/share/stinkpot/"* "$HOME/.local/state/dotgen/stinkpot/bash-history-import-v1"
+chmod 0755 "$HOME/bin/stinkpot"'''
+            )
             handle.run(_deploy_cmd(env_name), timeout=_DEPLOY_TIMEOUT[env_name])
             yield env_name, handle
     except VmBackendUnavailable as e:
@@ -262,54 +269,57 @@ cmp -s "$config" "$expected"
     )
 
 
-def test_stinkpot_is_bundled_installed_and_migrated(vm: tuple[str, VmHandle]) -> None:
+def test_fzf_bash_history_is_deployed_with_standard_bindings(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
-    expected_os = "darwin" if env_name == "macos" else "linux"
+    mode_command = "stat -f '%Lp'" if env_name == "macos" else "stat -c '%a'"
     handle.assert_cmd(
         rf"""
 set -euo pipefail
-case "$(uname -m)" in
-  x86_64) target={expected_os}-amd64 ;;
-  arm64|aarch64) target={expected_os}-arm64 ;;
-  *) exit 1 ;;
-esac
-bundle="/tmp/dotgen/{env_name}/artifacts/stinkpot/$target/stinkpot"
-[ -x "$bundle" ]
-[ -x "$HOME/bin/stinkpot" ]
-cmp -s "$bundle" "$HOME/bin/stinkpot"
-command -v stinkpot
-[ "$HISTFILE" = /dev/null ]
-grep -Fx 'dotgen-stinkpot-legacy' "$HOME/.bash_history"
-stinkpot list | grep -F 'dotgen-stinkpot-legacy'
-[ -f "${{XDG_STATE_HOME:-$HOME/.local/state}}/dotgen/stinkpot/bash-history-import-v1" ]
-! grep -Eq 'tangled.org|go build|GOTOOLCHAIN' "/tmp/dotgen/{env_name}/setup.sh"
+command -v fzf
+fzf --version | awk '$1 + 0 >= 0.60 {{ found=1 }} END {{ exit !found }}'
+[ "$({mode_command} "$HOME/.bash_history")" = 600 ]
+grep -Fx 'dotgen-bash-history-legacy' "$HOME/.bash_history"
+! grep -Eqi 'tangled.org|stinkpot_install|GOTOOLCHAIN|artifacts/stinkpot' "/tmp/dotgen/{env_name}/setup.sh"
+bash --noprofile --norc -ic '
+  source "$HOME/.bashrc"
+  [ "$HISTFILE" = "$HOME/.bash_history" ]
+  [ "$HISTSIZE" = 100000 ]
+  [ "$HISTFILESIZE" = 100000 ]
+  [ "$HISTCONTROL" = ignoreboth ]
+  shopt -q histappend
+  [ "$(printf "%s\n" $FZF_CTRL_R_OPTS | grep -o -- "--no-sort" | wc -l | tr -d " ")" = 1 ]
+  bind -m emacs-standard -X | grep -F "__fzf_history__"
+  bind -m vi-command -X | grep -F "__fzf_history__"
+  bind -m vi-insert -X | grep -F "__fzf_history__"
+  bind -m emacs-standard -X | grep -F "fzf-file-widget"
+  bind -m emacs-standard -s | grep -F "__fzf_cd__"
+  declare -f __fzf_history__ | grep -F -- "--bind=ctrl-r:toggle-sort"
+'
 """,
         login=True,
     )
-    mode_command = "stat -f '%Lp'" if env_name == "macos" else "stat -c '%a'"
-    result = handle.run(
-        f'{mode_command} "${{XDG_DATA_HOME:-$HOME/.local/share}}/stinkpot"; {mode_command} "${{XDG_DATA_HOME:-$HOME/.local/share}}/stinkpot/history.db"',
-        login=True,
-    )
-    assert result.stdout.splitlines() == ["700", "600"]
 
 
-def test_stinkpot_records_across_processes_and_handles_concurrency(vm: tuple[str, VmHandle]) -> None:
+def test_bash_history_shares_across_processes_and_preserves_concurrent_commands(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
     handle.assert_cmd(
         r"""
 set -euo pipefail
-command="dotgen-stinkpot-cross-process-$$"
-export command
-bash --noprofile --norc -ic 'source "$HOME/.bashrc"; history -s "$command"; (exit 37); __stinkpot_record'
-stinkpot list | awk -F '\t' -v command="$command" '$2 == 37 && $3 == command { found=1 } END { exit !found }'
-errors="$(mktemp)"
-for i in 1 2 3 4 5 6 7 8; do
-  stinkpot add --exit "$i" -- "dotgen-stinkpot-concurrent-$i" 2>>"$errors" &
-done
+history_file="$HOME/.bash_history"
+command_a="dotgen-history-a-$$"
+command_b="dotgen-history-b-$$"
+export command_a command_b
+bash --noprofile --norc -ic 'source "$HOME/.bashrc"; history -s "$command_a"; __dotgen_history_sync'
+bash --noprofile --norc -ic 'source "$HOME/.bashrc"; history -n; history | grep -F "$command_a"'
+(
+  bash --noprofile --norc -ic 'source "$HOME/.bashrc"; history -s "$command_a-concurrent"; history -a'
+) &
+(
+  bash --noprofile --norc -ic 'source "$HOME/.bashrc"; history -s "$command_b-concurrent"; history -a'
+) &
 wait
-! grep -qi 'locked' "$errors"
-rm -f "$errors"
+grep -F "$command_a-concurrent" "$history_file"
+grep -F "$command_b-concurrent" "$history_file"
 """,
         login=True,
     )
@@ -457,12 +467,12 @@ grep -q 'Sandbox User' "$HOME/.config/git/config"
     handle.assert_cmd(cmd, login=True)
 
 
-def test_pi_sandbox_hides_stinkpot_database(vm: tuple[str, VmHandle]) -> None:
+def test_pi_sandbox_hides_bash_history_and_legacy_stinkpot_database(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":
         pytest.skip("Docker does not allow the unprivileged user namespace required by bubblewrap")
     sum_cmd = "shasum -a 256" if env_name == "macos" else "sha256sum"
-    before = handle.run(f'{sum_cmd} "${{XDG_DATA_HOME:-$HOME/.local/share}}/stinkpot/history.db"').stdout
+    before = handle.run(f'{sum_cmd} "$HOME/.bash_history" "${{XDG_DATA_HOME:-$HOME/.local/share}}/stinkpot/history.db"').stdout
     handle.assert_cmd(
         r"""
 set -euo pipefail
@@ -472,17 +482,19 @@ cat > "$repo/pi" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 db="${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db"
-if cat "$db" >/tmp/stinkpot-visible 2>/dev/null; then
-  exit 1
-fi
-printf 'shadow write\n' > "$db" 2>/dev/null || true
+for hidden in "$HOME/.bash_history" "$db"; do
+  if cat "$hidden" >/tmp/dotgen-hidden-visible 2>/dev/null; then
+    exit 1
+  fi
+  printf 'shadow write\n' > "$hidden" 2>/dev/null || true
+done
 SH
 chmod +x "$repo/pi"
 (cd "$repo" && PATH="$PWD:$PATH" pi-sandbox)
 """,
         login=True,
     )
-    after = handle.run(f'{sum_cmd} "${{XDG_DATA_HOME:-$HOME/.local/share}}/stinkpot/history.db"').stdout
+    after = handle.run(f'{sum_cmd} "$HOME/.bash_history" "${{XDG_DATA_HOME:-$HOME/.local/share}}/stinkpot/history.db"').stdout
     assert before == after
 
 
@@ -508,12 +520,16 @@ def test_ghostty_app_installed(vm: tuple[str, VmHandle]) -> None:
 def test_setup_is_idempotent(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     sum_cmd = "sha256sum" if env_name != "macos" else "shasum -a 256"
-    state = "${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1"
-    database = "${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db"
+    legacy = (
+        ' $HOME/bin/stinkpot "${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db"'
+        ' "${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db-wal"'
+        ' "${XDG_DATA_HOME:-$HOME/.local/share}/stinkpot/history.db-shm"'
+        ' "${XDG_STATE_HOME:-$HOME/.local/state}/dotgen/stinkpot/bash-history-import-v1"'
+    )
     tmux_config = " $HOME/.tmux.conf" if env_name != "debian-docker" else ""
     if env_name == "debian":
         tmux_config += " $HOME/.config/dotgen/tmuxinator/default.yml /usr/local/bin/dotgen-agent-session"
-    tracked = f'$HOME/.bashrc $HOME/.aliases $HOME/.gitconfig{tmux_config} $HOME/bin/stinkpot "{state}" "{database}"'
+    tracked = f"$HOME/.bashrc $HOME/.aliases $HOME/.gitconfig $HOME/.bash_history{tmux_config}{legacy}"
     mtime_cmd = "stat -f '%m'" if env_name == "macos" else "stat -c '%Y'"
     before = handle.run(f"{sum_cmd} {tracked}; {mtime_cmd} $HOME/bin/stinkpot").stdout
     handle.run(_deploy_cmd(env_name), timeout=_REDEPLOY_TIMEOUT[env_name])

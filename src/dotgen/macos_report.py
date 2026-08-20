@@ -52,7 +52,6 @@ REQUIRED_COMMANDS = (
     "btop",
     "cloc",
     "gpg",
-    "stinkpot",
     "tmux",
     "mosh",
     "hx",

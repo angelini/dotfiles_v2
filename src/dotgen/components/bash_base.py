@@ -9,7 +9,9 @@ _BASHRC = r"""ulimit -n 65536
 export COLORTERM="${COLORTERM:-truecolor}"
 
 set_win_title() {
+  local status=$?
   printf '\033]0;%s@%s:%s\007' "${USER:-?}" "${HOSTNAME%%.*}" "${PWD/#$HOME/~}"
+  return "$status"
 }
 case ";${PROMPT_COMMAND:-};" in
   *";set_win_title;"*|*"; set_win_title;"*) ;;

@@ -7,6 +7,7 @@ from dotgen.components.docker import Docker
 from dotgen.components.doppler import Doppler
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
 from dotgen.components.fonts import Fonts
+from dotgen.components.fzf_bash_history import FzfBashHistory
 from dotgen.components.gcloud import Gcloud
 from dotgen.components.gh import Gh
 from dotgen.components.ghostty import Ghostty
@@ -26,7 +27,6 @@ from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
-from dotgen.components.stinkpot import Stinkpot
 from dotgen.components.supacode import Supacode
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
@@ -38,7 +38,7 @@ from dotgen.types import OS, PkgMgr
 _SHARED: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
-    Stinkpot(),
+    FzfBashHistory(),
     Tmux(),
     Mosh(),
     Herdr(),
