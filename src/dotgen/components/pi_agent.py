@@ -59,6 +59,7 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
     writable_dirs=(
         "repos",
         ".pi",
+        ".pi-lens",
         ".cache",
         ".config",
         ".cargo",
@@ -198,15 +199,17 @@ __SANDBOX_HOME_DIRS__
 
 _run_macos() {
   local pi_bin="$1" transformers_cache_target="$2"
-  local profile="$HOME/.config/pi/sandbox/pi-macos.sb"
+  local profile="$HOME/.config/pi/sandbox/pi-macos.sb" tmpdir
   shift 2
   [ -r "$profile" ] || _die "missing sandbox profile: $profile"
+  tmpdir="$(_resolve_path "${TMPDIR:-/tmp}")" || _die "cannot resolve temporary directory: ${TMPDIR:-/tmp}"
   exec env -i \
     "HOME=$HOME" \
     "PATH=${PATH:-/usr/bin:/bin}" \
     "SHELL=${SHELL:-/bin/bash}" \
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
+    "TMPDIR=$tmpdir" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
@@ -214,7 +217,7 @@ _run_macos() {
     sandbox-exec \
     -D "HOME=$HOME" \
     -D "HOME_PARENT=$(dirname "$HOME")" \
-    -D "TMPDIR=${TMPDIR:-/tmp}" \
+    -D "TMPDIR=$tmpdir" \
     -D "TRANSFORMERS_CACHE=$transformers_cache_target" \
     -f "$profile" \
     "$pi_bin" "$@"

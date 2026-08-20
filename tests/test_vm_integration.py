@@ -409,6 +409,7 @@ set -euo pipefail
 transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
 for dir in \
   "$HOME/.pi" \
+  "$HOME/.pi-lens" \
   "$HOME/.cache" \
   "$HOME/.config" \
   "$HOME/.cargo" \
@@ -420,6 +421,10 @@ do
   printf 'state\n' > "$dir/sandbox-smoke"
 done
 printf 'cache\n' > "$transformers_cache/sandbox-smoke"
+if [ "$(uname -s)" = Darwin ]; then
+  [ "$TMPDIR" = "$(cd "$TMPDIR" && pwd -P)" ]
+  printf 'temp\n' > "$TMPDIR/dotgen-sandbox-smoke"
+fi
 [ -r "$HOME/.gitconfig" ]
 grep -q 'Sandbox User' "$HOME/.config/git/config"
 [ ! -e "$HOME/.config/dotgen/secrets.env" ]
@@ -443,6 +448,7 @@ cd "$HOME/repos/sandbox-smoke"
 PATH="$PWD:$PATH" pi-sandbox
 for path in \
   "$HOME/.pi/sandbox-smoke" \
+  "$HOME/.pi-lens/sandbox-smoke" \
   "$HOME/.cache/sandbox-smoke" \
   "$HOME/.config/sandbox-smoke" \
   "$HOME/.cargo/sandbox-smoke" \
@@ -453,6 +459,10 @@ for path in \
 do
   [ "$(cat "$path")" = state ]
 done
+if [ "$(uname -s)" = Darwin ]; then
+  [ "$(cat "${TMPDIR:-/tmp}/dotgen-sandbox-smoke")" = temp ]
+  rm -f "${TMPDIR:-/tmp}/dotgen-sandbox-smoke"
+fi
 transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
 if [ -f "$HOME/.pi/memory/transformers-cache/sandbox-smoke" ]; then
   [ "$(cat "$HOME/.pi/memory/transformers-cache/sandbox-smoke")" = cache ]

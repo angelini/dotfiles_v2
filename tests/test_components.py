@@ -876,6 +876,7 @@ def test_pi_agent_sandbox_configs() -> None:
     assert ".local/share/stinkpot" not in SANDBOX_HOME_POLICY.hidden_files
     assert ".bash_history" in SANDBOX_HOME_POLICY.hidden_files
     assert ".local/share" in SANDBOX_HOME_POLICY.writable_dirs
+    assert ".pi-lens" in SANDBOX_HOME_POLICY.writable_dirs
     assert {
         ".docker/config.json",
         ".config/gh/hosts.yml",
@@ -918,8 +919,12 @@ def test_pi_agent_sandbox_configs() -> None:
     assert script.content.index(fnm_bind) < script.content.index(cache_bind)
     assert '-D "TRANSFORMERS_CACHE=$transformers_cache_target"' in script.content
     assert '-D "HOME_PARENT=$(dirname "$HOME")"' in script.content
+    assert 'tmpdir="$(_resolve_path "${TMPDIR:-/tmp}")"' in script.content
+    assert '"TMPDIR=$tmpdir"' in script.content
+    assert '-D "TMPDIR=$tmpdir"' in script.content
     assert '(literal (param "HOME_PARENT"))' in profile.content
     assert '(subpath (param "HOME"))' in profile.content
+    assert '(subpath (param "TMPDIR"))' in profile.content
     assert '(subpath (param "TRANSFORMERS_CACHE"))' in profile.content
     assert 'runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' in script.content
     assert '--ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells"' in script.content
