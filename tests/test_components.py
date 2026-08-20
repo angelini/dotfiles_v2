@@ -694,6 +694,14 @@ def test_dotfiles_deploy_emits_bashrc_alias_install_and_private_overlay() -> Non
         assert fragment.alias == '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh"\n'
 
 
+def test_dotfiles_deploy_sets_macos_login_locale() -> None:
+    macos_profile = DotfilesDeploy().render(ENVIRONMENTS["macos"]).configs[0].content
+    debian_profile = DotfilesDeploy().render(ENVIRONMENTS["debian"]).configs[0].content
+
+    assert macos_profile.startswith('export LANG="${LANG:-en_US.UTF-8}"\n')
+    assert "export LANG=" not in debian_profile
+
+
 @pytest.mark.parametrize("env_name", ENVIRONMENTS)
 def test_dotfiles_deploy_refreshes_private_overlay_with_local_starship(tmp_path: Path, env_name: str) -> None:
     home = tmp_path / "home"

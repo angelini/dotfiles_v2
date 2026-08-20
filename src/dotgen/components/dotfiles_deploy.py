@@ -2,9 +2,14 @@ from dataclasses import dataclass
 
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
+from dotgen.types import OS
 
 # Ensure macOS login shells read .bashrc
 _BASH_PROFILE = '[ -r "$HOME/.bashrc" ] && source "$HOME/.bashrc"\n'
+_BASH_PROFILES = {
+    OS.DEBIAN: _BASH_PROFILE,
+    OS.MACOS: 'export LANG="${LANG:-en_US.UTF-8}"\n' + _BASH_PROFILE,
+}
 _PRIVATE_ALIAS_OVERLAY = '[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh" ] && source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/private-aliases.sh"\n'
 
 _SETUP = """\
@@ -32,5 +37,5 @@ class DotfilesDeploy:
         return Fragment(
             setup=_SETUP + _PRIVATE_OVERLAY_SETUP,
             alias=_PRIVATE_ALIAS_OVERLAY,
-            configs=(ConfigFile(dest="bash/bash_profile", content=_BASH_PROFILE),),
+            configs=(ConfigFile(dest="bash/bash_profile", content=_BASH_PROFILES[env.os]),),
         )
