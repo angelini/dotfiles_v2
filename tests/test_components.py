@@ -275,6 +275,9 @@ onboarding = false
 [theme]
 name = "catppuccin-latte"
 
+[ui.sidebar.spaces]
+rows = [["state_icon", "workspace"], ["branch"]]
+
 [ui.sound]
 enabled = false
 
