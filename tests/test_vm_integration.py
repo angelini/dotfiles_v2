@@ -114,7 +114,7 @@ def test_rootless_engine(vm: tuple[str, VmHandle]) -> None:
 def test_core_utils_installed(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
     handle.assert_cmd(
-        "command -v jq && command -v rg && command -v fd && command -v eza && command -v bat && command -v delta && command -v tree && command -v htop && command -v btop",
+        "command -v jq && command -v just && command -v rg && command -v fd && command -v eza && command -v bat && command -v delta && command -v tree && command -v htop && command -v btop",
         login=True,
     )
 

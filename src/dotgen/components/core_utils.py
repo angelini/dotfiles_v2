@@ -9,6 +9,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
     OS.DEBIAN: (
         "git",
         "git-delta",
+        "just",
         "jq",
         "yq",
         "fzf",
@@ -28,6 +29,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
     OS.MACOS: (
         "git",
         "git-delta",
+        "just",
         "jq",
         "yq",
         "fzf",

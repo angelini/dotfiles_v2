@@ -144,6 +144,7 @@ def test_core_utils_include_modern_cli_tools() -> None:
     for environment in ENVIRONMENTS.values():
         setup = CoreUtils().render(environment).setup
         assert " git-delta " in setup
+        assert " just " in setup
         assert " eza " in setup
         assert " bat " in setup
 

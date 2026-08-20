@@ -37,7 +37,7 @@ update_pkg_index
 component_begin "core_utils"
 if (
   set -e
-  install_packages git git-delta jq yq fzf ripgrep fd-find eza bat tree vim htop btop cloc gnupg2 bash-completion bsdmainutils
+  install_packages git git-delta just jq yq fzf ripgrep fd-find eza bat tree vim htop btop cloc gnupg2 bash-completion bsdmainutils
   if bin_exists fdfind && ! bin_exists fd; then
     link_file "$(command -v fdfind)" "$HOME/bin/fd"
   fi

@@ -58,7 +58,7 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages git git-delta jq yq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion
+  install_packages git git-delta just jq yq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion
 ); then
   component_end "core_utils" 0
 else
