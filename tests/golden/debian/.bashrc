@@ -99,6 +99,9 @@ fi
 # --- rust ---
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
+# --- zig ---
+export PATH="$HOME/.local/share/zig:$PATH"
+
 # --- node_fnm ---
 export PATH="$HOME/.local/share/fnm:$PATH"
 if bin_exists fnm; then

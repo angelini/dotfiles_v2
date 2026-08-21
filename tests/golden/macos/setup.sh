@@ -302,11 +302,106 @@ fi
 component_begin "rust"
 if (
   set -e
-  install_script cargo https://sh.rustup.rs -y --default-toolchain stable
+  install_script rustup https://sh.rustup.rs -y --default-toolchain stable
+  [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+  rustup target add wasm32-wasip2
 ); then
   component_end "rust" 0
 else
   _rc=$?; component_end "rust" "$_rc"; exit "$_rc"
+fi
+
+# --- taplo ---
+component_begin "taplo"
+if (
+  set -e
+  _install_taplo() (
+    local arch checksum installed tmp actual
+    case "$(detect_arch)" in
+      x86_64) arch=x86_64; checksum=9fd7a2872ea154df61a2c7e9ca69fc19ac08e29f2e2dc2f866e299bdc789c1a1 ;;
+      aarch64|arm64) arch=aarch64; checksum=13cd257c1cadb003b40daf82b3fb1451e012e2463b760bdd33df07a07970c604 ;;
+      *) error "unsupported arch for Taplo: $(detect_arch)"; exit 1 ;;
+    esac
+    installed="$HOME/bin/taplo"
+    if [ -e "$installed" ] || [ -L "$installed" ]; then
+      if [ ! -f "$installed" ] || [ -L "$installed" ]; then
+        error "unsafe Taplo binary destination: $installed"
+        exit 1
+      fi
+    fi
+    if [ -x "$installed" ] && [ "$(sha256_file "$installed")" = "$checksum" ] && bin_version_matches "$installed" "0.10.0" --version; then
+      exit 0
+    fi
+    ensure_dir "$HOME/bin"
+    tmp="$(mktemp "$HOME/bin/.taplo.XXXXXX")"
+    trap 'rm -f -- "$tmp"' EXIT
+    curl -fsSL "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-${arch}.gz" | gzip -dc > "$tmp"
+    actual="$(sha256_file "$tmp")"
+    if [ "$actual" != "$checksum" ]; then
+      error "checksum mismatch for Taplo"
+      exit 1
+    fi
+    chmod 0755 "$tmp"
+    if ! bin_version_matches "$tmp" "0.10.0" --version; then
+      error "version mismatch for Taplo"
+      exit 1
+    fi
+    mv -f -- "$tmp" "$installed"
+    tmp=""
+  )
+  _install_taplo
+); then
+  component_end "taplo" 0
+else
+  _rc=$?; component_end "taplo" "$_rc"; exit "$_rc"
+fi
+
+# --- zig ---
+component_begin "zig"
+if (
+  set -e
+  _install_zig() (
+    local arch checksum zig_dir parent stage archive actual
+    case "$(detect_arch)" in
+      x86_64) arch=x86_64; checksum=0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7 ;;
+      aarch64|arm64) arch=aarch64; checksum=b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489 ;;
+      *) error "unsupported arch for Zig: $(detect_arch)"; exit 1 ;;
+    esac
+    zig_dir="$HOME/.local/share/zig"
+    if [ -e "$zig_dir" ] || [ -L "$zig_dir" ]; then
+      if [ ! -d "$zig_dir" ] || [ -L "$zig_dir" ]; then
+        error "unsafe Zig installation destination: $zig_dir"
+        exit 1
+      fi
+    fi
+    if [ -x "$zig_dir/zig" ] && [ "$("$zig_dir/zig" version)" = "0.16.0" ]; then
+      exit 0
+    fi
+    parent="$HOME/.local/share"
+    ensure_dir "$parent"
+    stage="$(mktemp -d "$parent/.zig.XXXXXX")"
+    archive="$(mktemp "$parent/.zig-archive.XXXXXX")"
+    trap 'rm -rf -- "$stage"; rm -f -- "$archive"' EXIT
+    curl -fsSL "https://ziglang.org/download/0.16.0/zig-${arch}-macos-0.16.0.tar.xz" -o "$archive"
+    actual="$(sha256_file "$archive")"
+    if [ "$actual" != "$checksum" ]; then
+      error "checksum mismatch for Zig"
+      exit 1
+    fi
+    tar -xJf "$archive" -C "$stage" --strip-components=1
+    if [ ! -x "$stage/zig" ] || [ "$("$stage/zig" version)" != "0.16.0" ]; then
+      error "version mismatch for Zig"
+      exit 1
+    fi
+    rm -rf -- "$zig_dir"
+    mv -- "$stage" "$zig_dir"
+    stage=""
+  )
+  _install_zig
+); then
+  component_end "zig" 0
+else
+  _rc=$?; component_end "zig" "$_rc"; exit "$_rc"
 fi
 
 # --- node_fnm ---

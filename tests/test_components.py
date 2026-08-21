@@ -37,9 +37,11 @@ from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
 from dotgen.components.supacode import Supacode
+from dotgen.components.taplo import Taplo
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
+from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
@@ -81,13 +83,122 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, Supacode, OrbStack, PiAgent])
+@pytest.mark.parametrize("cls", [Rust, Taplo, Zig, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, Supacode, OrbStack, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
         comp = cls()
         if comp.applies_to(env):
             assert isinstance(comp.render(env), Fragment)
+
+
+def test_taplo_installs_for_normal_environments() -> None:
+    debian = Taplo().render(ENVIRONMENTS["debian"]).setup
+    macos = Taplo().render(ENVIRONMENTS["macos"]).setup
+    assert "taplo-linux-${arch}.gz" in debian
+    assert "taplo-darwin-${arch}.gz" in macos
+    assert "sha256_file" in debian
+    assert "sha256_file" in macos
+    assert '"0.10.0" --version' in debian
+    assert '"0.10.0" --version' in macos
+    assert "install_package" not in macos
+    assert not Taplo().applies_to(ENVIRONMENTS["debian-docker"])
+
+
+def test_zig_installs_for_normal_environments() -> None:
+    debian = Zig().render(ENVIRONMENTS["debian"])
+    macos = Zig().render(ENVIRONMENTS["macos"])
+    assert "zig-${arch}-linux-0.16.0.tar.xz" in debian.setup
+    assert "zig-${arch}-macos-0.16.0.tar.xz" in macos.setup
+    assert "sha256_file" in debian.setup
+    assert "sha256_file" in macos.setup
+    assert 'export PATH="$HOME/.local/share/zig:$PATH"' in debian.bashrc
+    assert macos.bashrc == debian.bashrc
+    assert "install_package zig" not in macos.setup
+    assert not Zig().applies_to(ENVIRONMENTS["debian-docker"])
+
+
+def test_rust_installs_wasip2_target() -> None:
+    setup = Rust().render(ENVIRONMENTS["debian"]).setup
+    assert "install_script rustup https://sh.rustup.rs" in setup
+    assert '[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"' in setup
+    assert "rustup target add wasm32-wasip2" in setup
+
+
+def _run_tool_setup(tmp_path: Path, setup: str, prelude: str) -> subprocess.CompletedProcess[str]:
+    script = tmp_path / "tool-setup.sh"
+    script.write_text("set -euo pipefail\n" + prelude + setup)
+    return subprocess.run(["bash", str(script)], env={**os.environ, "HOME": str(tmp_path / "home")}, capture_output=True, text=True)
+
+
+def test_taplo_setup_reuses_verified_binary_without_downloading(tmp_path: Path) -> None:
+    binary = tmp_path / "home" / "bin" / "taplo"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/usr/bin/env bash\nprintf 'taplo 0.10.0\\n'\n")
+    binary.chmod(0o755)
+    marker = tmp_path / "downloaded"
+    prelude = f"""\
+detect_arch() {{ printf 'x86_64\\n'; }}
+sha256_file() {{ printf 'dad2faf6377d2daa4f4fabf459fe7ccfb98a5448f0d4bca8270ca9acb0409bfe\\n'; }}
+bin_version_matches() {{ local bin="$1" expected="$2"; shift 2; "$bin" "$@" | grep -qw "$expected"; }}
+ensure_dir() {{ mkdir -p "$1"; }}
+error() {{ printf '%s\\n' "$*" >&2; }}
+curl() {{ touch {shlex.quote(str(marker))}; return 99; }}
+"""
+
+    result = _run_tool_setup(tmp_path, Taplo().render(ENVIRONMENTS["debian"]).setup, prelude)
+
+    assert result.returncode == 0, result.stderr
+    assert not marker.exists()
+
+
+def test_zig_setup_reuses_matching_installation_without_downloading(tmp_path: Path) -> None:
+    binary = tmp_path / "home" / ".local" / "share" / "zig" / "zig"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/usr/bin/env bash\nprintf '0.16.0\\n'\n")
+    binary.chmod(0o755)
+    marker = tmp_path / "downloaded"
+    prelude = f"""\
+install_package() {{ :; }}
+detect_arch() {{ printf 'x86_64\\n'; }}
+ensure_dir() {{ mkdir -p "$1"; }}
+error() {{ printf '%s\\n' "$*" >&2; }}
+curl() {{ touch {shlex.quote(str(marker))}; return 99; }}
+"""
+
+    result = _run_tool_setup(tmp_path, Zig().render(ENVIRONMENTS["debian"]).setup, prelude)
+
+    assert result.returncode == 0, result.stderr
+    assert not marker.exists()
+
+
+def test_tool_setups_reject_unsafe_managed_destinations(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = tmp_path / "target"
+    target.mkdir()
+    taplo = home / "bin" / "taplo"
+    taplo.parent.mkdir(parents=True)
+    taplo.symlink_to(target)
+    prelude = """\
+install_package() { :; }
+detect_arch() { printf 'x86_64\\n'; }
+error() { printf '%s\\n' "$*" >&2; }
+"""
+
+    taplo_result = _run_tool_setup(tmp_path, Taplo().render(ENVIRONMENTS["debian"]).setup, prelude)
+
+    assert taplo_result.returncode != 0
+    assert "unsafe Taplo binary destination" in taplo_result.stderr
+
+    taplo.unlink()
+    zig = home / ".local" / "share" / "zig"
+    zig.parent.mkdir(parents=True)
+    zig.symlink_to(target, target_is_directory=True)
+
+    zig_result = _run_tool_setup(tmp_path, Zig().render(ENVIRONMENTS["debian"]).setup, prelude)
+
+    assert zig_result.returncode != 0
+    assert "unsafe Zig installation destination" in zig_result.stderr
 
 
 def test_bash_base_l_alias_uses_eza() -> None:
@@ -676,7 +787,7 @@ def test_orbstack_macos_only_and_installs_cask() -> None:
 def test_install_script_used_for_curl_installers() -> None:
     expected = {
         "starship": "install_script starship https://starship.rs/install.sh -y",
-        "rust": "install_script cargo https://sh.rustup.rs -y --default-toolchain stable",
+        "rust": "install_script rustup https://sh.rustup.rs -y --default-toolchain stable",
         "node_fnm": 'install_script fnm https://fnm.vercel.app/install --skip-shell --force-install --install-dir "$HOME/.local/share/fnm"',
         "claude_code": "install_script claude https://claude.ai/install.sh",
     }

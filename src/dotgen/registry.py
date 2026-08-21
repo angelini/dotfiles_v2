@@ -28,9 +28,11 @@ from dotgen.components.rust import Rust
 from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
 from dotgen.components.supacode import Supacode
+from dotgen.components.taplo import Taplo
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
+from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
 from dotgen.types import OS, PkgMgr
@@ -52,6 +54,8 @@ _SHARED: tuple[Component, ...] = (
     Gh(),
     GitSigning(),
     Rust(),
+    Taplo(),
+    Zig(),
     NodeFnm(),
     NpmConfig(),
     PiAgent(),
@@ -73,6 +77,8 @@ _DOCKER_SKIP = {
     "aws",
     "gcloud",
     "rust",
+    "taplo",
+    "zig",
     "go_lang",
     "python_tools",
     "claude_code",
