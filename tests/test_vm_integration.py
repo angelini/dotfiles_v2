@@ -406,6 +406,11 @@ printf 'helm-repository-secret\n' > "$HOME/.config/helm/repositories.yaml"
 cat > "$HOME/repos/sandbox-smoke/pi" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+process_substitution_output=
+while IFS= read -r line; do
+  process_substitution_output+="$line"
+done < <(printf 'process-substitution\n')
+[ "$process_substitution_output" = process-substitution ]
 transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
 for dir in \
   "$HOME/.pi" \

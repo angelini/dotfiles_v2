@@ -287,6 +287,8 @@ _pi_macos_sb_template = r"""(version 1)
 (allow file-read* file-write-data
   (literal "/dev/null")
   (literal "/dev/zero"))
+(allow file-read-data file-test-existence file-write-data
+  (subpath "/dev/fd"))
 
 (allow file-read*
   (subpath "/bin")

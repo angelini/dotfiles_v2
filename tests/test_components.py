@@ -925,6 +925,7 @@ def test_pi_agent_sandbox_configs() -> None:
     assert '(literal (param "HOME_PARENT"))' in profile.content
     assert '(subpath (param "HOME"))' in profile.content
     assert '(subpath (param "TMPDIR"))' in profile.content
+    assert '(allow file-read-data file-test-existence file-write-data\n  (subpath "/dev/fd"))' in profile.content
     assert '(subpath (param "TRANSFORMERS_CACHE"))' in profile.content
     assert 'runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' in script.content
     assert '--ro-bind-try "$runtime_dir/fnm_multishells" "$runtime_dir/fnm_multishells"' in script.content
