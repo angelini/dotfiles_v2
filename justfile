@@ -41,11 +41,14 @@ typecheck:
 test:
     uv run pytest
 
+_vm-test-preflight:
+    @if [ "${DOTGEN_PI_SANDBOX:-}" = 1 ]; then echo "VM tests require host virtualization access and cannot run inside pi-sandbox. Rerun from a regular terminal or start Pi with pi-unsafe." >&2; exit 2; fi
+
 # env: debian | debian-docker | macos
-test-vm env="debian":
+test-vm env="debian": _vm-test-preflight
     case "{{env}}" in debian) selector=debian ;; debian-docker) selector=docker ;; macos) selector=macos ;; *) echo "unknown VM environment: {{env}}" >&2; exit 2 ;; esac; uv run pytest tests/test_vm_integration.py -v -m vm -k "$selector"
 
-test-vm-all:
+test-vm-all: _vm-test-preflight
     uv run pytest tests/test_vm_integration.py -v -m vm
 
 clean:

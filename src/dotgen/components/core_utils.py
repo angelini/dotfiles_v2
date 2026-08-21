@@ -25,6 +25,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
         "gnupg2",
         "bash-completion",
         "bsdmainutils",
+        "protobuf-compiler",
     ),
     OS.MACOS: (
         "git",
@@ -44,6 +45,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
         "cloc",
         "gnupg",
         "bash-completion",
+        "protobuf",
     ),
 }
 

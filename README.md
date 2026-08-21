@@ -19,6 +19,34 @@ just clean              # rm -rf dist
 
 `just ci` runs the full chain: `lint typecheck test build-all shellcheck`.
 
+### VM integration tests
+
+VM tests are opt-in and must run from an ordinary, unsandboxed macOS shell. The default `pi` function launches `pi-sandbox`; its macOS Seatbelt profile deliberately excludes the host virtualization state these tests control:
+
+- `/Applications` is not readable, so the `orb` and `docker` symlinks into `OrbStack.app` appear missing.
+- `~/.tart` is not readable or writable, so Tart cannot access its image cache, temporary files, or VM state.
+- On this host, `uv run` also fails inside the sandbox while canonicalizing `.venv/bin/python3`, before pytest can evaluate its backend skip checks.
+
+The VM recipes therefore no longer run from a normal Pi session by design. Do not add these paths or daemons to the standard sandbox: Docker or OrbStack access can mount arbitrary host paths and would defeat its file isolation. The recipes detect `pi-sandbox` and stop with instructions to retry from a regular terminal or a deliberately unsandboxed `pi-unsafe` session. They are not part of `just ci`.
+
+| Recipe | Host requirements |
+| --- | --- |
+| `just test-vm debian` | `just`, `uv`, and a running OrbStack installation exposing `orb` |
+| `just test-vm debian-docker` | `just`, `uv`, `docker`, and a reachable Docker daemon (normally OrbStack on this Mac) |
+| `just test-vm macos` | Apple Silicon, `just`, `uv`, `tart`, `sshpass`, `ssh`, `scp`, and the digest-pinned image from `tests/test_vm_integration.py` already present under `~/.tart/cache/OCIs/` |
+
+Check the selected backend from the same unsandboxed shell that will run the test:
+
+```bash
+command -v just uv
+command -v orb && orb list                    # Debian VM
+command -v docker && docker info               # Debian container
+command -v tart sshpass ssh scp                # macOS VM
+test "$(uname -m)" = arm64
+```
+
+A bare `pytest` executable is not required; `uv run pytest` uses the project development dependency.
+
 ### Native Bash and fzf history
 
 Interactive Bash stores plaintext history in `~/.bash_history` with `HISTSIZE=100000`, `HISTFILESIZE=100000`, `HISTCONTROL=ignoreboth`, and `histappend`. Setup creates the file with mode `0600` or tightens an existing regular file without truncating it; unsafe symlink and non-regular paths stop deployment. `ignoreboth` omits commands beginning with a space and immediate duplicates, but it is not secret detection or redaction. Pi continues to hide `.bash_history`.

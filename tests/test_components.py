@@ -156,6 +156,13 @@ def test_core_utils_include_modern_cli_tools() -> None:
         assert " bat " in setup
 
 
+def test_core_utils_install_protoc_package() -> None:
+    debian = CoreUtils().render(ENVIRONMENTS["debian"]).setup
+    macos = CoreUtils().render(ENVIRONMENTS["macos"]).setup
+    assert "protobuf-compiler" in shlex.split(debian)
+    assert "protobuf" in shlex.split(macos)
+
+
 def test_core_utils_debian_normalizes_binary_names() -> None:
     setup = CoreUtils().render(ENVIRONMENTS["debian"]).setup
     assert "command -v fdfind" in setup
@@ -862,6 +869,7 @@ def test_pi_agent_sandbox_configs() -> None:
     profile = next(cf for cf in frag.configs if cf.dest == "pi/sandbox/pi-macos.sb")
     models = next(cf for cf in frag.configs if cf.dest == "pi/agent/models.json")
     assert script.mode == 0o755
+    assert script.content.count('"DOTGEN_PI_SANDBOX=1"') == 2
     assert {
         ".ssh",
         ".gnupg",

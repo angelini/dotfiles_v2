@@ -210,6 +210,7 @@ _run_macos() {
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
     "TMPDIR=$tmpdir" \
+    "DOTGEN_PI_SANDBOX=1" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
@@ -234,6 +235,7 @@ _run_linux() {
     "SHELL=${SHELL:-/bin/bash}" \
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
+    "DOTGEN_PI_SANDBOX=1" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \

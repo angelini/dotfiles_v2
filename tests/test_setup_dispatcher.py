@@ -94,3 +94,12 @@ def test_just_deploy_removes_stale_bundle_and_archive() -> None:
     justfile = (Path(__file__).parents[1] / "justfile").read_text()
     assert 'rm -rf -- "{{env}}"' in justfile
     assert 'rm -f -- "{{env}}.tar.gz"' in justfile
+
+
+def test_vm_recipes_reject_pi_sandbox() -> None:
+    justfile = (Path(__file__).parents[1] / "justfile").read_text()
+    assert "_vm-test-preflight:" in justfile
+    assert 'test-vm env="debian": _vm-test-preflight' in justfile
+    assert "test-vm-all: _vm-test-preflight" in justfile
+    assert '"${DOTGEN_PI_SANDBOX:-}" = 1' in justfile
+    assert "Rerun from a regular terminal or start Pi with pi-unsafe." in justfile
