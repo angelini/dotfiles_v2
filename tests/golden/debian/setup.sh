@@ -816,6 +816,7 @@ if (
     remove_packages docker.io docker-compose docker-doc podman-docker containerd runc || return 1
     update_pkg_index || return 1
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || return 1
+    install_package kmod || return 1
     service_mask docker.service docker.socket || return 1
     _docker_verify_rootful || return 1
     _docker_load_iptables_module || return 1

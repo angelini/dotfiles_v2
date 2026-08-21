@@ -76,8 +76,27 @@ class _VmBackend(Protocol):
         timeout: float | None,
     ) -> subprocess.CompletedProcess[str]: ...
     def push(self, vm_name: str, user: str, src: Path, dest: str) -> None: ...
+    def prepare_passwordless_sudo(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]: ...
     def prepare_rootless_container_subids(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]: ...
     def teardown(self, vm_name: str) -> None: ...
+
+
+_PREPARE_PASSWORDLESS_SUDO = r"""set -euo pipefail
+user="$1"
+[[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || { echo "invalid account" >&2; exit 1; }
+id "$user" >/dev/null 2>&1 || { echo "unknown account" >&2; exit 1; }
+sudoers_dir=/etc/sudoers.d
+rule="$sudoers_dir/dotgen-vm-test"
+mkdir -p "$sudoers_dir"
+tmp="$(mktemp "$sudoers_dir/.dotgen-vm-test.XXXXXX")"
+trap 'rm -f "$tmp"' EXIT
+printf 'Defaults:%s !authenticate\n%s ALL=(ALL) NOPASSWD: ALL\n' "$user" "$user" > "$tmp"
+chmod 0440 "$tmp"
+visudo -cf "$tmp" >/dev/null
+mv -f "$tmp" "$rule"
+trap - EXIT
+visudo -cf /etc/sudoers >/dev/null
+"""
 
 
 _ORB_PREPARE_ROOTLESS_SUBIDS = r"""set -euo pipefail
@@ -216,6 +235,16 @@ class _OrbBackend:
                 check=True,
             )
 
+    def prepare_passwordless_sudo(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["orb", "-m", vm_name, "-u", "root", "bash", "-s", "--", user],
+            input=_PREPARE_PASSWORDLESS_SUDO,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+
     def prepare_rootless_container_subids(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["orb", "-m", vm_name, "-u", "root", "bash", "-s", "--", user],
@@ -298,6 +327,10 @@ class _DockerBackend:
             text=True,
             check=True,
         )
+
+    def prepare_passwordless_sudo(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]:
+        _ = (vm_name, user)
+        raise VmBackendUnavailable("passwordless sudo is already provisioned in the Docker fixture")
 
     def prepare_rootless_container_subids(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]:
         _ = (vm_name, user)
@@ -399,6 +432,27 @@ class _TartBackend:
         ]
         _ = subprocess.run(argv, capture_output=True, text=True, check=True)
 
+    def prepare_passwordless_sudo(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]:
+        ip = self._sessions[vm_name].ip
+        cmd = f"sudo -S -p '' bash -c {shlex.quote(_PREPARE_PASSWORDLESS_SUDO)} -- {shlex.quote(user)}"
+        argv = [
+            "sshpass",
+            "-p",
+            self._SSH_PASS,
+            "ssh",
+            *_SSH_OPTS,
+            f"{user}@{ip}",
+            cmd,
+        ]
+        return subprocess.run(
+            argv,
+            input=f"{self._SSH_PASS}\n",
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+
     def prepare_rootless_container_subids(self, vm_name: str, user: str) -> subprocess.CompletedProcess[str]:
         _ = (vm_name, user)
         raise VmBackendUnavailable("rootless-container subordinate-ID preparation is supported only by the OrbStack Debian fixture")
@@ -492,6 +546,18 @@ class VmHandle:
 
     def assert_cmd(self, cmd: str, *, login: bool = False) -> None:
         self.run(cmd, login=login, check=True)
+
+    def prepare_passwordless_sudo(self) -> None:
+        result = self.backend.prepare_passwordless_sudo(self.name, self.user)
+        if result.returncode != 0:
+            raise VmCommandError(
+                vm=self.name,
+                cmd="prepare passwordless sudo",
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
+        self.run("sudo -n -v", timeout=30)
 
     def prepare_rootless_container_subids(self) -> None:
         result = self.backend.prepare_rootless_container_subids(self.name, self.user)

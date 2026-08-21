@@ -25,6 +25,7 @@ IMAGES = {
 
 _DEPLOY_TIMEOUT = {"debian": 900, "debian-docker": 900, "macos": 1800}
 _REDEPLOY_TIMEOUT = {"debian": 600, "debian-docker": 600, "macos": 600}
+_FAKE_NPM_TOKEN = "dotgen-vm-test-not-a-real-token"
 
 
 def _deploy_cmd(env_name: str) -> str:
@@ -33,7 +34,9 @@ def _deploy_cmd(env_name: str) -> str:
 
 
 def _stub_secrets_env(template_path: Path) -> str:
-    return template_path.read_text().replace('=""', '="test"')
+    template = template_path.read_text()
+    assert 'NPM_TOKEN=""' in template
+    return template.replace('NPM_TOKEN=""', f'NPM_TOKEN="{_FAKE_NPM_TOKEN}"').replace('=""', '="test"')
 
 
 @pytest.fixture(scope="module", params=list(IMAGES), ids=["debian", "docker", "macos"])
@@ -48,13 +51,17 @@ def vm(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory)
     tar_base = str(work / env_name)
     tar = shutil.make_archive(tar_base, "gztar", root_dir=str(work), base_dir=env_name)
 
+    secrets_template = work / env_name / "config" / "dotgen" / "secrets.env.template"
     secrets_local = work / "secrets.env"
-    secrets_local.write_text(_stub_secrets_env(work / env_name / "config" / "dotgen" / "secrets.env.template"))
+    secrets_local.write_text(_stub_secrets_env(secrets_template))
+    if env_name == "debian-docker":
+        secrets_template.write_text(secrets_local.read_text())
 
     try:
         with vm_session(env_name, image_spec) as handle:
+            if env_name != "debian-docker":
+                handle.prepare_passwordless_sudo()
             if env_name == "debian":
-                handle.assert_cmd("sudo -n true")
                 handle.prepare_rootless_container_subids()
             handle.push(Path(tar), "/tmp/dotgen.tar.gz")
             handle.push(secrets_local, "/tmp/secrets.env")
@@ -383,6 +390,11 @@ fi
 def test_node_and_npm_installed(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
     handle.assert_cmd("command -v node && command -v npm", login=True)
+
+
+def test_npm_config_uses_synthetic_token(vm: tuple[str, VmHandle]) -> None:
+    _, handle = vm
+    handle.assert_cmd(f"grep -Fqx '//npm.pkg.github.com/:_authToken={_FAKE_NPM_TOKEN}' \"$HOME/.npmrc\"")
 
 
 def test_pi_launches_through_sandbox(vm: tuple[str, VmHandle]) -> None:

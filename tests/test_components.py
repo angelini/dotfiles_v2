@@ -699,6 +699,7 @@ def test_docker_render_contract() -> None:
         'sudo modprobe "$module"',
         "update_pkg_index",
         "install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras",
+        "install_package kmod",
     ):
         assert token in setup
     for forbidden in (

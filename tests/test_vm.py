@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import BinaryIO, cast
@@ -58,6 +59,73 @@ def test_orb_push_streams_binary_file_over_stdin(monkeypatch: pytest.MonkeyPatch
     assert "text" not in push_kwargs
     assert "input" not in push_kwargs
     assert str(src) not in calls[1]
+
+
+def test_orb_prepares_passwordless_sudo_over_root_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 0, "ok", "")
+
+    monkeypatch.setattr("dotgen.vm.subprocess.run", fake_run)
+    script_name = "_PREPARE_PASSWORDLESS_SUDO"
+    backend_name = "_OrbBackend"
+    script = getattr(vm, script_name)
+    assert "Defaults:%s !authenticate" in script
+    assert "%s ALL=(ALL) NOPASSWD: ALL" in script
+    assert "visudo -cf /etc/sudoers" in script
+    backend = getattr(vm, backend_name)()
+    handle = vm.VmHandle("vm-name", "test-user", backend)
+    handle.prepare_passwordless_sudo()
+
+    argv, kwargs = calls[0]
+    assert argv == ["orb", "-m", "vm-name", "-u", "root", "bash", "-s", "--", "test-user"]
+    assert kwargs == {"input": script, "capture_output": True, "text": True, "check": False, "timeout": 60}
+    assert calls[1] == (
+        ["orb", "-m", "vm-name", "-u", "test-user", "bash", "-c", "sudo -n -v"],
+        {"capture_output": True, "text": True, "check": False, "timeout": 30},
+    )
+
+
+def test_tart_prepares_passwordless_sudo_with_fixture_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 0, "ok", "")
+
+    monkeypatch.setattr("dotgen.vm.subprocess.run", fake_run)
+    script_name = "_PREPARE_PASSWORDLESS_SUDO"
+    backend_name = "_TartBackend"
+    session_name = "_TartSession"
+    sessions_name = "_sessions"
+    script = getattr(vm, script_name)
+    backend = getattr(vm, backend_name)()
+    session = getattr(vm, session_name)(cast(subprocess.Popen[bytes], object()), "192.0.2.10")
+    getattr(backend, sessions_name)["vm-name"] = session
+
+    result = backend.prepare_passwordless_sudo("vm-name", "admin")
+
+    assert result.returncode == 0
+    argv, kwargs = calls[0]
+    assert argv[-2] == "admin@192.0.2.10"
+    assert argv[-1] == f"sudo -S -p '' bash -c {shlex.quote(script)} -- admin"
+    assert kwargs == {"input": "admin\n", "capture_output": True, "text": True, "check": False, "timeout": 60}
+
+
+def test_passwordless_sudo_prepare_failure_is_vm_command_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 1, "out", "err")
+
+    monkeypatch.setattr("dotgen.vm.subprocess.run", fake_run)
+    backend_name = "_OrbBackend"
+    backend = getattr(vm, backend_name)()
+    handle = vm.VmHandle("vm-name", "test-user", backend)
+    with pytest.raises(VmCommandError, match="prepare passwordless sudo") as raised:
+        handle.prepare_passwordless_sudo()
+    assert raised.value.stdout == "out"
+    assert raised.value.stderr == "err"
 
 
 def test_orb_prepares_subordinate_ids_over_root_transport(monkeypatch: pytest.MonkeyPatch) -> None:
