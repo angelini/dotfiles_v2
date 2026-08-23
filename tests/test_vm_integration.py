@@ -410,7 +410,7 @@ def test_pi_sandbox_exposes_developer_state_without_credentials(vm: tuple[str, V
         pytest.skip("Docker does not allow the unprivileged user namespace required by bubblewrap")
     cmd = r"""
 set -euo pipefail
-mkdir -p "$HOME/repos/sandbox-smoke" "$HOME/.config/git" "$HOME/.config/helm/registry"
+mkdir -p "$HOME/repos/sandbox-smoke" "$HOME/.config/git" "$HOME/.config/helm/registry" "$HOME/.ssh"
 printf '[user]\n  name = Sandbox User\n' > "$HOME/.config/git/config"
 printf 'git-secret\n' > "$HOME/.config/git/credentials"
 printf 'helm-registry-secret\n' > "$HOME/.config/helm/registry/config.json"
@@ -424,6 +424,22 @@ while IFS= read -r line; do
 done < <(printf 'process-substitution\n')
 [ "$process_substitution_output" = process-substitution ]
 transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+[ "$JITI_FS_CACHE" = 1 ]
+if [ "$(uname -s)" = Darwin ]; then
+  jiti_cache="$TMPDIR/jiti"
+else
+  jiti_cache=/tmp/jiti
+  [ ! -e "$HOME/.pi-sandbox-cache" ]
+fi
+printf 'const value: number = 42;\nexport default value;\n' > "$PWD/jiti-cache-probe.ts"
+jiti_entry="$(npm root -g)/@earendil-works/pi-coding-agent/node_modules/jiti/lib/jiti-static.mjs"
+JITI_ENTRY="$jiti_entry" PROBE="$PWD/jiti-cache-probe.ts" node --input-type=module <<'JS'
+const { createJiti } = await import(process.env.JITI_ENTRY);
+const jiti = createJiti(import.meta.url, { moduleCache: false, tryNative: false });
+const value = await jiti.import(process.env.PROBE, { default: true });
+if (value !== 42) throw new Error(`unexpected Jiti probe result: ${value}`);
+JS
+find "$jiti_cache" -maxdepth 1 -type f -name '*jiti-cache-probe*' -print -quit | grep -q .
 for dir in \
   "$HOME/.pi" \
   "$HOME/.pi-lens" \
@@ -462,7 +478,36 @@ done
 SH
 chmod +x "$HOME/repos/sandbox-smoke/pi"
 cd "$HOME/repos/sandbox-smoke"
+if [ "$(uname -s)" != Darwin ]; then
+  mkdir -p "$HOME/.pi-sandbox-cache"
+  ln -s "$HOME/.ssh" "$HOME/.pi-sandbox-cache/jiti"
+  if PATH="$PWD:$PATH" pi-sandbox > /tmp/pi-sandbox-jiti-symlink.out 2>&1; then
+    echo "pi-sandbox accepted a symlinked Jiti cache" >&2
+    exit 1
+  fi
+  grep -q 'refusing symlinked Jiti cache directory' /tmp/pi-sandbox-jiti-symlink.out
+  rm -f "$HOME/.pi-sandbox-cache/jiti" /tmp/pi-sandbox-jiti-symlink.out
+fi
 PATH="$PWD:$PATH" pi-sandbox
+if [ "$(uname -s)" = Darwin ]; then
+  jiti_cache="${TMPDIR:-/tmp}/jiti"
+else
+  jiti_cache="$HOME/.pi-sandbox-cache/jiti"
+fi
+jiti_cache_file="$(find "$jiti_cache" -maxdepth 1 -type f -name '*jiti-cache-probe*' -print -quit)"
+[ -n "$jiti_cache_file" ]
+if [ "$(uname -s)" = Darwin ]; then
+  jiti_cache_mtime="$(stat -f %m "$jiti_cache_file")"
+else
+  jiti_cache_mtime="$(stat -c %Y "$jiti_cache_file")"
+fi
+sleep 1
+PATH="$PWD:$PATH" pi-sandbox
+if [ "$(uname -s)" = Darwin ]; then
+  [ "$(stat -f %m "$jiti_cache_file")" = "$jiti_cache_mtime" ]
+else
+  [ "$(stat -c %Y "$jiti_cache_file")" = "$jiti_cache_mtime" ]
+fi
 for path in \
   "$HOME/.pi/sandbox-smoke" \
   "$HOME/.pi-lens/sandbox-smoke" \

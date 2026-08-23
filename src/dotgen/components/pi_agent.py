@@ -157,6 +157,27 @@ _resolve_path() {
   cd "$1" 2>/dev/null && pwd -P
 }
 
+_prepare_jiti_cache() {
+  local cache="$1" cache_parent real_cache real_cache_parent real_home
+  real_home="$(_resolve_path "$HOME")" || _die "cannot resolve home directory: $HOME"
+  cache_parent="${cache%/*}"
+
+  [ ! -L "$cache_parent" ] || _die "refusing symlinked Pi sandbox cache directory: $cache_parent"
+  [ ! -e "$cache_parent" ] || [ -d "$cache_parent" ] || _die "Pi sandbox cache path is not a directory: $cache_parent"
+  mkdir -p "$cache_parent"
+  chmod 0700 "$cache_parent"
+  real_cache_parent="$(_resolve_path "$cache_parent")" || _die "cannot resolve Pi sandbox cache directory: $cache_parent"
+  [ "$real_cache_parent" = "$real_home/.pi-sandbox-cache" ] || _die "Pi sandbox cache directory escapes expected path: $cache_parent"
+
+  [ ! -L "$cache" ] || _die "refusing symlinked Jiti cache directory: $cache"
+  [ ! -e "$cache" ] || [ -d "$cache" ] || _die "Jiti cache path is not a directory: $cache"
+  mkdir -p "$cache"
+  chmod 0700 "$cache"
+  real_cache="$(_resolve_path "$cache")" || _die "cannot resolve Jiti cache directory: $cache"
+  [ "$real_cache" = "$real_cache_parent/jiti" ] || _die "Jiti cache directory escapes expected path: $cache"
+  printf '%s\n' "$real_cache"
+}
+
 _fnm_default_bin() {
   local bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"
   [ -x "$bin/node" ] || return 1
@@ -211,6 +232,7 @@ _run_macos() {
     "LANG=${LANG:-C.UTF-8}" \
     "TMPDIR=$tmpdir" \
     "DOTGEN_PI_SANDBOX=1" \
+    "JITI_FS_CACHE=1" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
@@ -226,9 +248,10 @@ _run_macos() {
 
 _run_linux() {
   local pi_bin="$1" transformers_cache="$2" transformers_cache_target="$3"
-  local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  local jiti_cache="$HOME/.pi-sandbox-cache/jiti" runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   shift 3
   command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
+  jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"
   exec env -i \
     "HOME=$HOME" \
     "PATH=${PATH:-/usr/bin:/bin}" \
@@ -236,6 +259,7 @@ _run_linux() {
     "TERM=${TERM:-xterm-256color}" \
     "LANG=${LANG:-C.UTF-8}" \
     "DOTGEN_PI_SANDBOX=1" \
+    "JITI_FS_CACHE=1" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
@@ -248,6 +272,7 @@ _run_linux() {
     --proc /proc \
     --dev-bind /dev /dev \
     --tmpfs /tmp \
+    --bind "$jiti_cache" /tmp/jiti \
     --dir /run \
     --dir /run/user \
     --dir "$runtime_dir" \

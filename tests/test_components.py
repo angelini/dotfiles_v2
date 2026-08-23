@@ -1032,6 +1032,14 @@ def test_pi_agent_sandbox_configs() -> None:
         sbpl = f'(literal (string-append (param "HOME") "/{path}"))'
         assert profile.content.count(sbpl) == 1
 
+    assert 'jiti_cache="$HOME/.pi-sandbox-cache/jiti"' in script.content
+    assert script.content.count('"JITI_FS_CACHE=1"') == 2
+    assert "refusing symlinked Jiti cache directory" in script.content
+    assert 'chmod 0700 "$cache_parent"' in script.content
+    assert 'chmod 0700 "$cache"' in script.content
+    jiti_bind = '--bind "$jiti_cache" /tmp/jiti'
+    assert script.content.index("--tmpfs /tmp") < script.content.index(jiti_bind)
+    assert script.content.index('jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"') < script.content.rindex("exec env -i")
     assert 'transformers_cache="$memory_dir/transformers-cache"' in script.content
     assert 'transformers_cache_target="$(npm root -g)/@samfp/pi-memory/' in script.content
     fnm_bind = '--ro-bind "$HOME/.local/share/fnm" "$HOME/.local/share/fnm"'
