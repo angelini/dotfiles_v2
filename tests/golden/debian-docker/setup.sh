@@ -164,12 +164,12 @@ if (
   _install_kubectl_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl" "v1.35.4" version --client
+    download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client
   }
   _install_helm_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.20.2" version --template '{{.Version}}'
+    download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template '{{.Version}}'
   }
   _install_k9s_linux() {
     local arch
@@ -189,7 +189,7 @@ if (
   _install_kubie_linux() {
     local arch
     arch="$(_kubie_arch)"
-    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}" "0.27.0" --version
+    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version
   }
   _install_kubectl_linux
   _install_helm_linux

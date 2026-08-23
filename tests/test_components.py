@@ -370,22 +370,22 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
     expected_assets = {
         "debian": (
             "herdr-linux-${arch}",
-            "b872ea7e40fa2cb17e857ac9b62b1bf26db7b403c622f5d2f3f5b35f6e9acd28",
-            "f647ac66468d9efbc642fe534fb284468f0aea60641606fc008dfc0d82a3ca87",
+            "976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4",
+            "f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d",
         ),
         "macos": (
             "herdr-macos-${arch}",
-            "77cb5afd6c8fcaaaf3bc28e474ec01c209331ad08094e20d7f8aa9b0bb78d649",
-            "d53a9f93fccfdfcc55632927bf51002f5add0aa7990bcdf508ffbd84ac658178",
+            "ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1",
+            "a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574",
         ),
     }
     for env_name, (asset, x86_sha, arm_sha) in expected_assets.items():
         fragment = herdr.render(ENVIRONMENTS[env_name])
-        assert f"https://github.com/herdrdev/herdr/releases/download/v0.8.0/{asset}" in fragment.setup
+        assert f"https://github.com/herdrdev/herdr/releases/download/v0.8.2/{asset}" in fragment.setup
         assert f"x86_64) arch=x86_64; checksum={x86_sha}" in fragment.setup
         assert f"aarch64|arm64) arch=aarch64; checksum={arm_sha}" in fragment.setup
         assert "download_bin_sha256 herdr" in fragment.setup
-        assert '"0.8.0" --version' in fragment.setup
+        assert '"0.8.2" --version' in fragment.setup
         assert 'remote_bin="$HOME/.local/bin/herdr"' in fragment.setup
         assert 'error "unsafe Herdr remote binary destination: $remote_bin"' in fragment.setup
         assert 'link_file "$HOME/bin/herdr" "$remote_bin"' in fragment.setup
@@ -528,13 +528,13 @@ def test_kubectl_per_os_branching() -> None:
     assert "_install_k9s_linux" in debian
     assert "_install_kubectx_linux" in debian
     assert "_install_kubens_linux" in debian
-    assert 'download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl" "v1.35.4" version --client' in debian
-    assert 'download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.20.2" version --template \'{{.Version}}\'' in debian
+    assert 'download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client' in debian
+    assert 'download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template \'{{.Version}}\'' in debian
     assert 'download_tar_bin k9s "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_${arch}.tar.gz" "k9s" "v0.51.0" version --short' in debian
     assert "releases/latest" not in debian
     assert 'download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx" "v0.11.0" --version' in debian
     assert 'download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens" "v0.11.0" --version' in debian
-    assert 'download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}" "0.27.0" --version' in debian
+    assert 'download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version' in debian
     assert "kubie generate-completion" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
     aliases = Kubectl().render(ENVIRONMENTS["macos"]).alias
     assert "alias kca=" not in aliases

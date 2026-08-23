@@ -124,11 +124,11 @@ if (
   _install_herdr() {
     local arch checksum remote_bin
     case "$(detect_arch)" in
-      x86_64) arch=x86_64; checksum=77cb5afd6c8fcaaaf3bc28e474ec01c209331ad08094e20d7f8aa9b0bb78d649 ;;
-      aarch64|arm64) arch=aarch64; checksum=d53a9f93fccfdfcc55632927bf51002f5add0aa7990bcdf508ffbd84ac658178 ;;
+      x86_64) arch=x86_64; checksum=ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1 ;;
+      aarch64|arm64) arch=aarch64; checksum=a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574 ;;
       *) error "unsupported arch for Herdr: $(detect_arch)"; return 1 ;;
     esac
-    download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.0/herdr-macos-${arch}" "$checksum" "0.8.0" --version
+    download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-macos-${arch}" "$checksum" "0.8.2" --version
     ensure_dir "$HOME/.local/bin"
     remote_bin="$HOME/.local/bin/herdr"
     if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then

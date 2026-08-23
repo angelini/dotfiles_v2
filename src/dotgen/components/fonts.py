@@ -8,7 +8,7 @@ _SETUP_DEBIAN = """install_packages fontconfig xz-utils
 _install_nerd_fonts() {
   local tmp url
   tmp="$(mktemp -d)"
-  url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/UbuntuMono.tar.xz"
+  url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/UbuntuMono.tar.xz"
   curl -fsSL "$url" -o "$tmp/fonts.tar.xz"
   mkdir -p "$HOME/.local/share/fonts"
   tar -xf "$tmp/fonts.tar.xz" -C "$HOME/.local/share/fonts"

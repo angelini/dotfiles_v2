@@ -4,7 +4,7 @@ from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.types import OS
 
-_VERSION = "0.8.0"
+_VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
 _ASSET_OS: dict[OS, str] = {
     OS.DEBIAN: "linux",
@@ -12,12 +12,12 @@ _ASSET_OS: dict[OS, str] = {
 }
 _SHA256: dict[OS, dict[str, str]] = {
     OS.DEBIAN: {
-        "x86_64": "b872ea7e40fa2cb17e857ac9b62b1bf26db7b403c622f5d2f3f5b35f6e9acd28",
-        "aarch64": "f647ac66468d9efbc642fe534fb284468f0aea60641606fc008dfc0d82a3ca87",
+        "x86_64": "976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4",
+        "aarch64": "f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d",
     },
     OS.MACOS: {
-        "x86_64": "77cb5afd6c8fcaaaf3bc28e474ec01c209331ad08094e20d7f8aa9b0bb78d649",
-        "aarch64": "d53a9f93fccfdfcc55632927bf51002f5add0aa7990bcdf508ffbd84ac658178",
+        "x86_64": "ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1",
+        "aarch64": "a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574",
     },
 }
 

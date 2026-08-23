@@ -109,11 +109,11 @@ if (
   _install_herdr() {
     local arch checksum remote_bin
     case "$(detect_arch)" in
-      x86_64) arch=x86_64; checksum=b872ea7e40fa2cb17e857ac9b62b1bf26db7b403c622f5d2f3f5b35f6e9acd28 ;;
-      aarch64|arm64) arch=aarch64; checksum=f647ac66468d9efbc642fe534fb284468f0aea60641606fc008dfc0d82a3ca87 ;;
+      x86_64) arch=x86_64; checksum=976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4 ;;
+      aarch64|arm64) arch=aarch64; checksum=f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d ;;
       *) error "unsupported arch for Herdr: $(detect_arch)"; return 1 ;;
     esac
-    download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.0/herdr-linux-${arch}" "$checksum" "0.8.0" --version
+    download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-linux-${arch}" "$checksum" "0.8.2" --version
     ensure_dir "$HOME/.local/bin"
     remote_bin="$HOME/.local/bin/herdr"
     if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then
@@ -231,12 +231,12 @@ if (
   _install_kubectl_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_bin kubectl "https://dl.k8s.io/release/v1.35.4/bin/linux/${arch}/kubectl" "v1.35.4" version --client
+    download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client
   }
   _install_helm_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_tar_bin helm "https://get.helm.sh/helm-v3.20.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.20.2" version --template '{{.Version}}'
+    download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template '{{.Version}}'
   }
   _install_k9s_linux() {
     local arch
@@ -256,7 +256,7 @@ if (
   _install_kubie_linux() {
     local arch
     arch="$(_kubie_arch)"
-    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.27.0/kubie-linux-${arch}" "0.27.0" --version
+    download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version
   }
   _install_kubectl_linux
   _install_helm_linux
@@ -630,7 +630,7 @@ if (
   _install_nerd_fonts() {
     local tmp url
     tmp="$(mktemp -d)"
-    url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/UbuntuMono.tar.xz"
+    url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/UbuntuMono.tar.xz"
     curl -fsSL "$url" -o "$tmp/fonts.tar.xz"
     mkdir -p "$HOME/.local/share/fonts"
     tar -xf "$tmp/fonts.tar.xz" -C "$HOME/.local/share/fonts"

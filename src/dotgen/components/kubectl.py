@@ -4,11 +4,11 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
-_KUBE_VERSION = "v1.35.4"
-_HELM_VERSION = "v3.20.2"
+_KUBE_VERSION = "v1.35.8"
+_HELM_VERSION = "v3.21.4"
 _K9S_VERSION = "v0.51.0"
 _KUBECTX_VERSION = "v0.11.0"
-_KUBIE_VERSION = "v0.27.0"
+_KUBIE_VERSION = "v0.28.0"
 
 _LINUX_HELPERS = (
     r"""_kube_arch() {
