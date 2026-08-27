@@ -392,6 +392,8 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert 'error "failed to publish Herdr remote binary: $remote_bin"' in fragment.setup
         assert 'install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"' in fragment.setup
         assert 'install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"' in fragment.setup
+        assert '"$remote_bin" plugin install "persiyanov/herdr-reviewr" --ref "v0.36.0" --yes' in fragment.setup
+        assert '"$remote_bin" plugin install "alexarthurs/herdr-sidebar/plugins/herdr-sidebar" --ref "v0.10.0" --yes' in fragment.setup
         configs = {config.dest: config for config in fragment.configs}
         assert (
             configs["herdr/config.toml"].content

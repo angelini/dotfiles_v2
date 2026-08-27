@@ -6,6 +6,10 @@ from dotgen.types import OS
 
 _VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
+_REVIEWR_VERSION = "0.36.0"
+_REVIEWR_SOURCE = "persiyanov/herdr-reviewr"
+_SIDEBAR_VERSION = "0.10.0"
+_SIDEBAR_SOURCE = "alexarthurs/herdr-sidebar/plugins/herdr-sidebar"
 _ASSET_OS: dict[OS, str] = {
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
@@ -85,6 +89,8 @@ _install_herdr() {{
   fi
   install_config "$DIR/config/herdr/config.toml" "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/config.toml"
   install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
+  "$remote_bin" plugin install "{_REVIEWR_SOURCE}" --ref "v{_REVIEWR_VERSION}" --yes
+  "$remote_bin" plugin install "{_SIDEBAR_SOURCE}" --ref "v{_SIDEBAR_VERSION}" --yes
 }}
 _install_herdr
 """
