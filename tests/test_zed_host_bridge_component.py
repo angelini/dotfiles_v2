@@ -3,6 +3,7 @@ import os
 import plistlib
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 from collections.abc import Generator
@@ -70,6 +71,10 @@ def test_launch_agent_and_ssh_resources_are_scoped() -> None:
     assert "Host *" not in ssh_config
 
 
+def _socket_path(name: str) -> Path:
+    return Path(tempfile.mkdtemp(prefix="dotgen-zed-", dir="/tmp")) / f"{name}.sock"
+
+
 def _run_client(home: Path, socket_path: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [_node(), str(BRIDGE), "client", *args],
@@ -83,20 +88,27 @@ def _run_client(home: Path, socket_path: Path, cwd: Path, *args: str) -> subproc
 
 
 def _one_shot_receiver(socket_path: Path, captured: list[dict[str, object]]) -> threading.Thread:
+    socket_path.parent.mkdir(mode=0o700, exist_ok=True)
+    socket_path.parent.chmod(0o700)
+    socket_path.unlink(missing_ok=True)
     ready = threading.Event()
 
     def receive() -> None:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-            server.bind(str(socket_path))
-            ready.set()
-            server.listen(1)
-            connection, _ = server.accept()
-            with connection:
-                payload = b""
-                while not payload.endswith(b"\n"):
-                    payload += connection.recv(65536)
-                captured.append(json.loads(payload))
-                connection.sendall(b'{"ok":true,"exitCode":0}\n')
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(str(socket_path))
+                ready.set()
+                server.listen(1)
+                connection, _ = server.accept()
+                with connection:
+                    payload = b""
+                    while not payload.endswith(b"\n"):
+                        payload += connection.recv(65536)
+                    captured.append(json.loads(payload))
+                    connection.sendall(b'{"ok":true,"exitCode":0}\n')
+        finally:
+            socket_path.unlink(missing_ok=True)
+            socket_path.parent.rmdir()
 
     thread = threading.Thread(target=receive, daemon=True)
     thread.start()
@@ -110,7 +122,7 @@ def test_client_round_trips_paths_positions_and_options(tmp_path: Path) -> None:
     project.mkdir(parents=True)
     file_path = project / "unicode-λ.py"
     file_path.write_text("pass\n")
-    socket_path = tmp_path / "bridge.sock"
+    socket_path = _socket_path("client")
     captured: list[dict[str, object]] = []
     receiver = _one_shot_receiver(socket_path, captured)
 
@@ -136,7 +148,7 @@ def test_client_existing_filename_colon_wins_and_defaults_to_cwd(tmp_path: Path)
     project = home / "repos/project"
     project.mkdir(parents=True)
     (project / "name:12").write_text("data\n")
-    socket_path = tmp_path / "bridge.sock"
+    socket_path = _socket_path("existing")
     captured: list[dict[str, object]] = []
     receiver = _one_shot_receiver(socket_path, captured)
     result = _run_client(home, socket_path, project, "name:12")
@@ -179,7 +191,7 @@ def test_client_rejects_traversal_and_symlink_escape(tmp_path: Path) -> None:
 
 @contextmanager
 def _server(tmp_path: Path, ssh_host: str = "debian-dev", exit_code: int = 0) -> Generator[tuple[Path, Path]]:
-    socket_path = tmp_path / "server.sock"
+    socket_path = _socket_path("server")
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"sshHost": ssh_host}))
     fake_bin = tmp_path / "bin"
@@ -210,6 +222,7 @@ def _server(tmp_path: Path, ssh_host: str = "debian-dev", exit_code: int = 0) ->
         time.sleep(0.02)
     if not socket_path.exists():
         _, stderr = process.communicate(timeout=2)
+        socket_path.parent.rmdir()
         pytest.fail(f"bridge server failed to start: {stderr}")
     assert socket_path.stat().st_mode & 0o777 == 0o600
     try:
@@ -218,6 +231,7 @@ def _server(tmp_path: Path, ssh_host: str = "debian-dev", exit_code: int = 0) ->
         process.terminate()
         process.wait(timeout=5)
         assert not socket_path.exists()
+        socket_path.parent.rmdir()
 
 
 def _request(socket_path: Path, value: object) -> dict[str, object]:

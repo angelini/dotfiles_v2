@@ -502,7 +502,7 @@ download_bin_sha256() {{ :; }}
 ensure_dir() {{ mkdir -p "$1"; }}
 link_file() {{ ln -sf "$1" "$2"; }}
 install_config() {{ : > "$CONFIG_TOUCHED"; }}
-sha256_file() {{ sha256sum "$1" | cut -d ' ' -f 1; }}
+sha256_file() {{ if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d ' ' -f 1; }}
 DIR={shlex.quote(str(tmp_path / "bundle"))}
 {setup}
 """
@@ -568,7 +568,7 @@ download_bin_sha256() {{ :; }}
 ensure_dir() {{ mkdir -p "$1"; }}
 link_file() {{ ln -sf "$1" "$2"; }}
 install_config() {{ mkdir -p "$(dirname "$2")"; install -m 0644 "$1" "$2"; }}
-sha256_file() {{ sha256sum "$1" | cut -d ' ' -f 1; }}
+sha256_file() {{ if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d ' ' -f 1; }}
 DIR={shlex.quote(str(bundle))}
 {fragment.setup}
 """
@@ -1393,6 +1393,7 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
         "skills/pipeline/**",
     )
     assert set(_vendored(claude_vendor, tmp_path / "claude")) == {
+        "CLAUDE.md",
         "agents/reviewer.md",
         "commands/review.md",
         "hooks/fixture-hook.sh",
