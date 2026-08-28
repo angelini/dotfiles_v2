@@ -121,6 +121,23 @@ fi
 component_begin "herdr"
 if (
   set -e
+  _retire_legacy_herdr_file() {
+    local path=$1 expected_checksum=$2 description=$3 actual_checksum
+    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+      return 0
+    fi
+    if [ -L "$path" ] || [ ! -f "$path" ]; then
+      error "legacy Herdr $description requires manual remediation (not a regular file): $path"
+      return 1
+    fi
+    actual_checksum="$(sha256_file "$path")"
+    if [ "$actual_checksum" != "$expected_checksum" ]; then
+      error "legacy Herdr $description requires manual remediation (content modified): $path"
+      return 1
+    fi
+    rm -- "$path"
+  }
+
   _install_herdr() {
     local arch checksum remote_bin
     case "$(detect_arch)" in
@@ -130,6 +147,11 @@ if (
     esac
     download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-macos-${arch}" "$checksum" "0.8.2" --version
     ensure_dir "$HOME/.local/bin"
+    _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "9684922654ce0e5b00544aca2d0db39906b7d1c28d235318f8ebcb90b07627d9" "herd-agent launcher"
+    _retire_legacy_herdr_file "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml" "62cfffc211aa22adb45c2224cff284a9714f2bc8caa85b00a8765aeb5f39af17" "default config"
+    if brew list --cask --versions supacode >/dev/null 2>&1; then
+      brew uninstall --cask supacode
+    fi
     remote_bin="$HOME/.local/bin/herdr"
     if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then
       error "unsafe Herdr remote binary destination: $remote_bin"
@@ -140,8 +162,10 @@ if (
       error "failed to publish Herdr remote binary: $remote_bin"
       return 1
     fi
-    install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
-    install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
+    install_config "$DIR/config/herdr/local.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"
+    install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
+    install -m 0755 "$DIR/config/herdr/herd-local" "$HOME/.local/bin/herd-local"
+    install -m 0755 "$DIR/config/herdr/herd-remote" "$HOME/.local/bin/herd-remote"
     if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
       "$remote_bin" plugin uninstall herdr-sidebar
     fi
@@ -361,6 +385,19 @@ else
   _rc=$?; component_end "taplo" "$_rc"; exit "$_rc"
 fi
 
+# --- terraform ---
+component_begin "terraform"
+if (
+  set -e
+  add_repo tap hashicorp/tap
+  install_package hashicorp/tap/terraform
+  install_package terragrunt
+); then
+  component_end "terraform" 0
+else
+  _rc=$?; component_end "terraform" "$_rc"; exit "$_rc"
+fi
+
 # --- zig ---
 component_begin "zig"
 if (
@@ -574,17 +611,6 @@ if (
   component_end "zed" 0
 else
   _rc=$?; component_end "zed" "$_rc"; exit "$_rc"
-fi
-
-# --- supacode ---
-component_begin "supacode"
-if (
-  set -e
-  install_cask supacode
-); then
-  component_end "supacode" 0
-else
-  _rc=$?; component_end "supacode" "$_rc"; exit "$_rc"
 fi
 
 # --- orbstack ---

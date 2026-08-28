@@ -18,7 +18,12 @@ def built_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def test_shellcheck_clean(built_root: Path) -> None:
     if not shutil.which("shellcheck"):
         pytest.skip("shellcheck not installed")
-    files = sorted(built_root.glob("*/*.sh")) + sorted(built_root.glob("*/.bashrc")) + sorted(built_root.glob("*/config/tmuxinator/dotgen-agent-session"))
+    files = (
+        sorted(built_root.glob("*/*.sh"))
+        + sorted(built_root.glob("*/.bashrc"))
+        + sorted(built_root.glob("*/config/tmuxinator/dotgen-agent-session"))
+        + [built_root / "macos/config/herdr/herd-local", built_root / "macos/config/herdr/herd-remote"]
+    )
     cmd = [
         "shellcheck",
         "-s",

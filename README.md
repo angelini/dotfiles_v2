@@ -218,9 +218,15 @@ Setup does not delete these administrator-owned or partial states.
 
 The Pi component installs the Pi CLI/packages, writes managed config under `~/.pi/agent`, and installs the sandbox wrapper. It also bundles a sanitized copy of the sibling `pi-angelini` repository into the artifact and syncs it to `~/repos/pi-angelini` during deploy. The bundle excludes `.git`, `node_modules`, lockfiles, caches, tests, and plan artifacts; Pi then loads it as the local package source `~/repos/pi-angelini`.
 
-Managed Pi config includes Plannotator, the Supacode Pi extension, the `supacode-cli` skill, and the Claude-style scout/planner/reviewer/architect/editor pipeline agents, chain, and prompt. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
+Managed Pi config includes Plannotator and the Claude-style scout/planner/reviewer/architect/editor pipeline agents, chain, and prompt. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
 
-On macOS, setup installs the Supacode app via the Homebrew cask.
+## Herdr launchers
+
+On macOS, `herd-local [session-name]` starts or attaches to a local named session. With no argument it uses the persistent `local` session; supplied names select another persistent session. Local sessions use the Catppuccin Latte theme.
+
+Use `herd-remote <ssh-config-host>` to attach through exactly one host from the OpenSSH config. Remote sessions use the Rosé Pine Dawn theme. Both launchers select dedicated Herdr profiles without changing the configuration used by direct `herdr` invocations.
+
+Debian retains the managed Herdr binary, server configuration, and Reviewr plugin configuration, but receives no convenience launcher.
 
 ## Layout
 
@@ -275,7 +281,7 @@ ENVIRONMENTS["alpine"] = Environment(
 
 ## Default component composition
 
-`Postgres` is part of `_SHARED`, so normal Debian and macOS deployments install it by default. The smaller `debian-docker` environment excludes Postgres and other development toolchains through `_DOCKER_SKIP`.
+`Postgres` and the Terraform tooling are part of `_SHARED`, so normal Debian and macOS deployments install PostgreSQL, Terraform, and Terragrunt by default. Debian installs Terraform from HashiCorp's APT repository and a checksum-pinned Terragrunt binary; macOS uses the documented Homebrew formulas. The smaller `debian-docker` environment excludes these and other development toolchains through `_DOCKER_SKIP`.
 
 ## Local dev loop
 

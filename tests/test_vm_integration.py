@@ -137,7 +137,7 @@ def test_shared_tooling_installed(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     cmds = ["command -v kubectl", "command -v helm", "command -v starship", "command -v zoxide", "command -v gh"]
     if env_name != "debian-docker":
-        cmds.extend(["command -v uv", "command -v claude"])
+        cmds.extend(["command -v uv", "command -v claude", "command -v terraform", "command -v terragrunt"])
     handle.assert_cmd(" && ".join(cmds), login=True)
 
 

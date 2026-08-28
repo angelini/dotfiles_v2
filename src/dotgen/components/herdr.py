@@ -22,12 +22,17 @@ _SHA256: dict[OS, dict[str, str]] = {
         "aarch64": "a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574",
     },
 }
+_LEGACY_HELPER_SHA256 = "9684922654ce0e5b00544aca2d0db39906b7d1c28d235318f8ebcb90b07627d9"
+_LEGACY_CONFIG_SHA256 = "62cfffc211aa22adb45c2224cff284a9714f2bc8caa85b00a8765aeb5f39af17"
 
-_CONFIG = """\
+
+def _config(*, theme: str, manage_ssh_config: bool) -> str:
+    remote = "\n[remote]\nmanage_ssh_config = true\n" if manage_ssh_config else ""
+    return f"""\
 onboarding = false
 
 [theme]
-name = "catppuccin-latte"
+name = "{theme}"
 
 [ui.sidebar.spaces]
 rows = [["state_icon", "workspace"], ["branch"]]
@@ -39,10 +44,7 @@ enabled = false
 channel = "stable"
 version_check = false
 manifest_check = true
-
-[remote]
-manage_ssh_config = true
-
+{remote}
 [[keys.command]]
 key = "cmd+r"
 type = "plugin_action"
@@ -50,30 +52,101 @@ command = "persiyanov.reviewr.toggle"
 description = "toggle reviewr"
 """
 
+
+_DEBIAN_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=True)
+_LOCAL_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=False)
+_REMOTE_CONFIG = _config(theme="rose-pine-dawn", manage_ssh_config=True)
 _REVIEWR_CONFIG = "auto_open = false\n"
 
-_HELPER = r"""#!/usr/bin/env bash
+_LOCAL_LAUNCHER = r"""#!/usr/bin/env bash
+set -euo pipefail
+
+case "$#" in
+  0) session=local ;;
+  1)
+    if [ -z "$1" ] || [[ "$1" = -* ]]; then
+      printf 'usage: herd-local [session-name]\n' >&2
+      exit 2
+    fi
+    session=$1
+    ;;
+  *)
+    printf 'usage: herd-local [session-name]\n' >&2
+    exit 2
+    ;;
+esac
+
+herdr_bin="$HOME/.local/bin/herdr"
+if [ ! -f "$herdr_bin" ] || [ ! -x "$herdr_bin" ]; then
+  printf 'herd-local: managed Herdr binary is missing or invalid: %s\n' "$herdr_bin" >&2
+  exit 1
+fi
+
+HERDR_CONFIG_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml" \
+  exec "$herdr_bin" --session "$session"
+"""
+
+_REMOTE_LAUNCHER = r"""#!/usr/bin/env bash
 set -euo pipefail
 
 if [ "$#" -ne 1 ] || [ -z "$1" ] || [[ "$1" = -* ]]; then
-  printf 'usage: herd-agent <ssh-config-host>\n' >&2
+  printf 'usage: herd-remote <ssh-config-host>\n' >&2
   exit 2
 fi
 
 herdr_bin="$HOME/.local/bin/herdr"
 if [ ! -f "$herdr_bin" ] || [ ! -x "$herdr_bin" ]; then
-  printf 'herd-agent: managed Herdr binary is missing or invalid: %s\n' "$herdr_bin" >&2
+  printf 'herd-remote: managed Herdr binary is missing or invalid: %s\n' "$herdr_bin" >&2
   exit 1
 fi
 
-exec "$herdr_bin" --remote "$1"
+HERDR_CONFIG_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml" \
+  exec "$herdr_bin" --remote "$1"
 """
 
 
 def _setup(os: OS) -> str:
     asset_os = _ASSET_OS[os]
     checksums = _SHA256[os]
+    if os is OS.MACOS:
+        migration = f"""\
+  _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "{_LEGACY_HELPER_SHA256}" "herd-agent launcher"
+  _retire_legacy_herdr_file "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/config.toml" "{_LEGACY_CONFIG_SHA256}" "default config"
+  if brew list --cask --versions supacode >/dev/null 2>&1; then
+    brew uninstall --cask supacode
+  fi
+"""
+        install = """\
+  install_config "$DIR/config/herdr/local.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"
+  install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
+  install -m 0755 "$DIR/config/herdr/herd-local" "$HOME/.local/bin/herd-local"
+  install -m 0755 "$DIR/config/herdr/herd-remote" "$HOME/.local/bin/herd-remote"
+"""
+    else:
+        migration = f"""\
+  _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "{_LEGACY_HELPER_SHA256}" "herd-agent launcher"
+"""
+        install = """\
+  install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
+"""
     return f"""\
+_retire_legacy_herdr_file() {{
+  local path=$1 expected_checksum=$2 description=$3 actual_checksum
+  if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+    return 0
+  fi
+  if [ -L "$path" ] || [ ! -f "$path" ]; then
+    error "legacy Herdr $description requires manual remediation (not a regular file): $path"
+    return 1
+  fi
+  actual_checksum="$(sha256_file "$path")"
+  if [ "$actual_checksum" != "$expected_checksum" ]; then
+    error "legacy Herdr $description requires manual remediation (content modified): $path"
+    return 1
+  fi
+  rm -- "$path"
+}}
+
 _install_herdr() {{
   local arch checksum remote_bin
   case "$(detect_arch)" in
@@ -83,7 +156,7 @@ _install_herdr() {{
   esac
   download_bin_sha256 herdr "{_RELEASE_BASE}/herdr-{asset_os}-${{arch}}" "$checksum" "{_VERSION}" --version
   ensure_dir "$HOME/.local/bin"
-  remote_bin="$HOME/.local/bin/herdr"
+{migration}  remote_bin="$HOME/.local/bin/herdr"
   if [ -d "$remote_bin" ] || {{ [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }}; then
     error "unsafe Herdr remote binary destination: $remote_bin"
     return 1
@@ -93,9 +166,7 @@ _install_herdr() {{
     error "failed to publish Herdr remote binary: $remote_bin"
     return 1
   fi
-  install_config "$DIR/config/herdr/config.toml" "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/config.toml"
-  install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
-  if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
+{install}  if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
     "$remote_bin" plugin uninstall herdr-sidebar
   fi
   "$remote_bin" plugin install "{_REVIEWR_SOURCE}" --ref "v{_REVIEWR_VERSION}" --yes
@@ -113,11 +184,16 @@ class Herdr:
         return env.name in {"debian", "macos"}
 
     def render(self, env: Environment) -> Fragment:
-        return Fragment(
-            setup=_setup(env.os),
-            configs=(
-                ConfigFile(dest="herdr/config.toml", content=_CONFIG),
-                ConfigFile(dest="herdr/plugins/config/persiyanov.reviewr/config.toml", content=_REVIEWR_CONFIG),
-                ConfigFile(dest="herdr/herd-agent", content=_HELPER, mode=0o755),
-            ),
-        )
+        configs = [ConfigFile(dest="herdr/plugins/config/persiyanov.reviewr/config.toml", content=_REVIEWR_CONFIG)]
+        if env.os is OS.MACOS:
+            configs.extend(
+                (
+                    ConfigFile(dest="herdr/local.toml", content=_LOCAL_CONFIG),
+                    ConfigFile(dest="herdr/remote.toml", content=_REMOTE_CONFIG),
+                    ConfigFile(dest="herdr/herd-local", content=_LOCAL_LAUNCHER, mode=0o755),
+                    ConfigFile(dest="herdr/herd-remote", content=_REMOTE_LAUNCHER, mode=0o755),
+                )
+            )
+        else:
+            configs.append(ConfigFile(dest="herdr/config.toml", content=_DEBIAN_CONFIG))
+        return Fragment(setup=_setup(env.os), configs=tuple(configs))

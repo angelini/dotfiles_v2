@@ -82,7 +82,7 @@ REQUIRED_COMMANDS = (
     "docker",
 )
 
-REQUIRED_APPLICATIONS = ("Ghostty.app", "Zed.app", "Supacode.app", "OrbStack.app")
+REQUIRED_APPLICATIONS = ("Ghostty.app", "Zed.app", "OrbStack.app")
 CONFLICTING_APPLICATIONS = ("Docker.app",)
 
 _REVIEW_CONFIG_DIRS: frozenset[str] = frozenset()

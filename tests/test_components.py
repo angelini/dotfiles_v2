@@ -36,8 +36,8 @@ from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
-from dotgen.components.supacode import Supacode
 from dotgen.components.taplo import Taplo
+from dotgen.components.terraform import Terraform
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
@@ -83,7 +83,7 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, Taplo, Zig, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, Supacode, OrbStack, PiAgent])
+@pytest.mark.parametrize("cls", [Rust, Taplo, Terraform, Zig, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, OrbStack, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
@@ -103,6 +103,32 @@ def test_taplo_installs_for_normal_environments() -> None:
     assert '"0.10.0" --version' in macos
     assert "install_package" not in macos
     assert not Taplo().applies_to(ENVIRONMENTS["debian-docker"])
+
+
+def test_terraform_tools_install_for_normal_environments() -> None:
+    terraform = Terraform()
+    assert terraform.applies_to(ENVIRONMENTS["debian"])
+    assert terraform.applies_to(ENVIRONMENTS["macos"])
+    assert not terraform.applies_to(ENVIRONMENTS["debian-docker"])
+
+    for env_name in ("debian", "macos"):
+        names = [component.name for component in ENVIRONMENTS[env_name].components]
+        assert names.count("terraform") == 1
+    assert "terraform" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
+
+    debian = terraform.render(ENVIRONMENTS["debian"]).setup
+    assert "https://apt.releases.hashicorp.com trixie main" in debian
+    assert "https://apt.releases.hashicorp.com/gpg" in debian
+    assert debian.index("update_pkg_index") < debian.index("install_package terraform")
+    assert "terragrunt/releases/download/v1.1.4/terragrunt_linux_${arch}" in debian
+    assert "a2640da8455fa5f3671167e6373832b0907b9dc972dd01c2093cc7808934e158" in debian
+    assert "c65d1897446590ebb3c695835cc956c12c5374a9add8312517c83c9fd7a1c06b" in debian
+    assert '"$checksum" "v1.1.4" --version' in debian
+
+    macos = terraform.render(ENVIRONMENTS["macos"]).setup
+    assert "add_repo tap hashicorp/tap" in macos
+    assert "install_package hashicorp/tap/terraform" in macos
+    assert "install_package terragrunt" in macos
 
 
 def test_zig_installs_for_normal_environments() -> None:
@@ -361,6 +387,24 @@ def test_helix_emits_config_and_editor_env(env: Environment) -> None:
     assert "EDITOR=hx" in frag.bashrc
 
 
+_LEGACY_HERD_AGENT = r"""#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ] || [ -z "$1" ] || [[ "$1" = -* ]]; then
+  printf 'usage: herd-agent <ssh-config-host>\n' >&2
+  exit 2
+fi
+
+herdr_bin="$HOME/.local/bin/herdr"
+if [ ! -f "$herdr_bin" ] || [ ! -x "$herdr_bin" ]; then
+  printf 'herd-agent: managed Herdr binary is missing or invalid: %s\n' "$herdr_bin" >&2
+  exit 1
+fi
+
+exec "$herdr_bin" --remote "$1"
+"""
+
+
 def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
     herdr = Herdr()
     assert herdr.applies_to(ENVIRONMENTS["debian"])
@@ -390,50 +434,48 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert 'error "unsafe Herdr remote binary destination: $remote_bin"' in fragment.setup
         assert 'link_file "$HOME/bin/herdr" "$remote_bin"' in fragment.setup
         assert 'error "failed to publish Herdr remote binary: $remote_bin"' in fragment.setup
-        assert 'install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"' in fragment.setup
-        assert 'install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"' in fragment.setup
-        assert '"$remote_bin" plugin list --plugin herdr-sidebar --json' in fragment.setup
-        assert '"$remote_bin" plugin uninstall herdr-sidebar' in fragment.setup
         assert '"$remote_bin" plugin install "persiyanov/herdr-reviewr" --ref "v0.36.0" --yes' in fragment.setup
         assert (
             'install_config "$DIR/config/herdr/plugins/config/persiyanov.reviewr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/persiyanov.reviewr/config.toml"' in fragment.setup
         )
         assert "alexarthurs/herdr-sidebar" not in fragment.setup
-        configs = {config.dest: config for config in fragment.configs}
-        assert (
-            configs["herdr/config.toml"].content
-            == """\
-onboarding = false
+        assert '"$HOME/.local/bin/herd-agent"' in fragment.setup
+        assert "requires manual remediation" in fragment.setup
 
-[theme]
-name = "catppuccin-latte"
+    debian = herdr.render(ENVIRONMENTS["debian"])
+    debian_configs = {config.dest: config for config in debian.configs}
+    assert set(debian_configs) == {"herdr/config.toml", "herdr/plugins/config/persiyanov.reviewr/config.toml"}
+    assert 'name = "catppuccin-latte"' in debian_configs["herdr/config.toml"].content
+    assert "[remote]\nmanage_ssh_config = true" in debian_configs["herdr/config.toml"].content
+    assert not any("herd-" in dest for dest in debian_configs)
+    assert 'install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"' in debian.setup
+    assert "herd-local" not in debian.setup and "herd-remote" not in debian.setup
 
-[ui.sidebar.spaces]
-rows = [["state_icon", "workspace"], ["branch"]]
-
-[ui.sound]
-enabled = false
-
-[update]
-channel = "stable"
-version_check = false
-manifest_check = true
-
-[remote]
-manage_ssh_config = true
-
-[[keys.command]]
-key = "cmd+r"
-type = "plugin_action"
-command = "persiyanov.reviewr.toggle"
-description = "toggle reviewr"
-"""
-        )
-        assert configs["herdr/plugins/config/persiyanov.reviewr/config.toml"].content == "auto_open = false\n"
-        helper = configs["herdr/herd-agent"]
-        assert helper.mode == 0o755
-        assert 'exec "$herdr_bin" --remote "$1"' in helper.content
-        assert "ssh " not in helper.content
+    macos = herdr.render(ENVIRONMENTS["macos"])
+    macos_configs = {config.dest: config for config in macos.configs}
+    assert set(macos_configs) == {
+        "herdr/herd-local",
+        "herdr/herd-remote",
+        "herdr/local.toml",
+        "herdr/remote.toml",
+        "herdr/plugins/config/persiyanov.reviewr/config.toml",
+    }
+    assert macos_configs["herdr/herd-local"].mode == 0o755
+    assert macos_configs["herdr/herd-remote"].mode == 0o755
+    assert 'name = "catppuccin-latte"' in macos_configs["herdr/local.toml"].content
+    assert "[remote]" not in macos_configs["herdr/local.toml"].content
+    assert 'name = "rose-pine-dawn"' in macos_configs["herdr/remote.toml"].content
+    assert "[remote]\nmanage_ssh_config = true" in macos_configs["herdr/remote.toml"].content
+    assert "herdr/config.toml" not in macos_configs and "herdr/herd-agent" not in macos_configs
+    for source, destination in (
+        ("local.toml", "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"),
+        ("remote.toml", "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"),
+    ):
+        assert f'install_config "$DIR/config/herdr/{source}" "{destination}"' in macos.setup
+    for launcher in ("herd-local", "herd-remote"):
+        assert f'install -m 0755 "$DIR/config/herdr/{launcher}" "$HOME/.local/bin/{launcher}"' in macos.setup
+    assert "brew list --cask --versions supacode" in macos.setup
+    assert "brew uninstall --cask supacode" in macos.setup
 
     for env_name in ("debian", "macos"):
         assert [component.name for component in ENVIRONMENTS[env_name].components].count("herdr") == 1
@@ -460,6 +502,7 @@ download_bin_sha256() {{ :; }}
 ensure_dir() {{ mkdir -p "$1"; }}
 link_file() {{ ln -sf "$1" "$2"; }}
 install_config() {{ : > "$CONFIG_TOUCHED"; }}
+sha256_file() {{ sha256sum "$1" | cut -d ' ' -f 1; }}
 DIR={shlex.quote(str(tmp_path / "bundle"))}
 {setup}
 """
@@ -483,38 +526,216 @@ DIR={shlex.quote(str(tmp_path / "bundle"))}
         assert remote_bin.stat().st_mode & 0o170000 == 0o010000
 
 
-def test_herd_agent_executes_managed_binary(tmp_path: Path) -> None:
-    helper = next(config for config in Herdr().render(ENVIRONMENTS["macos"]).configs if config.dest == "herdr/herd-agent")
+def _herdr_setup_harness(tmp_path: Path, env_name: str = "macos") -> tuple[Path, Path, dict[str, str]]:
+    fragment = Herdr().render(ENVIRONMENTS[env_name])
+    home = tmp_path / "home"
+    xdg_config = tmp_path / "xdg-config"
+    bundle = tmp_path / "bundle"
+    for config in fragment.configs:
+        path = bundle / "config" / config.dest
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(config.content)
+        path.chmod(config.mode)
+    managed_source = home / "bin/herdr"
+    managed_source.parent.mkdir(parents=True)
+    managed_source.write_text("#!/usr/bin/env bash\nexit 0\n")
+    managed_source.chmod(0o755)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    brew_state = tmp_path / "supacode-installed"
+    brew_log = tmp_path / "brew-uninstall.log"
+    brew = fake_bin / "brew"
+    brew.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [ "$*" = "list --cask --versions supacode" ]; then
+  [ -f "$BREW_STATE" ]
+elif [ "$*" = "uninstall --cask supacode" ]; then
+  printf 'uninstalled\\n' >> "$BREW_LOG"
+  rm -- "$BREW_STATE"
+else
+  exit 2
+fi
+"""
+    )
+    brew.chmod(0o755)
+    script = tmp_path / "setup.sh"
+    script.write_text(
+        f"""set -euo pipefail
+error() {{ printf '%s\\n' "$*" >&2; }}
+detect_arch() {{ printf 'arm64\\n'; }}
+download_bin_sha256() {{ :; }}
+ensure_dir() {{ mkdir -p "$1"; }}
+link_file() {{ ln -sf "$1" "$2"; }}
+install_config() {{ mkdir -p "$(dirname "$2")"; install -m 0644 "$1" "$2"; }}
+sha256_file() {{ sha256sum "$1" | cut -d ' ' -f 1; }}
+DIR={shlex.quote(str(bundle))}
+{fragment.setup}
+"""
+    )
+    env = {
+        "HOME": str(home),
+        "XDG_CONFIG_HOME": str(xdg_config),
+        "BREW_STATE": str(brew_state),
+        "BREW_LOG": str(brew_log),
+        "PATH": f"{fake_bin}:/usr/bin:/bin",
+    }
+    return script, brew_state, env
+
+
+def test_herdr_macos_upgrade_migration_is_safe_and_idempotent(tmp_path: Path) -> None:
+    script, brew_state, env = _herdr_setup_harness(tmp_path)
+    home = Path(env["HOME"])
+    legacy_helper = home / ".local/bin/herd-agent"
+    legacy_helper.parent.mkdir(parents=True)
+    legacy_helper.write_text(_LEGACY_HERD_AGENT)
+    legacy_config = Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml"
+    legacy_config.parent.mkdir(parents=True)
+    debian_config = next(c for c in Herdr().render(ENVIRONMENTS["debian"]).configs if c.dest == "herdr/config.toml")
+    legacy_config.write_text(debian_config.content)
+    brew_state.touch()
+
+    for _ in range(2):
+        result = subprocess.run(["bash", str(script)], check=False, capture_output=True, text=True, env=env)
+        assert result.returncode == 0, result.stderr
+
+    assert not legacy_helper.exists()
+    assert not legacy_config.exists()
+    assert not brew_state.exists()
+    assert (tmp_path / "brew-uninstall.log").read_text() == "uninstalled\n"
+    assert (home / ".local/bin/herd-local").stat().st_mode & 0o777 == 0o755
+    assert (home / ".local/bin/herd-remote").stat().st_mode & 0o777 == 0o755
+    assert (Path(env["XDG_CONFIG_HOME"]) / "herdr/local.toml").is_file()
+    assert (Path(env["XDG_CONFIG_HOME"]) / "herdr/remote.toml").is_file()
+
+
+def test_herdr_debian_upgrade_retires_legacy_helper(tmp_path: Path) -> None:
+    script, _, env = _herdr_setup_harness(tmp_path, "debian")
+    home = Path(env["HOME"])
+    legacy_helper = home / ".local/bin/herd-agent"
+    legacy_helper.parent.mkdir(parents=True)
+    legacy_helper.write_text(_LEGACY_HERD_AGENT)
+
+    result = subprocess.run(["bash", str(script)], check=False, capture_output=True, text=True, env=env)
+
+    assert result.returncode == 0, result.stderr
+    assert not legacy_helper.exists()
+    assert (Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml").is_file()
+    assert not (home / ".local/bin/herd-local").exists()
+    assert not (home / ".local/bin/herd-remote").exists()
+
+
+@pytest.mark.parametrize(
+    ("legacy_name", "kind"),
+    [("helper", "modified"), ("config", "symlink"), ("helper", "directory")],
+)
+def test_herdr_migration_preserves_legacy_conflicts(tmp_path: Path, legacy_name: str, kind: str) -> None:
+    script, _, env = _herdr_setup_harness(tmp_path)
+    legacy = Path(env["HOME"]) / ".local/bin/herd-agent" if legacy_name == "helper" else Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    if kind == "modified":
+        legacy.write_text("user managed\n")
+    elif kind == "symlink":
+        target = tmp_path / "user-config"
+        target.write_text("user managed\n")
+        legacy.symlink_to(target)
+    else:
+        legacy.mkdir()
+
+    result = subprocess.run(["bash", str(script)], check=False, capture_output=True, text=True, env=env)
+
+    assert result.returncode == 1
+    assert "requires manual remediation" in result.stderr
+    if kind == "modified":
+        assert legacy.read_text() == "user managed\n"
+    elif kind == "symlink":
+        assert legacy.is_symlink() and legacy.read_text() == "user managed\n"
+    else:
+        assert legacy.is_dir()
+    assert not (Path(env["HOME"]) / ".local/bin/herd-local").exists()
+
+
+@pytest.mark.parametrize(
+    ("launcher", "args", "expected_args", "config_name"),
+    [
+        ("herd-local", [], ["--session", "local"], "local.toml"),
+        ("herd-local", ["custom-name"], ["--session", "custom-name"], "local.toml"),
+        ("herd-remote", ["workbox"], ["--remote", "workbox"], "remote.toml"),
+    ],
+)
+def test_herdr_launchers_execute_managed_binary(tmp_path: Path, launcher: str, args: list[str], expected_args: list[str], config_name: str) -> None:
+    config = next(c for c in Herdr().render(ENVIRONMENTS["macos"]).configs if c.dest == f"herdr/{launcher}")
     home = tmp_path / "home"
     bin_dir = home / ".local/bin"
     bin_dir.mkdir(parents=True)
     herdr = bin_dir / "herdr"
-    herdr.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$HERDR_ARGS"\n')
+    herdr.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$HERDR_ARGS"\nprintf "%s\\n" "$HERDR_CONFIG_PATH" > "$HERDR_CONFIG"\n')
     herdr.chmod(0o755)
-    script = tmp_path / "herd-agent"
-    script.write_text(helper.content)
-    script.chmod(helper.mode)
+    script = tmp_path / launcher
+    script.write_text(config.content)
+    script.chmod(config.mode)
     args_file = tmp_path / "args"
-    env = {"HOME": str(home), "HERDR_ARGS": str(args_file), "PATH": "/usr/bin:/bin"}
+    config_file = tmp_path / "config"
+    xdg_config = tmp_path / "xdg"
+    env = {
+        "HOME": str(home),
+        "XDG_CONFIG_HOME": str(xdg_config),
+        "HERDR_ARGS": str(args_file),
+        "HERDR_CONFIG": str(config_file),
+        "PATH": "/usr/bin:/bin",
+    }
 
-    result = subprocess.run([script, "workbox"], check=False, capture_output=True, text=True, env=env)
+    result = subprocess.run([script, *args], check=False, capture_output=True, text=True, env=env)
 
     assert result.returncode == 0, result.stderr
-    assert args_file.read_text() == "--remote\nworkbox\n"
+    assert args_file.read_text().splitlines() == expected_args
+    assert config_file.read_text().strip() == str(xdg_config / "herdr" / config_name)
 
-    invalid = subprocess.run([script, "--bad"], check=False, capture_output=True, text=True, env=env)
 
-    assert invalid.returncode == 2
-    assert "usage: herd-agent <ssh-config-host>" in invalid.stderr
-    assert args_file.read_text() == "--remote\nworkbox\n"
+@pytest.mark.parametrize(
+    ("launcher", "args", "usage"),
+    [
+        ("herd-local", [""], "usage: herd-local [session-name]"),
+        ("herd-local", ["-bad"], "usage: herd-local [session-name]"),
+        ("herd-local", ["one", "two"], "usage: herd-local [session-name]"),
+        ("herd-remote", [], "usage: herd-remote <ssh-config-host>"),
+        ("herd-remote", [""], "usage: herd-remote <ssh-config-host>"),
+        ("herd-remote", ["-bad"], "usage: herd-remote <ssh-config-host>"),
+        ("herd-remote", ["one", "two"], "usage: herd-remote <ssh-config-host>"),
+    ],
+)
+def test_herdr_launchers_reject_invalid_arguments(tmp_path: Path, launcher: str, args: list[str], usage: str) -> None:
+    config = next(c for c in Herdr().render(ENVIRONMENTS["macos"]).configs if c.dest == f"herdr/{launcher}")
+    script = tmp_path / launcher
+    script.write_text(config.content)
+    script.chmod(config.mode)
 
-    herdr.unlink()
-    herdr.mkdir()
-    invalid_binary = subprocess.run([script, "workbox"], check=False, capture_output=True, text=True, env=env)
+    result = subprocess.run([script, *args], check=False, capture_output=True, text=True, env={"HOME": str(tmp_path), "PATH": "/usr/bin:/bin"})
 
-    assert invalid_binary.returncode == 1
-    assert "managed Herdr binary is missing or invalid" in invalid_binary.stderr
-    assert args_file.read_text() == "--remote\nworkbox\n"
+    assert result.returncode == 2
+    assert usage in result.stderr
+
+
+@pytest.mark.parametrize("launcher", ["herd-local", "herd-remote"])
+@pytest.mark.parametrize("binary_kind", ["missing", "directory", "non-executable"])
+def test_herdr_launchers_reject_invalid_managed_binary(tmp_path: Path, launcher: str, binary_kind: str) -> None:
+    config = next(c for c in Herdr().render(ENVIRONMENTS["macos"]).configs if c.dest == f"herdr/{launcher}")
+    home = tmp_path / "home"
+    binary = home / ".local/bin/herdr"
+    binary.parent.mkdir(parents=True)
+    if binary_kind == "directory":
+        binary.mkdir()
+    elif binary_kind == "non-executable":
+        binary.write_text("not executable\n")
+    script = tmp_path / launcher
+    script.write_text(config.content)
+    script.chmod(config.mode)
+    args = ["workbox"] if launcher == "herd-remote" else []
+
+    result = subprocess.run([script, *args], check=False, capture_output=True, text=True, env={"HOME": str(home), "PATH": "/usr/bin:/bin"})
+
+    assert result.returncode == 1
+    assert f"{launcher}: managed Herdr binary is missing or invalid" in result.stderr
 
 
 def test_starship_emits_config_and_init() -> None:
@@ -646,6 +867,7 @@ def test_environment_component_distribution() -> None:
         "gh",
         "git_signing",
         "rust",
+        "terraform",
         "node_fnm",
         "npm_config",
         "go_lang",
@@ -655,8 +877,9 @@ def test_environment_component_distribution() -> None:
         "fonts",
     }
     assert shared_names.issubset(debian_names & macos_names)
-    assert {"ghostty", "zed", "supacode", "orbstack"}.isdisjoint(debian_names)
-    assert {"ghostty", "zed", "supacode", "orbstack"}.issubset(macos_names)
+    assert {"ghostty", "zed", "orbstack"}.isdisjoint(debian_names)
+    assert {"ghostty", "zed", "orbstack"}.issubset(macos_names)
+    assert "supacode" not in debian_names | macos_names
     assert "node_fnm" in {c.name for c in ENVIRONMENTS["debian-docker"].components}
 
 
@@ -785,12 +1008,6 @@ def test_zed_macos_only_and_emits_configs() -> None:
     assert '"**/deploy/helm/templates/**/*.yaml"' in settings
     macos = Zed().render(ENVIRONMENTS["macos"]).setup
     assert "install_cask zed" in macos
-
-
-def test_supacode_macos_only_and_installs_cask() -> None:
-    assert Supacode().applies_to(ENVIRONMENTS["macos"])
-    assert not Supacode().applies_to(ENVIRONMENTS["debian"])
-    assert "install_cask supacode" in Supacode().render(ENVIRONMENTS["macos"]).setup
 
 
 def test_orbstack_macos_only_and_installs_cask() -> None:
@@ -953,10 +1170,8 @@ def test_pi_agent_setup() -> None:
         "APPEND_SYSTEM.md",
         "agents/claude-pipeline/*.md",
         "chains/pipeline.chain.md",
-        "extensions/supacode/index.ts",
         "prompts/pipeline.md",
         "skills/pipeline/**",
-        "skills/supacode-cli/**",
     )
     assert angelini_vendor.source == _pi_angelini_root()
     assert angelini_vendor.dest == "pi-angelini"
@@ -1174,13 +1389,10 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
         "APPEND_SYSTEM.md",
         "agents/claude-pipeline/*.md",
         "chains/pipeline.chain.md",
-        "extensions/supacode/index.ts",
         "prompts/pipeline.md",
         "skills/pipeline/**",
-        "skills/supacode-cli/**",
     )
     assert set(_vendored(claude_vendor, tmp_path / "claude")) == {
-        "CLAUDE.md",
         "agents/reviewer.md",
         "commands/review.md",
         "hooks/fixture-hook.sh",
@@ -1192,10 +1404,8 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
         "APPEND_SYSTEM.md",
         "agents/claude-pipeline/reviewer.md",
         "chains/pipeline.chain.md",
-        "extensions/supacode/index.ts",
         "prompts/pipeline.md",
         "skills/pipeline/SKILL.md",
-        "skills/supacode-cli/SKILL.md",
     }
     assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
     assert "extensions/context7/cache/generated.json" not in _vendored(pi_vendor, tmp_path / "pi-again")

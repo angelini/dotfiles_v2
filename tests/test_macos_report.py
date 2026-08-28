@@ -101,7 +101,7 @@ def test_report_covers_bounded_migration_state_without_writes_or_disclosure(tmp_
     nested = home / ".config/ghostty/nested-candidate"
     nested.mkdir()
 
-    for name in ("Ghostty.app", "Zed.app", "Supacode.app", "Docker.app"):
+    for name in ("Ghostty.app", "Zed.app", "Docker.app"):
         (applications / name).mkdir(parents=True)
 
     _write(
@@ -141,6 +141,7 @@ def test_report_covers_bounded_migration_state_without_writes_or_disclosure(tmp_
     assert "missing: delta" in output
     assert "present: Ghostty.app" in output
     assert "missing: OrbStack.app" in output
+    assert "Supacode.app" not in output
     assert "conflict: Docker.app" in output
     assert "dropped: ~/.config/ghostty" in output
     assert "dropped: ~/.config/git" in output
@@ -204,7 +205,7 @@ def test_report_constants_pin_selected_commands_applications_and_mapping() -> No
         "doppler",
         "docker",
     )
-    assert REQUIRED_APPLICATIONS == ("Ghostty.app", "Zed.app", "Supacode.app", "OrbStack.app")
+    assert REQUIRED_APPLICATIONS == ("Ghostty.app", "Zed.app", "OrbStack.app")
     assert CONFLICTING_APPLICATIONS == ("Docker.app",)
     assert CONFIG_FILES == (
         (".bashrc", ".bashrc", "exact"),

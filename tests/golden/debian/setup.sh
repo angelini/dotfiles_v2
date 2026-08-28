@@ -106,6 +106,23 @@ fi
 component_begin "herdr"
 if (
   set -e
+  _retire_legacy_herdr_file() {
+    local path=$1 expected_checksum=$2 description=$3 actual_checksum
+    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+      return 0
+    fi
+    if [ -L "$path" ] || [ ! -f "$path" ]; then
+      error "legacy Herdr $description requires manual remediation (not a regular file): $path"
+      return 1
+    fi
+    actual_checksum="$(sha256_file "$path")"
+    if [ "$actual_checksum" != "$expected_checksum" ]; then
+      error "legacy Herdr $description requires manual remediation (content modified): $path"
+      return 1
+    fi
+    rm -- "$path"
+  }
+
   _install_herdr() {
     local arch checksum remote_bin
     case "$(detect_arch)" in
@@ -115,6 +132,7 @@ if (
     esac
     download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-linux-${arch}" "$checksum" "0.8.2" --version
     ensure_dir "$HOME/.local/bin"
+    _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "9684922654ce0e5b00544aca2d0db39906b7d1c28d235318f8ebcb90b07627d9" "herd-agent launcher"
     remote_bin="$HOME/.local/bin/herdr"
     if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then
       error "unsafe Herdr remote binary destination: $remote_bin"
@@ -126,7 +144,6 @@ if (
       return 1
     fi
     install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
-    install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
     if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
       "$remote_bin" plugin uninstall herdr-sidebar
     fi
@@ -424,6 +441,36 @@ if (
   component_end "taplo" 0
 else
   _rc=$?; component_end "taplo" "$_rc"; exit "$_rc"
+fi
+
+# --- terraform ---
+component_begin "terraform"
+if (
+  set -e
+  install_packages ca-certificates curl gnupg
+  add_repo apt hashicorp "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com trixie main" "https://apt.releases.hashicorp.com/gpg"
+  update_pkg_index
+  install_package terraform
+  _install_terragrunt_linux() {
+    local arch checksum
+    case "$(detect_arch)" in
+      x86_64) arch=amd64 ;;
+      aarch64|arm64) arch=arm64 ;;
+      *) error "unsupported arch for Terragrunt: $(detect_arch)"; return 1 ;;
+    esac
+    case "$arch" in
+      amd64) checksum="a2640da8455fa5f3671167e6373832b0907b9dc972dd01c2093cc7808934e158" ;;
+      arm64) checksum="c65d1897446590ebb3c695835cc956c12c5374a9add8312517c83c9fd7a1c06b" ;;
+    esac
+    download_bin_sha256 terragrunt \
+      "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.4/terragrunt_linux_${arch}" \
+      "$checksum" "v1.1.4" --version
+  }
+  _install_terragrunt_linux
+); then
+  component_end "terraform" 0
+else
+  _rc=$?; component_end "terraform" "$_rc"; exit "$_rc"
 fi
 
 # --- zig ---

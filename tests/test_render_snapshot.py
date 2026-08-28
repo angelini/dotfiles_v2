@@ -97,11 +97,12 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
             "agents/claude-pipeline/reviewer.md",
             "chains/pipeline.chain.md",
             "prompts/pipeline.md",
-            "extensions/supacode/index.ts",
             "skills/pipeline/SKILL.md",
-            "skills/supacode-cli/SKILL.md",
         ):
             assert f"  pi/agent/{path}" not in manifest
+        assert not (config / "pi" / "agent" / "extensions" / "supacode").exists()
+        assert not (config / "pi" / "agent" / "skills" / "supacode-cli").exists()
+        assert "supacode" not in manifest.lower()
 
         if env_name in ("debian", "macos"):
             assert setup.count(claude_call) == 1
@@ -209,9 +210,28 @@ def test_generated_bundle_migrates_legacy_pi_settings_ownership(tmp_path: Path, 
     settings = live / "settings.json"
     settings.write_text('{"defaultModel":"legacy","lastChangelogVersion":"0.82.1","packages":["local"],"unmanaged":"keep"}\n')
     (live / "AGENTS.md").write_text("legacy\n")
+    legacy_supacode = (
+        live / "extensions/supacode/index.ts",
+        live / "skills/supacode-cli/SKILL.md",
+    )
+    for path in legacy_supacode:
+        path.parent.mkdir(parents=True)
+        path.write_text("legacy managed Supacode\n")
     manifest = state / "dotgen" / "install-config-dir" / "pi-agent.manifest"
     manifest.parent.mkdir(parents=True)
-    manifest.write_bytes(b"\0".join((b"dotgen-install-config-dir-v1", os.fsencode(str(live)), b"settings.json", b"AGENTS.md")) + b"\0")
+    manifest.write_bytes(
+        b"\0".join(
+            (
+                b"dotgen-install-config-dir-v1",
+                os.fsencode(str(live)),
+                b"settings.json",
+                b"AGENTS.md",
+                b"extensions/supacode/index.ts",
+                b"skills/supacode-cli/SKILL.md",
+            )
+        )
+        + b"\0"
+    )
     script = root / "deploy-pi.sh"
     script.write_text(
         f"""set -euo pipefail
@@ -237,6 +257,9 @@ install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "pi
     records = manifest.read_bytes().split(b"\0")[:-1]
     assert b"settings.json" not in records[2:]
     assert b"AGENTS.md" in records[2:]
+    assert not any(path.exists() for path in legacy_supacode)
+    assert b"extensions/supacode/index.ts" not in records[2:]
+    assert b"skills/supacode-cli/SKILL.md" not in records[2:]
     settings_inode = settings.stat().st_ino
     settings_bytes = settings.read_bytes()
     manifest_bytes = manifest.read_bytes()

@@ -442,10 +442,8 @@ class PiAgent:
                         "APPEND_SYSTEM.md",
                         "agents/claude-pipeline/*.md",
                         "chains/pipeline.chain.md",
-                        "extensions/supacode/index.ts",
                         "prompts/pipeline.md",
                         "skills/pipeline/**",
-                        "skills/supacode-cli/**",
                     ),
                 ),
                 VendorDir(

@@ -27,8 +27,8 @@ from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
-from dotgen.components.supacode import Supacode
 from dotgen.components.taplo import Taplo
+from dotgen.components.terraform import Terraform
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
@@ -55,6 +55,7 @@ _SHARED: tuple[Component, ...] = (
     GitSigning(),
     Rust(),
     Taplo(),
+    Terraform(),
     Zig(),
     NodeFnm(),
     NpmConfig(),
@@ -69,7 +70,7 @@ _SHARED: tuple[Component, ...] = (
 
 _DEBIAN_FULL: tuple[Component, ...] = (Tmuxinator(), Docker())
 
-_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), Supacode(), OrbStack())
+_MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), OrbStack())
 
 _DOCKER_SKIP = {
     "fonts",
@@ -78,6 +79,7 @@ _DOCKER_SKIP = {
     "gcloud",
     "rust",
     "taplo",
+    "terraform",
     "zig",
     "go_lang",
     "python_tools",
