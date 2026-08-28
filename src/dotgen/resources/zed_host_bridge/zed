@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+node_bin="$HOME/.local/share/fnm/aliases/default/bin/node"
+bridge="$HOME/.local/libexec/dotgen/zed-host-bridge.mjs"
+if [ ! -f "$node_bin" ] || [ ! -x "$node_bin" ]; then
+  printf 'zed: managed Node runtime is missing: %s\n' "$node_bin" >&2
+  exit 1
+fi
+if [ ! -f "$bridge" ]; then
+  printf 'zed: managed host bridge is missing: %s\n' "$bridge" >&2
+  exit 1
+fi
+exec "$node_bin" "$bridge" client "$@"

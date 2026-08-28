@@ -915,7 +915,7 @@ def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None
         assert "docker" not in [component.name for component in ENVIRONMENTS[name].components]
     names = [component.name for component in ENVIRONMENTS["debian"].components]
     assert names.count("docker") == 1
-    assert names[-5:] == ["fonts", "tmuxinator", "docker", "git_setup", "dotfiles_deploy"]
+    assert names[-5:] == ["tmuxinator", "docker", "zed_host_bridge", "git_setup", "dotfiles_deploy"]
 
 
 def test_docker_render_contract() -> None:

@@ -1,0 +1,5 @@
+Host ${ZED_HOST_BRIDGE_SSH_HOST}
+  RemoteForward /home/%r/.cache/dotgen/zed-host-bridge.sock %d/Library/Caches/dotgen/zed-host-bridge.sock
+  StreamLocalBindMask 0177
+  StreamLocalBindUnlink yes
+  ExitOnForwardFailure yes

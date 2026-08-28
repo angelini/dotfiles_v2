@@ -909,6 +909,62 @@ else
   _rc=$?; component_end "docker" "$_rc"; exit "$_rc"
 fi
 
+# --- zed_host_bridge ---
+component_begin "zed_host_bridge"
+if (
+  set -e
+  \
+  _zed_bridge_assert_dir() {
+    local directory=$1
+    if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
+      error "unsafe Zed host bridge directory: $directory"
+      return 1
+    fi
+    mkdir -p -- "$directory"
+  }
+
+  _zed_bridge_safe_dir() {
+    local directory=$1 mode=$2
+    _zed_bridge_assert_dir "$directory"
+    chmod "$mode" "$directory"
+  }
+
+  _zed_bridge_install_file() {
+    local source=$1 destination=$2 mode=$3 parent staging
+    parent="$(dirname "$destination")"
+    _zed_bridge_assert_dir "$parent"
+    if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+      error "unsafe Zed host bridge destination: $destination"
+      return 1
+    fi
+    staging="$(mktemp "$parent/.dotgen-zed-host-bridge.XXXXXX")"
+    if ! install -m "$mode" "$source" "$staging"; then
+      rm -f -- "$staging"
+      return 1
+    fi
+    if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+      rm -f -- "$staging"
+      error "unsafe Zed host bridge destination: $destination"
+      return 1
+    fi
+    mv -f -- "$staging" "$destination"
+  }
+
+  _zed_bridge_assert_dir "$HOME/.local"
+  _zed_bridge_assert_dir "$HOME/.local/libexec"
+  _zed_bridge_safe_dir "$HOME/.local/libexec/dotgen" 0700
+  _zed_bridge_install_file "$DIR/config/zed-host-bridge/bridge.mjs" "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" 0644
+  \
+  _zed_bridge_assert_dir "$HOME/bin"
+  _zed_bridge_install_file "$DIR/config/zed-host-bridge/zed" "$HOME/bin/zed" 0755
+  _zed_bridge_assert_dir "$HOME/.cache"
+  _zed_bridge_safe_dir "$HOME/.cache/dotgen" 0700
+); then
+  component_end "zed_host_bridge" 0
+else
+  _rc=$?; component_end "zed_host_bridge" "$_rc"; exit "$_rc"
+fi
+
 # --- git_setup ---
 component_begin "git_setup"
 if (

@@ -55,6 +55,6 @@ clean:
     rm -rf dist
 
 shellcheck:
-    shellcheck -s bash --exclude=SC1090,SC1091 dist/*/*.sh dist/*/.bashrc dist/debian/config/tmuxinator/dotgen-agent-session dist/macos/config/herdr/herd-local dist/macos/config/herdr/herd-remote
+    shellcheck -s bash --exclude=SC1090,SC1091 dist/*/*.sh dist/*/.bashrc dist/debian/config/tmuxinator/dotgen-agent-session dist/debian/config/zed-host-bridge/zed dist/macos/config/zed-host-bridge/serve dist/macos/config/herdr/herd-local dist/macos/config/herdr/herd-remote
 
 ci: lint typecheck test build-all shellcheck

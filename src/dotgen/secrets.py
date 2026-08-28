@@ -10,6 +10,7 @@ SecretKey = Literal[
     "KUBE_CONTEXT",
     "EXA_API_KEY",
     "CONTEXT7_API_KEY",
+    "ZED_HOST_BRIDGE_SSH_HOST",
 ]
 
 DESCRIPTIONS: dict[str, str] = {
@@ -22,6 +23,7 @@ DESCRIPTIONS: dict[str, str] = {
     "KUBE_CONTEXT": "Default kubectl context name",
     "EXA_API_KEY": "API key for Exa search",
     "CONTEXT7_API_KEY": "API key for Context7 code search",
+    "ZED_HOST_BRIDGE_SSH_HOST": "SSH config alias used by the Zed host bridge",
 }
 
 

@@ -1,6 +1,9 @@
 0600  167a6ee1c8993debd269e587e47259020844fc7d1c1fdcab6e140abaf0017415  managed-settings/claude.json
+0600  2d403f8c54132d40e27aad6fd8baee1baef5e137f42cfe19720498ec0646dc7c  zed-host-bridge/ssh.conf.template
+0600  4af07404b23ef63fe280f0e1480479dcd959e42d8fbb8b4667e2fa92c16fbf97  zed-host-bridge/dev.dotgen.zed-host-bridge.plist
 0600  567d070b394161cb7f51d551cfcb64d5bdbd03cb8444e7a271823476dc0fd1e6  aws/config
 0600  72dd8e8225b400124afecbf4aafc67277ec9e43aff1c085b8d12a2c16186fea8  managed-settings/pi.json
+0600  c4d45e53eca749a23a9d2a4ce748eccdb9ddab45e1eab466dd4910ad14773cf6  zed-host-bridge/config.json.template
 0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0600  f330dbe84c0436a2b71181fa66421ef2ead8e2f8fed2860507a51b16755cf7f1  pi/agent/models.json
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
@@ -10,6 +13,7 @@
 0644  668a3d03db8920c53d467a503eef2e511e747f2f301d507b288ec51f00ae158b  bash/bash_profile
 0644  76a246010494bbfc06de685273b00f9da01dafdf9085b7fa8c549e33c477ad39  helix/config.toml
 0644  7ebb947e3cff48055fab1d7a1fab423c77af388459fa474697f835cdefd3de5d  starship/starship.toml
+0644  9d3af6ea8cc1bc997a7dcaebe3754ddef862233aabb8c7eac7e9184e82edb31f  zed-host-bridge/bridge.mjs
 0644  9e843b2b6b42fc4ee1317182ef00943aeccdd779ce19965bf7d45283227a0d0a  ghostty/config
 0644  b58f08db43030483a7a7c6a44441e01c842271a3970bb3ea5e55a326be61a363  zed/keymap.json
 0644  b8db24f88e7ba0a010bfd687483abebedbcbcf947536ef4eed7e2b49b143b094  pi/sandbox/pi-macos.sb
@@ -23,6 +27,7 @@
 0755  5c0177913ef495ca03dd304d02c0d260a37a7bfbc79236ef0c44f5d0b68a746c  pi/launcher/pi.sh
 0755  c082009a049f536f1373e91284c50db769ba5518ae65285e2c96dba4eca90e70  herdr/herd-remote
 0755  c9346e8234fb65bc846f9806afb5eab8bf641f26a27fa7c4881efa3961adbdd1  herdr/herd-local
+0755  ceac562ef966d826ad5bb84b2f6187c293ed9ed92539ff26da7c5fac7e92a39b  zed-host-bridge/serve
 dir  claude
 dir  pi-angelini
 dir  pi/agent

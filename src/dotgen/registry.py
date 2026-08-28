@@ -32,6 +32,7 @@ from dotgen.components.terraform import Terraform
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.zed import Zed
+from dotgen.components.zed_host_bridge import ZedHostBridge
 from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
@@ -91,8 +92,8 @@ _DOCKER_SKIP = {
     "herdr",
 }
 
-# GitSetup depends on Gh
-_LAST: tuple[Component, ...] = (GitSetup(), DotfilesDeploy())
+# GitSetup depends on Gh. ZedHostBridge depends on NodeFnm and, on macOS, Zed.
+_LAST: tuple[Component, ...] = (ZedHostBridge(), GitSetup(), DotfilesDeploy())
 
 ENVIRONMENTS: dict[str, Environment] = {
     "debian": Environment(
@@ -105,7 +106,7 @@ ENVIRONMENTS: dict[str, Environment] = {
         "debian-docker",
         OS.DEBIAN,
         PkgMgr.APT,
-        components=tuple(c for c in _SHARED if c.name not in _DOCKER_SKIP) + _LAST,
+        components=tuple(c for c in _SHARED if c.name not in _DOCKER_SKIP) + tuple(c for c in _LAST if c.name != "zed_host_bridge"),
     ),
     "macos": Environment(
         "macos",

@@ -228,6 +228,34 @@ Use `herd-remote <ssh-config-host>` to attach through exactly one host from the 
 
 Debian retains the managed Herdr binary, server configuration, and Reviewr plugin configuration, but receives no convenience launcher.
 
+## Zed host bridge
+
+The full Debian environment installs `~/bin/zed`, which asks the macOS Zed CLI to open paths through Zed Remote Development. The transport is a reverse Unix-socket forward on the existing `herd-remote <ssh-config-host>` OpenSSH connection; it does not require host/guest filesystem mounts, TCP listeners, or changes to Herdr.
+
+Before deploying macOS, set `ZED_HOST_BRIDGE_SSH_HOST` in the macOS dotgen deployment input to the exact OpenSSH config alias passed to `herd-remote`. The alias may contain only ASCII letters, digits, dots, and hyphens. Deploy macOS first, then Debian, and reconnect Herdr so OpenSSH creates the guest socket:
+
+```bash
+# Debian, inside a repository under ~/repos
+zed .
+zed src/app.py:42:5
+zed --new .
+zed --wait file.txt
+```
+
+Supported options are `-n`/`--new`, `-a`/`--add`, `-r`/`--reuse`, `-e`/`--existing`, `-w`/`--wait`, and `--` before path operands. No operands opens the current directory. stdin, URLs, `--diff`, unknown options, paths outside canonical `~/repos`, and symlink escapes are rejected. Spaces, Unicode, multiple paths, and positive line/column positions are preserved without shell evaluation.
+
+The macOS receiver is the per-user LaunchAgent `dev.dotgen.zed-host-bridge`. Useful diagnostics are:
+
+```bash
+launchctl print gui/$UID/dev.dotgen.zed-host-bridge
+ls -l ~/Library/Caches/dotgen/zed-host-bridge.sock
+ssh -G "$ZED_HOST_BRIDGE_SSH_HOST" | grep -E '^(remoteforward|streamlocal|exitonforwardfailure)'
+```
+
+A headless macOS deployment installs the LaunchAgent but defers activation until GUI login. With no active Herdr remote attachment, Debian reports `macOS host bridge unavailable; attach with herd-agent <host>`. Only one macOS SSH client can own the forwarded guest socket for an alias at a time; disconnect and reconnect after changing the alias, restarting the receiver, or replacing a stale connection.
+
+Manual end-to-end verification: confirm both owner-only sockets, run `zed .` and a positioned file from Debian, repeat from `pi-sandbox`, test every supported behavior and `--wait`, detach Herdr and verify failure, reconnect and verify recovery, then restart the LaunchAgent and reconnect once more.
+
 ## Layout
 
 - `src/dotgen/` — package

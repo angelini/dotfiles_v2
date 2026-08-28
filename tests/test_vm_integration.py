@@ -397,11 +397,73 @@ def test_npm_config_uses_synthetic_token(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd(f"grep -Fqx '//npm.pkg.github.com/:_authToken={_FAKE_NPM_TOKEN}' \"$HOME/.npmrc\"")
 
 
+def test_zed_host_bridge_is_installed_only_in_full_environments(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name == "debian-docker":
+        handle.assert_cmd('[ ! -e "$HOME/bin/zed" ] && [ ! -e "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" ]')
+    elif env_name == "debian":
+        handle.assert_cmd('[ -x "$HOME/bin/zed" ] && [ -f "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" ] && [ "$(stat -c %a "$HOME/.cache/dotgen")" = 700 ]')
+        result = handle.run('cd "$HOME/repos/pi-angelini" && zed .', login=True)
+        assert result.returncode != 0
+        assert "macOS host bridge unavailable" in result.stderr
+    else:
+        handle.assert_cmd(
+            '[ -f "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" ] && '
+            '[ -x "$HOME/.local/libexec/dotgen/zed-host-bridge-serve" ] && '
+            '[ -f "$HOME/.config/dotgen/zed-host-bridge.json" ] && '
+            '[ -f "$HOME/Library/LaunchAgents/dev.dotgen.zed-host-bridge.plist" ] && '
+            '[ -f "$HOME/.ssh/config.d/dotgen-zed-host-bridge.conf" ]'
+        )
+
+
 def test_pi_launches_through_sandbox(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":
         pytest.skip("Docker does not allow the unprivileged user namespace required by bubblewrap")
     handle.assert_cmd('cd "$HOME/repos" && pi --version', login=True)
+
+
+def test_zed_bridge_socket_is_visible_inside_pi_sandbox(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name != "debian":
+        pytest.skip("the guest Zed wrapper is installed only in the full Debian environment")
+    handle.assert_cmd(
+        r"""
+set -euo pipefail
+socket="$HOME/.cache/dotgen/zed-host-bridge.sock"
+request_log="$HOME/.cache/dotgen/zed-host-bridge-request.json"
+rm -f -- "$socket" "$request_log"
+mkdir -p "$HOME/repos/zed-sandbox-smoke"
+cat > "$HOME/repos/zed-sandbox-smoke/pi" <<'SH'
+#!/usr/bin/env bash
+exec "$HOME/bin/zed" "$HOME/repos/zed-sandbox-smoke"
+SH
+chmod +x "$HOME/repos/zed-sandbox-smoke/pi"
+SOCKET="$socket" REQUEST_LOG="$request_log" node -e '
+const fs = require("node:fs");
+const net = require("node:net");
+const server = net.createServer({ allowHalfOpen: true }, (client) => {
+  let payload = "";
+  client.on("data", (chunk) => { payload += chunk.toString("utf8"); });
+  client.on("end", () => {
+    fs.writeFileSync(process.env.REQUEST_LOG, payload);
+    client.end("{\\"ok\\":true,\\"exitCode\\":0}\\n");
+    server.close();
+  });
+});
+server.listen(process.env.SOCKET);
+' &
+server_pid=$!
+trap 'kill "$server_pid" 2>/dev/null || true; rm -f -- "$socket"' EXIT
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -S "$socket" ] && break; sleep 0.1; done
+[ -S "$socket" ]
+cd "$HOME/repos/zed-sandbox-smoke"
+PATH="$PWD:$PATH" pi-sandbox
+wait "$server_pid"
+grep -Fq '"relativePath":"zed-sandbox-smoke"' "$request_log"
+""",
+        login=True,
+    )
 
 
 def test_pi_sandbox_exposes_developer_state_without_credentials(vm: tuple[str, VmHandle]) -> None:

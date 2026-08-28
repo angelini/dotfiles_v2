@@ -1,0 +1,3 @@
+{
+  "sshHost": "${ZED_HOST_BRIDGE_SSH_HOST}"
+}
