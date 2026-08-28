@@ -127,8 +127,11 @@ if (
     fi
     install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
     install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
+    if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
+      "$remote_bin" plugin uninstall herdr-sidebar
+    fi
     "$remote_bin" plugin install "persiyanov/herdr-reviewr" --ref "v0.36.0" --yes
-    "$remote_bin" plugin install "alexarthurs/herdr-sidebar/plugins/herdr-sidebar" --ref "v0.10.0" --yes
+    install_config "$DIR/config/herdr/plugins/config/persiyanov.reviewr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/persiyanov.reviewr/config.toml"
   }
   _install_herdr
 ); then

@@ -8,8 +8,6 @@ _VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
 _REVIEWR_VERSION = "0.36.0"
 _REVIEWR_SOURCE = "persiyanov/herdr-reviewr"
-_SIDEBAR_VERSION = "0.10.0"
-_SIDEBAR_SOURCE = "alexarthurs/herdr-sidebar/plugins/herdr-sidebar"
 _ASSET_OS: dict[OS, str] = {
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
@@ -44,7 +42,15 @@ manifest_check = true
 
 [remote]
 manage_ssh_config = true
+
+[[keys.command]]
+key = "cmd+r"
+type = "plugin_action"
+command = "persiyanov.reviewr.toggle"
+description = "toggle reviewr"
 """
+
+_REVIEWR_CONFIG = "auto_open = false\n"
 
 _HELPER = r"""#!/usr/bin/env bash
 set -euo pipefail
@@ -89,8 +95,11 @@ _install_herdr() {{
   fi
   install_config "$DIR/config/herdr/config.toml" "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/config.toml"
   install -m 0755 "$DIR/config/herdr/herd-agent" "$HOME/.local/bin/herd-agent"
+  if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
+    "$remote_bin" plugin uninstall herdr-sidebar
+  fi
   "$remote_bin" plugin install "{_REVIEWR_SOURCE}" --ref "v{_REVIEWR_VERSION}" --yes
-  "$remote_bin" plugin install "{_SIDEBAR_SOURCE}" --ref "v{_SIDEBAR_VERSION}" --yes
+  install_config "$DIR/config/herdr/plugins/config/persiyanov.reviewr/config.toml" "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/plugins/config/persiyanov.reviewr/config.toml"
 }}
 _install_herdr
 """
@@ -108,6 +117,7 @@ class Herdr:
             setup=_setup(env.os),
             configs=(
                 ConfigFile(dest="herdr/config.toml", content=_CONFIG),
+                ConfigFile(dest="herdr/plugins/config/persiyanov.reviewr/config.toml", content=_REVIEWR_CONFIG),
                 ConfigFile(dest="herdr/herd-agent", content=_HELPER, mode=0o755),
             ),
         )
