@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 
-from dotgen.macos_report import MacOSReportError, render_report
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import build_all, build_env, required_secrets
 from dotgen.secrets_transfer import (
@@ -26,9 +25,6 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("build-all", help="build every environment")
     sub.add_parser("list-envs", help="print environment names")
-
-    p_report = sub.add_parser("macos-report", help="report migration differences against this macOS host")
-    p_report.add_argument("--stage", type=Path, required=True)
 
     p_send = sub.add_parser("send-secrets", help="send environment-scoped secrets over SSH")
     p_send.add_argument("env")
@@ -56,12 +52,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "list-envs":
         for name in ENVIRONMENTS:
             print(name)
-        return 0
-    if args.cmd == "macos-report":
-        try:
-            print(render_report(args.stage), end="")
-        except MacOSReportError as error:
-            parser.error(str(error))
         return 0
     if args.cmd == "send-secrets":
         if args.env not in ENVIRONMENTS:
