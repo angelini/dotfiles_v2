@@ -601,6 +601,37 @@ grep -q 'Sandbox User' "$HOME/.config/git/config"
     handle.assert_cmd(cmd, login=True)
 
 
+def test_pi_sandbox_exposes_herdr_clipboard_images_readonly(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name != "debian":
+        pytest.skip("Herdr clipboard images need a dedicated bind only under bubblewrap")
+    handle.assert_cmd(
+        r"""
+set -euo pipefail
+repo="$HOME/repos/herdr-clipboard-sandbox-smoke"
+clipboard_dir="/tmp/herdr-clipboard-images-$(id -u)"
+probe="$clipboard_dir/dotgen-sandbox-smoke.png"
+mkdir -p "$repo" "$clipboard_dir"
+printf 'clipboard-image\n' > "$probe"
+trap 'rm -f -- "$probe" "$clipboard_dir/dotgen-sandbox-write"' EXIT
+cat > "$repo/pi" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+clipboard_dir="/tmp/herdr-clipboard-images-$(id -u)"
+[ "$(cat "$clipboard_dir/dotgen-sandbox-smoke.png")" = clipboard-image ]
+if printf 'unexpected write\n' > "$clipboard_dir/dotgen-sandbox-write" 2>/dev/null; then
+  echo "Herdr clipboard image directory is unexpectedly writable" >&2
+  exit 1
+fi
+SH
+chmod +x "$repo/pi"
+(cd "$repo" && PATH="$repo:$PATH" pi-sandbox)
+[ ! -e "$clipboard_dir/dotgen-sandbox-write" ]
+""",
+        login=True,
+    )
+
+
 def test_pi_sandbox_hides_bash_history_and_legacy_stinkpot_database(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name == "debian-docker":

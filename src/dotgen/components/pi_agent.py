@@ -178,6 +178,19 @@ _prepare_jiti_cache() {
   printf '%s\n' "$real_cache"
 }
 
+_prepare_herdr_clipboard_images() {
+  local path="$1" owner real_path
+  [ ! -L "$path" ] || _die "refusing symlinked Herdr clipboard image directory: $path"
+  [ ! -e "$path" ] || [ -d "$path" ] || _die "Herdr clipboard image path is not a directory: $path"
+  mkdir -p "$path"
+  owner="$(stat -c %u "$path")" || _die "cannot inspect Herdr clipboard image directory: $path"
+  [ "$owner" = "$(id -u)" ] || _die "Herdr clipboard image directory has unexpected owner: $path"
+  chmod 0700 "$path"
+  real_path="$(_resolve_path "$path")" || _die "cannot resolve Herdr clipboard image directory: $path"
+  [ "$real_path" = "$path" ] || _die "Herdr clipboard image directory escapes expected path: $path"
+  printf '%s\n' "$real_path"
+}
+
 _fnm_default_bin() {
   local bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"
   [ -x "$bin/node" ] || return 1
@@ -248,9 +261,12 @@ _run_macos() {
 
 _run_linux() {
   local pi_bin="$1" transformers_cache="$2" transformers_cache_target="$3"
+  local herdr_clipboard_images
   local jiti_cache="$HOME/.pi-sandbox-cache/jiti" runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   shift 3
+  herdr_clipboard_images="/tmp/herdr-clipboard-images-$(id -u)"
   command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
+  herdr_clipboard_images="$(_prepare_herdr_clipboard_images "$herdr_clipboard_images")"
   jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"
   exec env -i \
     "HOME=$HOME" \
@@ -272,6 +288,7 @@ _run_linux() {
     --proc /proc \
     --dev-bind /dev /dev \
     --tmpfs /tmp \
+    --ro-bind "$herdr_clipboard_images" "$herdr_clipboard_images" \
     --bind "$jiti_cache" /tmp/jiti \
     --dir /run \
     --dir /run/user \
