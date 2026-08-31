@@ -9,7 +9,7 @@
     "openai-codex/gpt-5.6-terra"
   ],
   "packages": [
-    "npm:pi-lens",
+    "npm:@spences10/pi-lsp",
     "npm:pi-mcp-adapter",
     "npm:pi-subagents",
     "npm:pi-simplify",

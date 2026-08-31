@@ -1123,6 +1123,7 @@ def test_pi_agent_setup() -> None:
     npm_lines = [line for line in frag.setup.splitlines() if line.startswith("install_npm_global ")]
     assert len(npm_lines) == 1
     assert shlex.split(npm_lines[0]) == ["install_npm_global", *_PI_PACKAGES]
+    assert "npm uninstall -g pi-lens" in frag.setup
     assert "pi-web-access" not in npm_lines[0]
     assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
@@ -1141,6 +1142,8 @@ def test_pi_agent_setup() -> None:
     assert "lastChangelogVersion" not in settings.content
     assert "npm:@plannotator/pi-extension" in settings.content
     assert "npm:@dreki-gg/pi-context7" in settings.content
+    assert "npm:@spences10/pi-lsp" in settings.content
+    assert "pi-lens" not in settings.content
     assert "npm:@juicesharp/rpiv-btw" in settings.content
     assert "npm:@vanillagreen/pi-web-tools" in settings.content
     assert "npm:pi-web-access" not in settings.content

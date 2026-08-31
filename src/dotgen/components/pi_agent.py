@@ -32,7 +32,7 @@ def _pi_angelini_root() -> Path:
 
 _PI_PACKAGES = (
     "@earendil-works/pi-coding-agent",
-    "pi-lens",
+    "@spences10/pi-lsp",
     "pi-mcp-adapter",
     "pi-subagents",
     "pi-simplify",
@@ -408,6 +408,7 @@ _SETUP_BASE = (
     "install_npm_global "
     + shlex.join(_PI_PACKAGES)
     + r"""
+npm uninstall -g pi-lens
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"
 ensure_dir "$HOME/.local/bin"

@@ -1,8 +1,8 @@
+0600  15510e1fecd8aa2f3c2e7667fbb7e50208273512923d308687a1adface0effb0  managed-settings/pi.json
 0600  167a6ee1c8993debd269e587e47259020844fc7d1c1fdcab6e140abaf0017415  managed-settings/claude.json
 0600  4af07404b23ef63fe280f0e1480479dcd959e42d8fbb8b4667e2fa92c16fbf97  zed-host-bridge/dev.dotgen.zed-host-bridge.plist
 0600  4d4b36d4c8e669f4297a2317e30774d3eb9e590a8bf80f90b362952cf194feab  zed-host-bridge/ssh.conf.template
 0600  567d070b394161cb7f51d551cfcb64d5bdbd03cb8444e7a271823476dc0fd1e6  aws/config
-0600  72dd8e8225b400124afecbf4aafc67277ec9e43aff1c085b8d12a2c16186fea8  managed-settings/pi.json
 0600  c4d45e53eca749a23a9d2a4ce748eccdb9ddab45e1eab466dd4910ad14773cf6  zed-host-bridge/config.json.template
 0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0600  f330dbe84c0436a2b71181fa66421ef2ead8e2f8fed2860507a51b16755cf7f1  pi/agent/models.json
