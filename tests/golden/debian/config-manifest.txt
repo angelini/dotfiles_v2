@@ -7,6 +7,7 @@
 0644  526a623b3e24a34320f254f3544d9374aceb4cb8436ace8189740243802a6f36  herdr/plugins/config/persiyanov.reviewr/config.toml
 0644  589b0beae0c025c70b667db1113f925c56be3656396a66eb30042f22f2e856df  pi/agent/plannotator.json
 0644  62cfffc211aa22adb45c2224cff284a9714f2bc8caa85b00a8765aeb5f39af17  herdr/config.toml
+0644  652902c9456e1e944fb6f55091afba7f3b31dee60339e8bed84aac0a291ea448  zed-host-bridge/sshd.conf
 0644  76a246010494bbfc06de685273b00f9da01dafdf9085b7fa8c549e33c477ad39  helix/config.toml
 0644  7ebb947e3cff48055fab1d7a1fab423c77af388459fa474697f835cdefd3de5d  starship/starship.toml
 0644  a62ded06e54c0bfce18ee0bf022b20efb6c05ee3e30d426da2cc9b9a00abeed2  bash/bash_profile
@@ -17,10 +18,10 @@
 0644  f9f3cc61dfe2bba162e2ba06109255d4ae35756693ced5a0fed8595ccb5aff15  tmuxinator/default.yml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
 0644  fbf21eed560c101db1bf6e098676922fac9214c09cfb649e5f54bd7eb15b0f22  tmux/tmux.conf
-0755  99cd0f5e0994e8296255f69ff80d4c221895ae1d5d51611f01f7ab72edfe7d4f  pi/sandbox/pi-sandbox.sh
 0755  3dc960151cb0d0249a54741f543082c277ecf698f05d58ba5be4b2e45d4bea1b  zed-host-bridge/zed
 0755  5c0177913ef495ca03dd304d02c0d260a37a7bfbc79236ef0c44f5d0b68a746c  pi/launcher/pi.sh
 0755  8fc3401d60e1d9b79c1dc2c9e6ede758edb7232024cecc8b0324db8ec7d5c10a  tmuxinator/dotgen-agent-session
+0755  99cd0f5e0994e8296255f69ff80d4c221895ae1d5d51611f01f7ab72edfe7d4f  pi/sandbox/pi-sandbox.sh
 dir  claude
 dir  pi-angelini
 dir  pi/agent

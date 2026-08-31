@@ -1,6 +1,6 @@
 0600  167a6ee1c8993debd269e587e47259020844fc7d1c1fdcab6e140abaf0017415  managed-settings/claude.json
-0600  2d403f8c54132d40e27aad6fd8baee1baef5e137f42cfe19720498ec0646dc7c  zed-host-bridge/ssh.conf.template
 0600  4af07404b23ef63fe280f0e1480479dcd959e42d8fbb8b4667e2fa92c16fbf97  zed-host-bridge/dev.dotgen.zed-host-bridge.plist
+0600  4d4b36d4c8e669f4297a2317e30774d3eb9e590a8bf80f90b362952cf194feab  zed-host-bridge/ssh.conf.template
 0600  567d070b394161cb7f51d551cfcb64d5bdbd03cb8444e7a271823476dc0fd1e6  aws/config
 0600  72dd8e8225b400124afecbf4aafc67277ec9e43aff1c085b8d12a2c16186fea8  managed-settings/pi.json
 0600  c4d45e53eca749a23a9d2a4ce748eccdb9ddab45e1eab466dd4910ad14773cf6  zed-host-bridge/config.json.template
@@ -23,8 +23,8 @@
 0644  e767c69d0e6696672b4fbfb82427ad9e4ebc36ba93f0ba13c7633389ac50d55f  herdr/local.toml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
 0644  fbf21eed560c101db1bf6e098676922fac9214c09cfb649e5f54bd7eb15b0f22  tmux/tmux.conf
-0755  99cd0f5e0994e8296255f69ff80d4c221895ae1d5d51611f01f7ab72edfe7d4f  pi/sandbox/pi-sandbox.sh
 0755  5c0177913ef495ca03dd304d02c0d260a37a7bfbc79236ef0c44f5d0b68a746c  pi/launcher/pi.sh
+0755  99cd0f5e0994e8296255f69ff80d4c221895ae1d5d51611f01f7ab72edfe7d4f  pi/sandbox/pi-sandbox.sh
 0755  c082009a049f536f1373e91284c50db769ba5518ae65285e2c96dba4eca90e70  herdr/herd-remote
 0755  c9346e8234fb65bc846f9806afb5eab8bf641f26a27fa7c4881efa3961adbdd1  herdr/herd-local
 0755  ceac562ef966d826ad5bb84b2f6187c293ed9ed92539ff26da7c5fac7e92a39b  zed-host-bridge/serve
