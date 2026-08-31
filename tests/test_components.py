@@ -120,10 +120,10 @@ def test_terraform_tools_install_for_normal_environments() -> None:
     assert "https://apt.releases.hashicorp.com trixie main" in debian
     assert "https://apt.releases.hashicorp.com/gpg" in debian
     assert debian.index("update_pkg_index") < debian.index("install_package terraform")
-    assert "terragrunt/releases/download/v1.1.4/terragrunt_linux_${arch}" in debian
-    assert "a2640da8455fa5f3671167e6373832b0907b9dc972dd01c2093cc7808934e158" in debian
-    assert "c65d1897446590ebb3c695835cc956c12c5374a9add8312517c83c9fd7a1c06b" in debian
-    assert '"$checksum" "v1.1.4" --version' in debian
+    assert "terragrunt/releases/download/v0.96.1/terragrunt_linux_${arch}" in debian
+    assert "513eff2f87e2f5ec84369cc0f9d6c6766b43ca765fec4a3ac3598b933dc3218f" in debian
+    assert "5cf6006c99b4d05e03eea1375cf8a591ade8b06a40e804b0b73f89f7589347c3" in debian
+    assert '"$checksum" "v0.96.1" --version' in debian
 
     macos = terraform.render(ENVIRONMENTS["macos"]).setup
     assert "add_repo tap hashicorp/tap" in macos

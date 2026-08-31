@@ -459,12 +459,12 @@ if (
       *) error "unsupported arch for Terragrunt: $(detect_arch)"; return 1 ;;
     esac
     case "$arch" in
-      amd64) checksum="a2640da8455fa5f3671167e6373832b0907b9dc972dd01c2093cc7808934e158" ;;
-      arm64) checksum="c65d1897446590ebb3c695835cc956c12c5374a9add8312517c83c9fd7a1c06b" ;;
+      amd64) checksum="513eff2f87e2f5ec84369cc0f9d6c6766b43ca765fec4a3ac3598b933dc3218f" ;;
+      arm64) checksum="5cf6006c99b4d05e03eea1375cf8a591ade8b06a40e804b0b73f89f7589347c3" ;;
     esac
     download_bin_sha256 terragrunt \
-      "https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.4/terragrunt_linux_${arch}" \
-      "$checksum" "v1.1.4" --version
+      "https://github.com/gruntwork-io/terragrunt/releases/download/v0.96.1/terragrunt_linux_${arch}" \
+      "$checksum" "v0.96.1" --version
   }
   _install_terragrunt_linux
 ); then

@@ -4,10 +4,10 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
-_TERRAGRUNT_VERSION = "v1.1.4"
+_TERRAGRUNT_VERSION = "v0.96.1"
 _TERRAGRUNT_SHA256 = {
-    "amd64": "a2640da8455fa5f3671167e6373832b0907b9dc972dd01c2093cc7808934e158",
-    "arm64": "c65d1897446590ebb3c695835cc956c12c5374a9add8312517c83c9fd7a1c06b",
+    "amd64": "513eff2f87e2f5ec84369cc0f9d6c6766b43ca765fec4a3ac3598b933dc3218f",
+    "arm64": "5cf6006c99b4d05e03eea1375cf8a591ade8b06a40e804b0b73f89f7589347c3",
 }
 
 _SETUP_DEBIAN = f"""\
