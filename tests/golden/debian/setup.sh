@@ -959,6 +959,35 @@ if (
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/zed" "$HOME/bin/zed" 0755
   _zed_bridge_assert_dir "$HOME/.cache"
   _zed_bridge_safe_dir "$HOME/.cache/dotgen" 0700
+
+  sshd_config_dir=/etc/ssh/sshd_config.d
+  sshd_config="$sshd_config_dir/00-dotgen-zed-host-bridge.conf"
+  sshd_backup=
+  sshd_had_config=0
+  if sudo test -L "$sshd_config" || { sudo test -e "$sshd_config" && ! sudo test -f "$sshd_config"; }; then
+    error "unsafe Zed host bridge sshd destination: $sshd_config"
+    exit 1
+  fi
+  if sudo test -f "$sshd_config"; then
+    sshd_backup="$(mktemp)"
+    sudo cp -- "$sshd_config" "$sshd_backup"
+    sshd_had_config=1
+  fi
+  sudo install -d -m 0755 "$sshd_config_dir"
+  if ! sudo install -m 0644 "$DIR/config/zed-host-bridge/sshd.conf" "$sshd_config" || ! sudo sshd -t || ! sudo systemctl reload ssh; then
+    if [ "$sshd_had_config" -eq 1 ]; then
+      sudo cp -- "$sshd_backup" "$sshd_config"
+    else
+      sudo rm -f -- "$sshd_config"
+    fi
+    if sudo sshd -t; then
+      sudo systemctl reload ssh || true
+    fi
+    [ -z "$sshd_backup" ] || sudo rm -f -- "$sshd_backup"
+    error "failed to install Zed host bridge sshd configuration"
+    exit 1
+  fi
+  [ -z "$sshd_backup" ] || sudo rm -f -- "$sshd_backup"
 ); then
   component_end "zed_host_bridge" 0
 else

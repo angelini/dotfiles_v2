@@ -754,8 +754,6 @@ if (
     exit 1
   }
   grep -Fqx 'exitonforwardfailure yes' <<< "$ssh_effective" || { error "Zed host bridge ExitOnForwardFailure setting is not effective"; exit 1; }
-  grep -Fqx 'streamlocalbindunlink yes' <<< "$ssh_effective" || { error "Zed host bridge StreamLocalBindUnlink setting is not effective"; exit 1; }
-  grep -Fqx 'streamlocalbindmask 0177' <<< "$ssh_effective" || { error "Zed host bridge StreamLocalBindMask setting is not effective"; exit 1; }
   grep -E '^remoteforward /home/[^/]+/\.cache/dotgen/zed-host-bridge\.sock .*/Library/Caches/dotgen/zed-host-bridge\.sock$' <<< "$ssh_effective" >/dev/null || {
     error "Zed host bridge RemoteForward setting is not effective"
     exit 1

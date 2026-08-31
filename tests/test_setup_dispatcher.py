@@ -85,7 +85,7 @@ def test_just_deploy_builds_transfers_and_runs_with_tty() -> None:
     assert "deploy env target:" in justfile
     assert 'just build "{{env}}"' in justfile
     assert 'scp -- "dist/{{env}}.tar.gz" "{{target}}:"' in justfile
-    assert 'ssh -t -- "{{target}}"' in justfile
+    assert 'ssh -o ClearAllForwardings=yes -t -- "{{target}}"' in justfile
     assert 'tar xzf "{{env}}.tar.gz"' in justfile
     assert 'bash "{{env}}/setup.sh" deploy' in justfile
 

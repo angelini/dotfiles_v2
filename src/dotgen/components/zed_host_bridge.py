@@ -17,6 +17,7 @@ _ZED_LAUNCHER = _resource_text("zed")
 _SERVER_LAUNCHER = _resource_text("serve")
 _PLIST = _resource_text("dev.dotgen.zed-host-bridge.plist")
 _SSH_CONFIG = _resource_text("ssh.conf.template")
+_SSHD_CONFIG = _resource_text("sshd.conf")
 _RECEIVER_CONFIG = _resource_text("config.json.template")
 
 _COMMON_SETUP = r"""\
@@ -69,6 +70,35 @@ _zed_bridge_assert_dir "$HOME/bin"
 _zed_bridge_install_file "$DIR/config/zed-host-bridge/zed" "$HOME/bin/zed" 0755
 _zed_bridge_assert_dir "$HOME/.cache"
 _zed_bridge_safe_dir "$HOME/.cache/dotgen" 0700
+
+sshd_config_dir=/etc/ssh/sshd_config.d
+sshd_config="$sshd_config_dir/00-dotgen-zed-host-bridge.conf"
+sshd_backup=
+sshd_had_config=0
+if sudo test -L "$sshd_config" || { sudo test -e "$sshd_config" && ! sudo test -f "$sshd_config"; }; then
+  error "unsafe Zed host bridge sshd destination: $sshd_config"
+  exit 1
+fi
+if sudo test -f "$sshd_config"; then
+  sshd_backup="$(mktemp)"
+  sudo cp -- "$sshd_config" "$sshd_backup"
+  sshd_had_config=1
+fi
+sudo install -d -m 0755 "$sshd_config_dir"
+if ! sudo install -m 0644 "$DIR/config/zed-host-bridge/sshd.conf" "$sshd_config" || ! sudo sshd -t || ! sudo systemctl reload ssh; then
+  if [ "$sshd_had_config" -eq 1 ]; then
+    sudo cp -- "$sshd_backup" "$sshd_config"
+  else
+    sudo rm -f -- "$sshd_config"
+  fi
+  if sudo sshd -t; then
+    sudo systemctl reload ssh || true
+  fi
+  [ -z "$sshd_backup" ] || sudo rm -f -- "$sshd_backup"
+  error "failed to install Zed host bridge sshd configuration"
+  exit 1
+fi
+[ -z "$sshd_backup" ] || sudo rm -f -- "$sshd_backup"
 """
 )
 
@@ -160,8 +190,6 @@ ssh_effective="$(ssh -G "$zed_bridge_ssh_host" 2>/dev/null)" || {
   exit 1
 }
 grep -Fqx 'exitonforwardfailure yes' <<< "$ssh_effective" || { error "Zed host bridge ExitOnForwardFailure setting is not effective"; exit 1; }
-grep -Fqx 'streamlocalbindunlink yes' <<< "$ssh_effective" || { error "Zed host bridge StreamLocalBindUnlink setting is not effective"; exit 1; }
-grep -Fqx 'streamlocalbindmask 0177' <<< "$ssh_effective" || { error "Zed host bridge StreamLocalBindMask setting is not effective"; exit 1; }
 grep -E '^remoteforward /home/[^/]+/\.cache/dotgen/zed-host-bridge\.sock .*/Library/Caches/dotgen/zed-host-bridge\.sock$' <<< "$ssh_effective" >/dev/null || {
   error "Zed host bridge RemoteForward setting is not effective"
   exit 1
@@ -214,5 +242,10 @@ class ZedHostBridge:
                 )
             )
             return Fragment(setup=_MACOS_SETUP, configs=tuple(configs), secrets=frozenset({"ZED_HOST_BRIDGE_SSH_HOST"}))
-        configs.append(ConfigFile(dest="zed-host-bridge/zed", content=_ZED_LAUNCHER, mode=0o755))
+        configs.extend(
+            (
+                ConfigFile(dest="zed-host-bridge/zed", content=_ZED_LAUNCHER, mode=0o755),
+                ConfigFile(dest="zed-host-bridge/sshd.conf", content=_SSHD_CONFIG),
+            )
+        )
         return Fragment(setup=_DEBIAN_SETUP, configs=tuple(configs))

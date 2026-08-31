@@ -39,7 +39,11 @@ def test_component_distribution_ordering_and_deployment_input() -> None:
     macos_fragment = ZedHostBridge().render(ENVIRONMENTS["macos"])
     assert not debian_fragment.secrets
     assert macos_fragment.secrets == frozenset({"ZED_HOST_BRIDGE_SSH_HOST"})
-    assert {config.dest for config in debian_fragment.configs} == {"zed-host-bridge/bridge.mjs", "zed-host-bridge/zed"}
+    assert {config.dest for config in debian_fragment.configs} == {
+        "zed-host-bridge/bridge.mjs",
+        "zed-host-bridge/sshd.conf",
+        "zed-host-bridge/zed",
+    }
     assert {config.dest for config in macos_fragment.configs} == {
         "zed-host-bridge/bridge.mjs",
         "zed-host-bridge/config.json.template",
@@ -65,10 +69,18 @@ def test_launch_agent_and_ssh_resources_are_scoped() -> None:
     ssh_config = configs["zed-host-bridge/ssh.conf.template"].content
     assert ssh_config.startswith("Host ${ZED_HOST_BRIDGE_SSH_HOST}\n")
     assert "RemoteForward /home/%r/.cache/dotgen/zed-host-bridge.sock %d/Library/Caches/dotgen/zed-host-bridge.sock" in ssh_config
-    assert "StreamLocalBindMask 0177" in ssh_config
-    assert "StreamLocalBindUnlink yes" in ssh_config
+    assert "StreamLocalBindMask" not in ssh_config
+    assert "StreamLocalBindUnlink" not in ssh_config
     assert "ExitOnForwardFailure yes" in ssh_config
     assert "Host *" not in ssh_config
+
+    debian_fragment = ZedHostBridge().render(ENVIRONMENTS["debian"])
+    debian_configs = {config.dest: config.content for config in debian_fragment.configs}
+    assert debian_configs["zed-host-bridge/sshd.conf"] == "StreamLocalBindMask 0177\nStreamLocalBindUnlink yes\n"
+    assert 'sshd_config="$sshd_config_dir/00-dotgen-zed-host-bridge.conf"' in debian_fragment.setup
+    assert 'sudo install -m 0644 "$DIR/config/zed-host-bridge/sshd.conf" "$sshd_config"' in debian_fragment.setup
+    assert "sudo sshd -t" in debian_fragment.setup
+    assert "sudo systemctl reload ssh" in debian_fragment.setup
 
 
 def _socket_path(name: str) -> Path:

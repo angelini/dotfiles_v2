@@ -403,6 +403,8 @@ def test_zed_host_bridge_is_installed_only_in_full_environments(vm: tuple[str, V
         handle.assert_cmd('[ ! -e "$HOME/bin/zed" ] && [ ! -e "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" ]')
     elif env_name == "debian":
         handle.assert_cmd('[ -x "$HOME/bin/zed" ] && [ -f "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" ] && [ "$(stat -c %a "$HOME/.cache/dotgen")" = 700 ]')
+        handle.assert_cmd("sudo sshd -T | grep -Fqx 'streamlocalbindmask 0177'")
+        handle.assert_cmd("sudo sshd -T | grep -Fqx 'streamlocalbindunlink yes'")
         result = handle.run('cd "$HOME/repos/pi-angelini" && zed .', login=True)
         assert result.returncode != 0
         assert "macOS host bridge unavailable" in result.stderr
