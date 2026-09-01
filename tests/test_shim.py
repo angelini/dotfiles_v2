@@ -775,6 +775,27 @@ def test_macos_remove_packages_and_service_mask_are_stubs() -> None:
     assert "debian only" in _function_body(macos, "service_mask")
 
 
+def test_macos_update_bootstraps_configured_gh_credential_helper(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".gitconfig").write_text('[credential "https://github.com"]\n    helper = !gh auth git-credential\n')
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{_macos_shim()}
+export HOME={shlex.quote(str(home))}
+bin_exists() {{ [ "$1" != gh ]; }}
+brew() {{ printf '%s|%s\\n' "${{HOMEBREW_NO_AUTO_UPDATE-}}" "$*"; }}
+update_pkg_index
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["1|install gh", "|update"]
+
+
 def test_download_bin_reuses_matching_version_and_replaces_mismatch(tmp_path: Path) -> None:
     home = tmp_path / "home"
     target = home / "bin" / "tool"

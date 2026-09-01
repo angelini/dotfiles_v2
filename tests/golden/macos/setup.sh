@@ -791,6 +791,7 @@ if (
 
   _zed_bridge_assert_dir "$HOME/Library"
   _zed_bridge_assert_dir "$HOME/Library/Caches"
+  _zed_bridge_assert_dir "$HOME/Library/Logs"
   _zed_bridge_safe_dir "$HOME/Library/Caches/dotgen" 0700
   _zed_bridge_assert_dir "$HOME/Library/LaunchAgents"
   launch_agent="$HOME/Library/LaunchAgents/dev.dotgen.zed-host-bridge.plist"
@@ -866,14 +867,36 @@ if (
 
   launch_domain="gui/$(id -u)"
   launch_label="$launch_domain/dev.dotgen.zed-host-bridge"
+  bridge_log="$HOME/Library/Logs/dotgen-zed-host-bridge.log"
+  _zed_bridge_launch_failure() {
+    error "$1"
+    plutil -lint "$launch_agent" >&2 || true
+    launchctl print "$launch_label" >&2 || true
+    if [ -f "$bridge_log" ]; then
+      printf '%s\n' "--- $bridge_log (last 50 lines) ---" >&2
+      tail -n 50 "$bridge_log" >&2 || true
+    else
+      printf '%s\n' "Zed host bridge log does not exist yet: $bridge_log" >&2
+    fi
+  }
   if launchctl print "$launch_domain" >/dev/null 2>&1; then
-    launchctl bootout "$launch_label" >/dev/null 2>&1 || true
-    launchctl bootstrap "$launch_domain" "$launch_agent"
-    launchctl kickstart -k "$launch_label"
-    launchctl print "$launch_label" >/dev/null
+    if launchctl print "$launch_label" >/dev/null 2>&1; then
+      if ! launchctl bootout --wait "$launch_label"; then
+        _zed_bridge_launch_failure "failed to unload Zed host bridge LaunchAgent"
+        exit 1
+      fi
+    fi
+    if ! launchctl bootstrap "$launch_domain" "$launch_agent"; then
+      _zed_bridge_launch_failure "failed to bootstrap Zed host bridge LaunchAgent"
+      exit 1
+    fi
+    if ! launchctl print "$launch_label" >/dev/null; then
+      _zed_bridge_launch_failure "Zed host bridge LaunchAgent is unavailable after bootstrap"
+      exit 1
+    fi
     bridge_socket="$HOME/Library/Caches/dotgen/zed-host-bridge.sock"
     socket_ready=0
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
+    for ((socket_attempt = 0; socket_attempt < 50; socket_attempt++)); do
       if [ -S "$bridge_socket" ]; then
         socket_ready=1
         break
@@ -881,7 +904,7 @@ if (
       sleep 0.2
     done
     if [ "$socket_ready" -ne 1 ]; then
-      error "Zed host bridge LaunchAgent started without creating its socket; inspect: launchctl print $launch_label"
+      _zed_bridge_launch_failure "Zed host bridge LaunchAgent started without creating its socket"
       exit 1
     fi
     chmod 0600 "$bridge_socket"

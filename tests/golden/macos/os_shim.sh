@@ -49,6 +49,9 @@ add_repo() {
 
 
 update_pkg_index() {
+  if ! bin_exists gh && git config --global --get-all credential.https://github.com.helper 2>/dev/null | grep -Fq "gh auth git-credential"; then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install gh
+  fi
   brew update
 }
 

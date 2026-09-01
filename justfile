@@ -15,7 +15,10 @@ package env:
 package-all:
     for e in $(uv run python -m dotgen list-envs); do just package "$e"; done
 
-install env:
+_install-preflight:
+    @if [ "${DOTGEN_PI_SANDBOX:-}" = 1 ]; then echo "Host installation cannot run inside pi-sandbox. Rerun from a regular terminal or start Pi with pi-unsafe." >&2; exit 2; fi
+
+install env: _install-preflight
     bash dist/{{env}}/setup.sh deploy
 
 deploy env target:

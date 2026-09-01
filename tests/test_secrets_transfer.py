@@ -205,7 +205,7 @@ def test_serialization_is_deterministic_and_round_trips_without_execution(tmp_pa
     first = serialize_payload(values)
     second = serialize_payload(dict(reversed(tuple(values.items()))))
     result = subprocess.run(
-        ["bash", "-c", 'set -u; source /dev/stdin; printf "%s\\0%s" "$A_KEY" "$Z_KEY"'],
+        ["bash", "-c", 'set -u; source /dev/fd/0; printf "%s\\0%s" "$A_KEY" "$Z_KEY"'],
         input=first,
         capture_output=True,
         check=True,

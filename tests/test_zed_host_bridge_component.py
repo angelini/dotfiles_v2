@@ -65,6 +65,15 @@ def test_launch_agent_and_ssh_resources_are_scoped() -> None:
     command = plist["ProgramArguments"]
     assert command[:2] == ["/bin/bash", "-c"]
     assert command[2] == 'exec "$HOME/.local/libexec/dotgen/zed-host-bridge-serve"'
+    server_launcher = configs["zed-host-bridge/serve"].content
+    assert 'log_file="$HOME/Library/Logs/dotgen-zed-host-bridge.log"' in server_launcher
+    assert 'exec >>"$log_file" 2>&1' in server_launcher
+
+    macos_setup = fragment.setup
+    assert 'launchctl bootout --wait "$launch_label"' in macos_setup
+    assert 'if ! launchctl bootstrap "$launch_domain" "$launch_agent"; then' in macos_setup
+    assert "launchctl kickstart" not in macos_setup
+    assert 'tail -n 50 "$bridge_log"' in macos_setup
 
     ssh_config = configs["zed-host-bridge/ssh.conf.template"].content
     assert ssh_config.startswith("Host ${ZED_HOST_BRIDGE_SSH_HOST}\n")
@@ -81,6 +90,30 @@ def test_launch_agent_and_ssh_resources_are_scoped() -> None:
     assert 'sudo install -m 0644 "$DIR/config/zed-host-bridge/sshd.conf" "$sshd_config"' in debian_fragment.setup
     assert "sudo sshd -t" in debian_fragment.setup
     assert "sudo systemctl reload ssh" in debian_fragment.setup
+
+
+def test_server_launcher_captures_startup_errors(tmp_path: Path) -> None:
+    fragment = ZedHostBridge().render(ENVIRONMENTS["macos"])
+    launcher = next(config for config in fragment.configs if config.dest == "zed-host-bridge/serve")
+    script = tmp_path / "serve"
+    script.write_text(launcher.content)
+    script.chmod(launcher.mode)
+    home = tmp_path / "home"
+    (home / "Library/Logs").mkdir(parents=True)
+
+    result = subprocess.run(
+        [str(script)],
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    log_file = home / "Library/Logs/dotgen-zed-host-bridge.log"
+    assert result.returncode != 0
+    assert result.stderr == ""
+    assert "managed runtime or receiver is missing" in log_file.read_text()
+    assert log_file.stat().st_mode & 0o777 == 0o600
 
 
 def _socket_path(name: str) -> Path:

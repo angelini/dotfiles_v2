@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+log_file="$HOME/Library/Logs/dotgen-zed-host-bridge.log"
+if [ -L "$log_file" ] || { [ -e "$log_file" ] && [ ! -f "$log_file" ]; }; then
+  printf 'zed-host-bridge: unsafe log destination: %s\n' "$log_file" >&2
+  exit 1
+fi
+touch "$log_file"
+chmod 0600 "$log_file"
+exec >>"$log_file" 2>&1
+
 node_bin="$HOME/.local/share/fnm/aliases/default/bin/node"
 bridge="$HOME/.local/libexec/dotgen/zed-host-bridge.mjs"
 if [ ! -x "$node_bin" ] || [ ! -f "$bridge" ]; then
