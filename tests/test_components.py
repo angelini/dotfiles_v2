@@ -1126,7 +1126,7 @@ def test_pi_agent_setup() -> None:
     npm_lines = [line for line in frag.setup.splitlines() if line.startswith("install_npm_global ")]
     assert len(npm_lines) == 1
     assert shlex.split(npm_lines[0]) == ["install_npm_global", *_PI_PACKAGES]
-    assert "npm uninstall -g pi-lens" in frag.setup
+    assert "npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension" in frag.setup
     assert "pi-web-access" not in npm_lines[0]
     assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
@@ -1143,9 +1143,11 @@ def test_pi_agent_setup() -> None:
     assert "openai-codex/gpt-5.6-luna" in settings.content
     assert "openai-codex/gpt-5.6-terra" in settings.content
     assert "lastChangelogVersion" not in settings.content
-    assert "npm:@plannotator/pi-extension" in settings.content
+    assert "npm:@plannotator/pi-extension" not in settings.content
+    assert "npm:pi-simplify" not in settings.content
     assert "npm:@dreki-gg/pi-context7" in settings.content
     assert "npm:@spences10/pi-lsp" in settings.content
+    assert "npm:pi-edit-hooks" in settings.content
     assert "pi-lens" not in settings.content
     assert "npm:@juicesharp/rpiv-btw" in settings.content
     assert "npm:@vanillagreen/pi-web-tools" in settings.content
@@ -1158,16 +1160,11 @@ def test_pi_agent_setup() -> None:
         "managed-settings/pi.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
-        "pi/agent/plannotator.json",
         "pi/launcher/pi.sh",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
     }
     assert not [d for d in dests if d.startswith("pi-angelini/")]
-    plannotator = next(cf for cf in frag.configs if cf.dest == "pi/agent/plannotator.json")
-    phases = json.loads(plannotator.content)["phases"]
-    assert all("instructions" in phase for phase in phases.values())
-    assert all("systemPrompt" not in phase for phase in phases.values())
     agent_vendor, angelini_vendor = frag.vendors
     assert agent_vendor.source == _agent_config_root() / "pi" / "agent"
     assert agent_vendor.dest == "pi/agent"
@@ -1435,7 +1432,6 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     assert {config.dest for config in pi.configs if config.dest.startswith("pi/agent/")} == {
         "pi/agent/models.json",
         "pi/agent/web-search.json",
-        "pi/agent/plannotator.json",
     }
     pi_settings = next(config for config in pi.configs if config.dest == "managed-settings/pi.json")
     assert pi_settings.mode == 0o600

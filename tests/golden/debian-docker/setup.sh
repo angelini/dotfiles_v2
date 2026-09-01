@@ -295,8 +295,8 @@ component_begin "pi_agent"
 if (
   set -e
   install_package bubblewrap
-  install_npm_global @earendil-works/pi-coding-agent @spences10/pi-lsp pi-mcp-adapter pi-subagents pi-simplify @plannotator/pi-extension @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
-  npm uninstall -g pi-lens
+  install_npm_global @earendil-works/pi-coding-agent @spences10/pi-lsp pi-mcp-adapter pi-subagents pi-edit-hooks @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
+  npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"

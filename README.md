@@ -218,7 +218,7 @@ Setup does not delete these administrator-owned or partial states.
 
 The Pi component installs the Pi CLI/packages, writes managed config under `~/.pi/agent`, and installs the sandbox wrapper. It also bundles a sanitized copy of the sibling `pi-angelini` repository into the artifact and syncs it to `~/repos/pi-angelini` during deploy. The bundle excludes `.git`, `node_modules`, lockfiles, caches, tests, and plan artifacts; Pi then loads it as the local package source `~/repos/pi-angelini`.
 
-Managed Pi config includes Plannotator and the Claude-style scout/planner/reviewer/architect/editor pipeline agents, chain, and prompt. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
+Managed Pi config includes the Claude-style scout/planner/reviewer/architect/editor pipeline agents, chain, and prompt. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
 
 ## Herdr launchers
 

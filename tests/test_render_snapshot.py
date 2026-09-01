@@ -63,7 +63,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
     claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"'
     claude_patch_call = 'install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600'
     platform_call = 'install_config "$DIR/config/repositories/platform/CLAUDE.md" "$HOME/repos/platform/CLAUDE.md"'
-    pi_mutable = ("models.json", "web-search.json", "plannotator.json")
+    pi_mutable = ("models.json", "web-search.json")
 
     for env_name in ENVIRONMENTS:
         root = built_root / env_name

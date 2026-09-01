@@ -20,7 +20,6 @@ def _resource_text(relative_path: str) -> str:
 
 
 _PI_LAUNCHER_SH = _resource_text("pi.sh")
-_PLANNOTATOR_JSON = _resource_text("plannotator.json")
 
 
 def _pi_angelini_root() -> Path:
@@ -35,8 +34,7 @@ _PI_PACKAGES = (
     "@spences10/pi-lsp",
     "pi-mcp-adapter",
     "pi-subagents",
-    "pi-simplify",
-    "@plannotator/pi-extension",
+    "pi-edit-hooks",
     "@dreki-gg/pi-context7",
     "@juicesharp/rpiv-ask-user-question",
     "@juicesharp/rpiv-btw",
@@ -408,7 +406,7 @@ _SETUP_BASE = (
     "install_npm_global "
     + shlex.join(_PI_PACKAGES)
     + r"""
-npm uninstall -g pi-lens
+npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"
 ensure_dir "$HOME/.local/bin"
@@ -446,7 +444,6 @@ class PiAgent:
                 ConfigFile(dest="managed-settings/pi.json", content=managed_settings("pi"), mode=0o600),
                 ConfigFile(dest="pi/agent/models.json", content=pi_models(), mode=0o600),
                 ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
-                ConfigFile(dest="pi/agent/plannotator.json", content=_PLANNOTATOR_JSON),
                 ConfigFile(dest="pi/launcher/pi.sh", content=_PI_LAUNCHER_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
                 ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
