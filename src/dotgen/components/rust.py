@@ -7,6 +7,7 @@ _SETUP = """\
 install_script rustup https://sh.rustup.rs -y --default-toolchain stable
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 rustup target add wasm32-wasip2
+rustup component add rust-analyzer
 """
 
 _BASHRC = """\

@@ -144,11 +144,12 @@ def test_zig_installs_for_normal_environments() -> None:
     assert not Zig().applies_to(ENVIRONMENTS["debian-docker"])
 
 
-def test_rust_installs_wasip2_target() -> None:
+def test_rust_installs_target_and_analyzer() -> None:
     setup = Rust().render(ENVIRONMENTS["debian"]).setup
     assert "install_script rustup https://sh.rustup.rs" in setup
     assert '[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"' in setup
     assert "rustup target add wasm32-wasip2" in setup
+    assert "rustup component add rust-analyzer" in setup
 
 
 def _run_tool_setup(tmp_path: Path, setup: str, prelude: str) -> subprocess.CompletedProcess[str]:
@@ -828,8 +829,10 @@ def test_python_tools_per_os_build_deps() -> None:
     macos = PythonTools().render(ENVIRONMENTS["macos"]).setup
     assert "build-essential" in debian
     assert "install_packages" not in macos.split("install_script uv")[0]
-    for s in (debian, macos):
-        assert "install_script uv https://astral.sh/uv/install.sh" in s
+    for setup in (debian, macos):
+        assert "install_script uv https://astral.sh/uv/install.sh" in setup
+        assert 'export PATH="$HOME/.local/bin:$PATH"' in setup
+        assert "uv tool install python-lsp-server" in setup
 
 
 def test_go_lang_has_no_macos_package_dependency() -> None:

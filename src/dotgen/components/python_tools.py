@@ -12,6 +12,8 @@ _BUILD_DEPS: dict[OS, tuple[str, ...]] = {
 
 _UV_INSTALL = """\
 install_script uv https://astral.sh/uv/install.sh
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install python-lsp-server
 """
 
 _BASHRC = """\
