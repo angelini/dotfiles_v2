@@ -244,8 +244,8 @@ _run_macos() {
     "TMPDIR=$tmpdir" \
     "DOTGEN_PI_SANDBOX=1" \
     "JITI_FS_CACHE=1" \
-    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
-    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
+    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" \
+    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     sandbox-exec \
@@ -274,8 +274,8 @@ _run_linux() {
     "LANG=${LANG:-C.UTF-8}" \
     "DOTGEN_PI_SANDBOX=1" \
     "JITI_FS_CACHE=1" \
-    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" \
-    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" \
+    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" \
+    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     bwrap \
@@ -468,5 +468,5 @@ class PiAgent:
                     exclude_globs=("package-lock.json", "pi-system-audit-plan.md", "*.test.ts"),
                 ),
             ),
-            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GCP_PROJECT_ID"}),
+            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GOOGLE_CLOUD_LOCATION", "GOOGLE_CLOUD_PROJECT"}),
         )

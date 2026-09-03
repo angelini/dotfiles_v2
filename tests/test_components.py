@@ -1133,7 +1133,8 @@ def test_pi_agent_setup() -> None:
     assert 'install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
     assert "GEMINI_API_KEY" not in frag.secrets
-    assert "GCP_PROJECT_ID" in frag.secrets
+    assert "GOOGLE_CLOUD_PROJECT" in frag.secrets
+    assert "GOOGLE_CLOUD_LOCATION" in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
     assert "CONTEXT7_API_KEY" in frag.secrets
     settings = next(cf for cf in frag.configs if cf.dest == "managed-settings/pi.json")
@@ -1307,8 +1308,9 @@ def test_pi_agent_sandbox_configs() -> None:
     assert 'pi_bin="$(command -v pi)"' in script.content
     assert '"$pi_bin" "$@"' in script.content
     assert "GEMINI_API_KEY" not in script.content
-    assert "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-${GCP_PROJECT_ID:-}}" in script.content
-    assert "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-europe-west4}" in script.content
+    assert "GCP_PROJECT_ID" not in script.content
+    assert "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" in script.content
+    assert "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" in script.content
     assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
     assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
     assert "__SANDBOX_" not in script.content

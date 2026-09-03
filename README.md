@@ -119,7 +119,7 @@ chmod 600 ~/.config/dotgen/secrets.env
 $EDITOR ~/.config/dotgen/secrets.env
 ```
 
-Populate manual files using single-line `KEY="value"` entries. Git name and email are required; API keys are needed for their corresponding services. Google model access uses `GEMINI_API_KEY`. Deployment aborts if the file is absent or a required template value is empty.
+Populate manual files using single-line `KEY="value"` entries. Git name and email are required; API keys are needed for their corresponding services. Google Vertex model access uses gcloud ADC plus `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` in this file. Deployment aborts if the file is absent or a required template value is empty.
 
 On Debian, extract the bundle if needed, run it, then start a new login shell:
 

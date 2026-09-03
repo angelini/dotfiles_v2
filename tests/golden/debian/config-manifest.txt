@@ -20,7 +20,7 @@
 0755  3dc960151cb0d0249a54741f543082c277ecf698f05d58ba5be4b2e45d4bea1b  zed-host-bridge/zed
 0755  5c0177913ef495ca03dd304d02c0d260a37a7bfbc79236ef0c44f5d0b68a746c  pi/launcher/pi.sh
 0755  8fc3401d60e1d9b79c1dc2c9e6ede758edb7232024cecc8b0324db8ec7d5c10a  tmuxinator/dotgen-agent-session
-0755  99cd0f5e0994e8296255f69ff80d4c221895ae1d5d51611f01f7ab72edfe7d4f  pi/sandbox/pi-sandbox.sh
+0755  f91ef887605a33ff5dcf2de9fdbfacf46d55e3dafc650f0ab277cd7fdac09e0e  pi/sandbox/pi-sandbox.sh
 dir  claude
 dir  pi-angelini
 dir  pi/agent
