@@ -2,20 +2,15 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1-}" in
-deploy) ;;
--h | --help | help)
-  printf 'usage: %s deploy\n' "$0"
-  printf '  deploy apply changes (overwrites configs)\n'
-  exit 0
-  ;;
-"")
-  printf 'usage: %s deploy\n' "$0" >&2
-  exit 2
-  ;;
-*)
-  printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2
-  exit 2
-  ;;
+  deploy) ;;
+  -h|--help|help)
+    printf 'usage: %s deploy\n' "$0"
+    printf '  deploy apply changes (overwrites configs)\n'
+    exit 0 ;;
+  "")
+    printf 'usage: %s deploy\n' "$0" >&2; exit 2 ;;
+  *)
+    printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2; exit 2 ;;
 esac
 source "$DIR/os_shim.sh"
 if [ "$(id -u)" -eq 0 ]; then
@@ -56,9 +51,7 @@ if (
 ); then
   component_end "bash_base" 0
 else
-  _rc=$?
-  component_end "bash_base" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "bash_base" "$_rc"; exit "$_rc"
 fi
 
 # --- core_utils ---
@@ -69,9 +62,7 @@ if (
 ); then
   component_end "core_utils" 0
 else
-  _rc=$?
-  component_end "core_utils" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "core_utils" "$_rc"; exit "$_rc"
 fi
 
 # --- fzf_bash_history ---
@@ -84,11 +75,7 @@ if (
     exit 1
   fi
   if [ ! -e "$history_file" ]; then
-    if ! (
-      umask 077
-      set -o noclobber
-      : >"$history_file"
-    ) 2>/dev/null; then
+    if ! (umask 077; set -o noclobber; : > "$history_file") 2>/dev/null; then
       error "unable to create Bash history file safely: $history_file"
       exit 1
     fi
@@ -104,9 +91,7 @@ if (
 ); then
   component_end "fzf_bash_history" 0
 else
-  _rc=$?
-  component_end "fzf_bash_history" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "fzf_bash_history" "$_rc"; exit "$_rc"
 fi
 
 # --- tmux ---
@@ -118,9 +103,7 @@ if (
 ); then
   component_end "tmux" 0
 else
-  _rc=$?
-  component_end "tmux" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "tmux" "$_rc"; exit "$_rc"
 fi
 
 # --- mosh ---
@@ -131,32 +114,13 @@ if (
 ); then
   component_end "mosh" 0
 else
-  _rc=$?
-  component_end "mosh" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "mosh" "$_rc"; exit "$_rc"
 fi
 
 # --- herdr ---
 component_begin "herdr"
 if (
   set -e
-  _retire_legacy_herdr_file() {
-    local path=$1 expected_checksum=$2 description=$3 actual_checksum
-    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
-      return 0
-    fi
-    if [ -L "$path" ] || [ ! -f "$path" ]; then
-      error "legacy Herdr $description requires manual remediation (not a regular file): $path"
-      return 1
-    fi
-    actual_checksum="$(sha256_file "$path")"
-    if [ "$actual_checksum" != "$expected_checksum" ]; then
-      error "legacy Herdr $description requires manual remediation (content modified): $path"
-      return 1
-    fi
-    rm -- "$path"
-  }
-
   _install_herdr() {
     local arch bun_path checksum remote_bin
     install_package unzip
@@ -172,26 +136,12 @@ if (
       return 1
     fi
     case "$(detect_arch)" in
-    x86_64)
-      arch=x86_64
-      checksum=ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1
-      ;;
-    aarch64 | arm64)
-      arch=aarch64
-      checksum=a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574
-      ;;
-    *)
-      error "unsupported arch for Herdr: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) arch=x86_64; checksum=ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1 ;;
+      aarch64|arm64) arch=aarch64; checksum=a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574 ;;
+      *) error "unsupported arch for Herdr: $(detect_arch)"; return 1 ;;
     esac
     download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-macos-${arch}" "$checksum" "0.8.2" --version
     ensure_dir "$HOME/.local/bin"
-    _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "9684922654ce0e5b00544aca2d0db39906b7d1c28d235318f8ebcb90b07627d9" "herd-agent launcher"
-    _retire_legacy_herdr_file "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml" "62cfffc211aa22adb45c2224cff284a9714f2bc8caa85b00a8765aeb5f39af17" "default config"
-    if brew list --cask --versions supacode >/dev/null 2>&1; then
-      brew uninstall --cask supacode
-    fi
     remote_bin="$HOME/.local/bin/herdr"
     if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then
       error "unsafe Herdr remote binary destination: $remote_bin"
@@ -206,21 +156,13 @@ if (
     install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
     install -m 0755 "$DIR/config/herdr/herd-local" "$HOME/.local/bin/herd-local"
     install -m 0755 "$DIR/config/herdr/herd-remote" "$HOME/.local/bin/herd-remote"
-    if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
-      "$remote_bin" plugin uninstall herdr-sidebar
-    fi
-    if "$remote_bin" plugin list --plugin "persiyanov.reviewr" --json | grep -q '"plugin_id":"persiyanov.reviewr"'; then
-      "$remote_bin" plugin uninstall "persiyanov.reviewr"
-    fi
     PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes
   }
   _install_herdr
 ); then
   component_end "herdr" 0
 else
-  _rc=$?
-  component_end "herdr" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "herdr" "$_rc"; exit "$_rc"
 fi
 
 # --- helix ---
@@ -232,9 +174,7 @@ if (
 ); then
   component_end "helix" 0
 else
-  _rc=$?
-  component_end "helix" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "helix" "$_rc"; exit "$_rc"
 fi
 
 # --- starship ---
@@ -247,9 +187,7 @@ if (
 ); then
   component_end "starship" 0
 else
-  _rc=$?
-  component_end "starship" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
 fi
 
 # --- shellcheck ---
@@ -260,9 +198,7 @@ if (
 ); then
   component_end "shellcheck" 0
 else
-  _rc=$?
-  component_end "shellcheck" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "shellcheck" "$_rc"; exit "$_rc"
 fi
 
 # --- zoxide ---
@@ -273,9 +209,7 @@ if (
 ); then
   component_end "zoxide" 0
 else
-  _rc=$?
-  component_end "zoxide" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zoxide" "$_rc"; exit "$_rc"
 fi
 
 # --- kubectl ---
@@ -286,9 +220,7 @@ if (
 ); then
   component_end "kubectl" 0
 else
-  _rc=$?
-  component_end "kubectl" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "kubectl" "$_rc"; exit "$_rc"
 fi
 
 # --- python_tools ---
@@ -296,12 +228,12 @@ component_begin "python_tools"
 if (
   set -e
   install_script uv https://astral.sh/uv/install.sh
+  export PATH="$HOME/.local/bin:$PATH"
+  uv tool install python-lsp-server
 ); then
   component_end "python_tools" 0
 else
-  _rc=$?
-  component_end "python_tools" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "python_tools" "$_rc"; exit "$_rc"
 fi
 
 # --- claude_code ---
@@ -339,9 +271,7 @@ if (
 ); then
   component_end "claude_code" 0
 else
-  _rc=$?
-  component_end "claude_code" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "claude_code" "$_rc"; exit "$_rc"
 fi
 
 # --- gh ---
@@ -354,9 +284,7 @@ if (
 ); then
   component_end "gh" 0
 else
-  _rc=$?
-  component_end "gh" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "gh" "$_rc"; exit "$_rc"
 fi
 
 # --- git_signing ---
@@ -384,9 +312,7 @@ if (
 ); then
   component_end "git_signing" 0
 else
-  _rc=$?
-  component_end "git_signing" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "git_signing" "$_rc"; exit "$_rc"
 fi
 
 # --- rust ---
@@ -396,12 +322,11 @@ if (
   install_script rustup https://sh.rustup.rs -y --default-toolchain stable
   [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
   rustup target add wasm32-wasip2
+  rustup component add rust-analyzer
 ); then
   component_end "rust" 0
 else
-  _rc=$?
-  component_end "rust" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "rust" "$_rc"; exit "$_rc"
 fi
 
 # --- taplo ---
@@ -411,18 +336,9 @@ if (
   _install_taplo() (
     local arch checksum installed tmp actual
     case "$(detect_arch)" in
-    x86_64)
-      arch=x86_64
-      checksum=9fd7a2872ea154df61a2c7e9ca69fc19ac08e29f2e2dc2f866e299bdc789c1a1
-      ;;
-    aarch64 | arm64)
-      arch=aarch64
-      checksum=13cd257c1cadb003b40daf82b3fb1451e012e2463b760bdd33df07a07970c604
-      ;;
-    *)
-      error "unsupported arch for Taplo: $(detect_arch)"
-      exit 1
-      ;;
+      x86_64) arch=x86_64; checksum=9fd7a2872ea154df61a2c7e9ca69fc19ac08e29f2e2dc2f866e299bdc789c1a1 ;;
+      aarch64|arm64) arch=aarch64; checksum=13cd257c1cadb003b40daf82b3fb1451e012e2463b760bdd33df07a07970c604 ;;
+      *) error "unsupported arch for Taplo: $(detect_arch)"; exit 1 ;;
     esac
     installed="$HOME/bin/taplo"
     if [ -e "$installed" ] || [ -L "$installed" ]; then
@@ -437,7 +353,7 @@ if (
     ensure_dir "$HOME/bin"
     tmp="$(mktemp "$HOME/bin/.taplo.XXXXXX")"
     trap 'rm -f -- "$tmp"' EXIT
-    curl -fsSL "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-${arch}.gz" | gzip -dc >"$tmp"
+    curl -fsSL "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-${arch}.gz" | gzip -dc > "$tmp"
     actual="$(sha256_file "$tmp")"
     if [ "$actual" != "$checksum" ]; then
       error "checksum mismatch for Taplo"
@@ -455,9 +371,7 @@ if (
 ); then
   component_end "taplo" 0
 else
-  _rc=$?
-  component_end "taplo" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "taplo" "$_rc"; exit "$_rc"
 fi
 
 # --- terraform ---
@@ -470,9 +384,7 @@ if (
 ); then
   component_end "terraform" 0
 else
-  _rc=$?
-  component_end "terraform" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "terraform" "$_rc"; exit "$_rc"
 fi
 
 # --- zig ---
@@ -482,18 +394,9 @@ if (
   _install_zig() (
     local arch checksum zig_dir parent stage archive actual
     case "$(detect_arch)" in
-    x86_64)
-      arch=x86_64
-      checksum=0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7
-      ;;
-    aarch64 | arm64)
-      arch=aarch64
-      checksum=b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489
-      ;;
-    *)
-      error "unsupported arch for Zig: $(detect_arch)"
-      exit 1
-      ;;
+      x86_64) arch=x86_64; checksum=0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7 ;;
+      aarch64|arm64) arch=aarch64; checksum=b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489 ;;
+      *) error "unsupported arch for Zig: $(detect_arch)"; exit 1 ;;
     esac
     zig_dir="$HOME/.local/share/zig"
     if [ -e "$zig_dir" ] || [ -L "$zig_dir" ]; then
@@ -529,9 +432,7 @@ if (
 ); then
   component_end "zig" 0
 else
-  _rc=$?
-  component_end "zig" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zig" "$_rc"; exit "$_rc"
 fi
 
 # --- node_fnm ---
@@ -553,9 +454,7 @@ if (
 ); then
   component_end "node_fnm" 0
 else
-  _rc=$?
-  component_end "node_fnm" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
 fi
 
 # --- npm_config ---
@@ -566,17 +465,14 @@ if (
 ); then
   component_end "npm_config" 0
 else
-  _rc=$?
-  component_end "npm_config" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "npm_config" "$_rc"; exit "$_rc"
 fi
 
 # --- pi_agent ---
 component_begin "pi_agent"
 if (
   set -e
-  install_npm_global @earendil-works/pi-coding-agent @spences10/pi-lsp pi-mcp-adapter pi-subagents pi-edit-hooks @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
-  npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension
+  install_npm_global @earendil-works/pi-coding-agent @earendil-works/pi-server @earendil-works/pi-client
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
@@ -590,9 +486,7 @@ if (
 ); then
   component_end "pi_agent" 0
 else
-  _rc=$?
-  component_end "pi_agent" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
 fi
 
 # --- postgres ---
@@ -603,9 +497,7 @@ if (
 ); then
   component_end "postgres" 0
 else
-  _rc=$?
-  component_end "postgres" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "postgres" "$_rc"; exit "$_rc"
 fi
 
 # --- go_lang ---
@@ -619,12 +511,9 @@ if (
     rm -rf "$GO_DIR"
     ARCH="$(detect_arch)"
     case "$ARCH" in
-    x86_64) GO_ARCH="amd64" ;;
-    arm64 | aarch64) GO_ARCH="arm64" ;;
-    *)
-      error "unsupported arch: $ARCH"
-      return 1
-      ;;
+      x86_64) GO_ARCH="amd64" ;;
+      arm64|aarch64) GO_ARCH="arm64" ;;
+      *) error "unsupported arch: $ARCH"; return 1 ;;
     esac
     OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
     download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
@@ -632,9 +521,7 @@ if (
 ); then
   component_end "go_lang" 0
 else
-  _rc=$?
-  component_end "go_lang" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "go_lang" "$_rc"; exit "$_rc"
 fi
 
 # --- gcloud ---
@@ -645,9 +532,7 @@ if (
 ); then
   component_end "gcloud" 0
 else
-  _rc=$?
-  component_end "gcloud" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "gcloud" "$_rc"; exit "$_rc"
 fi
 
 # --- aws ---
@@ -659,9 +544,7 @@ if (
 ); then
   component_end "aws" 0
 else
-  _rc=$?
-  component_end "aws" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "aws" "$_rc"; exit "$_rc"
 fi
 
 # --- doppler ---
@@ -675,9 +558,7 @@ if (
 ); then
   component_end "doppler" 0
 else
-  _rc=$?
-  component_end "doppler" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "doppler" "$_rc"; exit "$_rc"
 fi
 
 # --- fonts ---
@@ -693,9 +574,7 @@ if (
 ); then
   component_end "fonts" 0
 else
-  _rc=$?
-  component_end "fonts" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
 fi
 
 # --- ghostty ---
@@ -707,9 +586,7 @@ if (
 ); then
   component_end "ghostty" 0
 else
-  _rc=$?
-  component_end "ghostty" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "ghostty" "$_rc"; exit "$_rc"
 fi
 
 # --- zed ---
@@ -722,9 +599,7 @@ if (
 ); then
   component_end "zed" 0
 else
-  _rc=$?
-  component_end "zed" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zed" "$_rc"; exit "$_rc"
 fi
 
 # --- orbstack ---
@@ -735,23 +610,21 @@ if (
 ); then
   component_end "orbstack" 0
 else
-  _rc=$?
-  component_end "orbstack" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "orbstack" "$_rc"; exit "$_rc"
 fi
 
 # --- zed_host_bridge ---
 component_begin "zed_host_bridge"
 if (
   set -e
-
+  \
   load_secrets
   zed_bridge_ssh_host=${ZED_HOST_BRIDGE_SSH_HOST:-}
   if [ "${#zed_bridge_ssh_host}" -gt 255 ] || ! [[ "$zed_bridge_ssh_host" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
     error "ZED_HOST_BRIDGE_SSH_HOST must be an exact SSH alias containing only ASCII letters, digits, dots, and hyphens"
     exit 1
   fi
-
+  \
   _zed_bridge_assert_dir() {
     local directory=$1
     if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
@@ -792,7 +665,7 @@ if (
   _zed_bridge_assert_dir "$HOME/.local/libexec"
   _zed_bridge_safe_dir "$HOME/.local/libexec/dotgen" 0700
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/bridge.mjs" "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" 0644
-
+  \
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/serve" "$HOME/.local/libexec/dotgen/zed-host-bridge-serve" 0755
   _zed_bridge_assert_dir "${XDG_CONFIG_HOME:-$HOME/.config}"
   _zed_bridge_safe_dir "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen" 0700
@@ -870,11 +743,8 @@ if (
     error "invalid SSH configuration for Zed host bridge alias: $zed_bridge_ssh_host"
     exit 1
   }
-  grep -Fqx 'exitonforwardfailure yes' <<<"$ssh_effective" || {
-    error "Zed host bridge ExitOnForwardFailure setting is not effective"
-    exit 1
-  }
-  grep -E '^remoteforward /home/[^/]+/\.cache/dotgen/zed-host-bridge\.sock .*/Library/Caches/dotgen/zed-host-bridge\.sock$' <<<"$ssh_effective" >/dev/null || {
+  grep -Fqx 'exitonforwardfailure yes' <<< "$ssh_effective" || { error "Zed host bridge ExitOnForwardFailure setting is not effective"; exit 1; }
+  grep -E '^remoteforward /home/[^/]+/\.cache/dotgen/zed-host-bridge\.sock .*/Library/Caches/dotgen/zed-host-bridge\.sock$' <<< "$ssh_effective" >/dev/null || {
     error "Zed host bridge RemoteForward setting is not effective"
     exit 1
   }
@@ -910,7 +780,7 @@ if (
     fi
     bridge_socket="$HOME/Library/Caches/dotgen/zed-host-bridge.sock"
     socket_ready=0
-    for ((socket_attempt = 0; socket_attempt < 50; socket_attempt++)); do
+    for ((socket_attempt=0; socket_attempt<50; socket_attempt++)); do
       if [ -S "$bridge_socket" ]; then
         socket_ready=1
         break
@@ -928,9 +798,7 @@ if (
 ); then
   component_end "zed_host_bridge" 0
 else
-  _rc=$?
-  component_end "zed_host_bridge" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zed_host_bridge" "$_rc"; exit "$_rc"
 fi
 
 # --- git_setup ---
@@ -942,9 +810,7 @@ if (
 ); then
   component_end "git_setup" 0
 else
-  _rc=$?
-  component_end "git_setup" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "git_setup" "$_rc"; exit "$_rc"
 fi
 
 # --- dotfiles_deploy ---
@@ -961,9 +827,7 @@ if (
 ); then
   component_end "dotfiles_deploy" 0
 else
-  _rc=$?
-  component_end "dotfiles_deploy" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "dotfiles_deploy" "$_rc"; exit "$_rc"
 fi
 
 log "setup complete"

@@ -31,7 +31,7 @@ from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
 from dotgen.components.orbstack import OrbStack
-from dotgen.components.pi_agent import _PI_PACKAGES, SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.pi_agent import _PI_EXTENSION_PACKAGES, _PI_GLOBAL_PACKAGES, SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
@@ -388,24 +388,6 @@ def test_helix_emits_config_and_editor_env(env: Environment) -> None:
     assert "EDITOR=hx" in frag.bashrc
 
 
-_LEGACY_HERD_AGENT = r"""#!/usr/bin/env bash
-set -euo pipefail
-
-if [ "$#" -ne 1 ] || [ -z "$1" ] || [[ "$1" = -* ]]; then
-  printf 'usage: herd-agent <ssh-config-host>\n' >&2
-  exit 2
-fi
-
-herdr_bin="$HOME/.local/bin/herdr"
-if [ ! -f "$herdr_bin" ] || [ ! -x "$herdr_bin" ]; then
-  printf 'herd-agent: managed Herdr binary is missing or invalid: %s\n' "$herdr_bin" >&2
-  exit 1
-fi
-
-exec "$herdr_bin" --remote "$1"
-"""
-
-
 def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
     herdr = Herdr()
     assert herdr.applies_to(ENVIRONMENTS["debian"])
@@ -440,18 +422,11 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert 'bun_path="$HOME/.bun/bin"' in fragment.setup
         assert 'PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes' in fragment.setup
         assert 'error "Bun installer completed; bun unavailable"' in fragment.setup
-        assert '"$remote_bin" plugin list --plugin "persiyanov.reviewr" --json' in fragment.setup
-        assert '"$remote_bin" plugin uninstall "persiyanov.reviewr"' in fragment.setup
         assert '"$remote_bin" plugin install "AltanS/collie" --yes' in fragment.setup
-        assert "persiyanov/herdr-reviewr" not in fragment.setup
-        assert "plugins/config/persiyanov.reviewr" not in fragment.setup
-        assert "alexarthurs/herdr-sidebar" not in fragment.setup
+        assert "plugin uninstall" not in fragment.setup
         assert 'export BUN_INSTALL="$HOME/.bun"' in fragment.bashrc
         assert 'export PATH="$BUN_INSTALL/bin:$PATH"' in fragment.bashrc
-        assert all("reviewr" not in config.content.lower() for config in fragment.configs)
         assert all("collie" not in config.dest.lower() and "collie" not in config.content.lower() for config in fragment.configs)
-        assert '"$HOME/.local/bin/herd-agent"' in fragment.setup
-        assert "requires manual remediation" in fragment.setup
 
     debian = herdr.render(ENVIRONMENTS["debian"])
     debian_configs = {config.dest: config for config in debian.configs}
@@ -484,8 +459,7 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert f'install_config "$DIR/config/herdr/{source}" "{destination}"' in macos.setup
     for launcher in ("herd-local", "herd-remote"):
         assert f'install -m 0755 "$DIR/config/herdr/{launcher}" "$HOME/.local/bin/{launcher}"' in macos.setup
-    assert "brew list --cask --versions supacode" in macos.setup
-    assert "brew uninstall --cask supacode" in macos.setup
+    assert "supacode" not in macos.setup
 
     for env_name in ("debian", "macos"):
         assert [component.name for component in ENVIRONMENTS[env_name].components].count("herdr") == 1
@@ -537,141 +511,6 @@ DIR={shlex.quote(str(tmp_path / "bundle"))}
         assert not list(remote_bin.iterdir())
     else:
         assert remote_bin.stat().st_mode & 0o170000 == 0o010000
-
-
-def _herdr_setup_harness(tmp_path: Path, env_name: str = "macos") -> tuple[Path, Path, dict[str, str]]:
-    fragment = Herdr().render(ENVIRONMENTS[env_name])
-    home = tmp_path / "home"
-    xdg_config = tmp_path / "xdg-config"
-    bundle = tmp_path / "bundle"
-    for config in fragment.configs:
-        path = bundle / "config" / config.dest
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(config.content)
-        path.chmod(config.mode)
-    managed_source = home / "bin/herdr"
-    managed_source.parent.mkdir(parents=True)
-    managed_source.write_text("#!/usr/bin/env bash\nexit 0\n")
-    managed_source.chmod(0o755)
-    fake_bin = tmp_path / "fake-bin"
-    fake_bin.mkdir()
-    brew_state = tmp_path / "supacode-installed"
-    brew_log = tmp_path / "brew-uninstall.log"
-    brew = fake_bin / "brew"
-    brew.write_text(
-        """#!/usr/bin/env bash
-set -euo pipefail
-if [ "$*" = "list --cask --versions supacode" ]; then
-  [ -f "$BREW_STATE" ]
-elif [ "$*" = "uninstall --cask supacode" ]; then
-  printf 'uninstalled\\n' >> "$BREW_LOG"
-  rm -- "$BREW_STATE"
-else
-  exit 2
-fi
-"""
-    )
-    brew.chmod(0o755)
-    script = tmp_path / "setup.sh"
-    script.write_text(
-        f"""set -euo pipefail
-error() {{ printf '%s\\n' "$*" >&2; }}
-detect_arch() {{ printf 'arm64\\n'; }}
-download_bin_sha256() {{ :; }}
-bin_exists() {{ command -v "$1" >/dev/null 2>&1; }}
-install_package() {{ :; }}
-install_script() {{ mkdir -p "$HOME/.bun/bin"; printf '#!/usr/bin/env bash\\nexit 0\\n' > "$HOME/.bun/bin/bun"; chmod +x "$HOME/.bun/bin/bun"; }}
-ensure_dir() {{ mkdir -p "$1"; }}
-link_file() {{ ln -sf "$1" "$2"; }}
-install_config() {{ mkdir -p "$(dirname "$2")"; install -m 0644 "$1" "$2"; }}
-sha256_file() {{ if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d ' ' -f 1; }}
-DIR={shlex.quote(str(bundle))}
-{fragment.setup}
-"""
-    )
-    env = {
-        "HOME": str(home),
-        "XDG_CONFIG_HOME": str(xdg_config),
-        "BREW_STATE": str(brew_state),
-        "BREW_LOG": str(brew_log),
-        "PATH": f"{fake_bin}:/usr/bin:/bin",
-    }
-    return script, brew_state, env
-
-
-def test_herdr_macos_upgrade_migration_is_safe_and_idempotent(tmp_path: Path) -> None:
-    script, brew_state, env = _herdr_setup_harness(tmp_path)
-    home = Path(env["HOME"])
-    legacy_helper = home / ".local/bin/herd-agent"
-    legacy_helper.parent.mkdir(parents=True)
-    legacy_helper.write_text(_LEGACY_HERD_AGENT)
-    legacy_config = Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml"
-    legacy_config.parent.mkdir(parents=True)
-    debian_config = next(c for c in Herdr().render(ENVIRONMENTS["debian"]).configs if c.dest == "herdr/config.toml")
-    legacy_config.write_text(
-        debian_config.content
-        + '\n[[keys.command]]\nkey = "cmd+r"\ntype = "plugin_action"\ncommand = "persiyanov.reviewr.toggle"\ndescription = "toggle reviewr"\n'
-    )
-    brew_state.touch()
-
-    for _ in range(2):
-        result = subprocess.run(["bash", str(script)], check=False, capture_output=True, text=True, env=env)
-        assert result.returncode == 0, result.stderr
-
-    assert not legacy_helper.exists()
-    assert not legacy_config.exists()
-    assert not brew_state.exists()
-    assert (tmp_path / "brew-uninstall.log").read_text() == "uninstalled\n"
-    assert (home / ".local/bin/herd-local").stat().st_mode & 0o777 == 0o755
-    assert (home / ".local/bin/herd-remote").stat().st_mode & 0o777 == 0o755
-    assert (Path(env["XDG_CONFIG_HOME"]) / "herdr/local.toml").is_file()
-    assert (Path(env["XDG_CONFIG_HOME"]) / "herdr/remote.toml").is_file()
-
-
-def test_herdr_debian_upgrade_retires_legacy_helper(tmp_path: Path) -> None:
-    script, _, env = _herdr_setup_harness(tmp_path, "debian")
-    home = Path(env["HOME"])
-    legacy_helper = home / ".local/bin/herd-agent"
-    legacy_helper.parent.mkdir(parents=True)
-    legacy_helper.write_text(_LEGACY_HERD_AGENT)
-
-    result = subprocess.run(["bash", str(script)], check=False, capture_output=True, text=True, env=env)
-
-    assert result.returncode == 0, result.stderr
-    assert not legacy_helper.exists()
-    assert (Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml").is_file()
-    assert not (home / ".local/bin/herd-local").exists()
-    assert not (home / ".local/bin/herd-remote").exists()
-
-
-@pytest.mark.parametrize(
-    ("legacy_name", "kind"),
-    [("helper", "modified"), ("config", "symlink"), ("helper", "directory")],
-)
-def test_herdr_migration_preserves_legacy_conflicts(tmp_path: Path, legacy_name: str, kind: str) -> None:
-    script, _, env = _herdr_setup_harness(tmp_path)
-    legacy = Path(env["HOME"]) / ".local/bin/herd-agent" if legacy_name == "helper" else Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml"
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    if kind == "modified":
-        legacy.write_text("user managed\n")
-    elif kind == "symlink":
-        target = tmp_path / "user-config"
-        target.write_text("user managed\n")
-        legacy.symlink_to(target)
-    else:
-        legacy.mkdir()
-
-    result = subprocess.run(["bash", str(script)], check=False, capture_output=True, text=True, env=env)
-
-    assert result.returncode == 1
-    assert "requires manual remediation" in result.stderr
-    if kind == "modified":
-        assert legacy.read_text() == "user managed\n"
-    elif kind == "symlink":
-        assert legacy.is_symlink() and legacy.read_text() == "user managed\n"
-    else:
-        assert legacy.is_dir()
-    assert not (Path(env["HOME"]) / ".local/bin/herd-local").exists()
 
 
 @pytest.mark.parametrize(
@@ -1143,10 +982,14 @@ def test_pi_agent_setup() -> None:
     frag = PiAgent().render(ENVIRONMENTS["macos"])
     npm_lines = [line for line in frag.setup.splitlines() if line.startswith("install_npm_global ")]
     assert len(npm_lines) == 1
-    assert shlex.split(npm_lines[0]) == ["install_npm_global", *_PI_PACKAGES]
-    assert "@earendil-works/pi-server" in _PI_PACKAGES
-    assert "@earendil-works/pi-client" in _PI_PACKAGES
-    assert "npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension" in frag.setup
+    assert shlex.split(npm_lines[0]) == ["install_npm_global", *_PI_GLOBAL_PACKAGES]
+    assert _PI_GLOBAL_PACKAGES == (
+        "@earendil-works/pi-coding-agent",
+        "@earendil-works/pi-server",
+        "@earendil-works/pi-client",
+    )
+    assert not set(_PI_EXTENSION_PACKAGES) & set(_PI_GLOBAL_PACKAGES)
+    assert "npm uninstall" not in frag.setup
     assert "pi-web-access" not in npm_lines[0]
     assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
@@ -1159,6 +1002,8 @@ def test_pi_agent_setup() -> None:
     assert "CONTEXT7_API_KEY" in frag.secrets
     settings = next(cf for cf in frag.configs if cf.dest == "managed-settings/pi.json")
     assert settings.mode == 0o600
+    configured_extensions = tuple(source.removeprefix("npm:") for source in json.loads(settings.content)["packages"] if source.startswith("npm:"))
+    assert configured_extensions == _PI_EXTENSION_PACKAGES
     assert '"defaultModel": "gpt-5.6-sol"' in settings.content
     assert '"defaultThinkingLevel": "high"' in settings.content
     assert "openai-codex/gpt-5.6-luna" in settings.content
@@ -1300,7 +1145,8 @@ def test_pi_agent_sandbox_configs() -> None:
     assert script.content.index('herdr_clipboard_images="$(_prepare_herdr_clipboard_images "$herdr_clipboard_images")"') < script.content.rindex("exec env -i")
     assert script.content.index('jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"') < script.content.rindex("exec env -i")
     assert 'transformers_cache="$memory_dir/transformers-cache"' in script.content
-    assert 'transformers_cache_target="$(npm root -g)/@samfp/pi-memory/' in script.content
+    assert 'transformers_cache_target="$HOME/.pi/agent/npm/node_modules/@xenova/transformers/.cache"' in script.content
+    assert 'transformers_cache_target="$(npm root -g)' not in script.content
     fnm_bind = '--ro-bind "$HOME/.local/share/fnm" "$HOME/.local/share/fnm"'
     cache_bind = '--bind "$transformers_cache" "$transformers_cache_target"'
     assert script.content.index(fnm_bind) < script.content.index(cache_bind)

@@ -2,20 +2,15 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1-}" in
-deploy) ;;
--h | --help | help)
-  printf 'usage: %s deploy\n' "$0"
-  printf '  deploy apply changes (overwrites configs)\n'
-  exit 0
-  ;;
-"")
-  printf 'usage: %s deploy\n' "$0" >&2
-  exit 2
-  ;;
-*)
-  printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2
-  exit 2
-  ;;
+  deploy) ;;
+  -h|--help|help)
+    printf 'usage: %s deploy\n' "$0"
+    printf '  deploy apply changes (overwrites configs)\n'
+    exit 0 ;;
+  "")
+    printf 'usage: %s deploy\n' "$0" >&2; exit 2 ;;
+  *)
+    printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2; exit 2 ;;
 esac
 source "$DIR/os_shim.sh"
 if [ "$(id -u)" -eq 0 ]; then
@@ -52,9 +47,7 @@ if (
 ); then
   component_end "core_utils" 0
 else
-  _rc=$?
-  component_end "core_utils" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "core_utils" "$_rc"; exit "$_rc"
 fi
 
 # --- fzf_bash_history ---
@@ -67,11 +60,7 @@ if (
     exit 1
   fi
   if [ ! -e "$history_file" ]; then
-    if ! (
-      umask 077
-      set -o noclobber
-      : >"$history_file"
-    ) 2>/dev/null; then
+    if ! (umask 077; set -o noclobber; : > "$history_file") 2>/dev/null; then
       error "unable to create Bash history file safely: $history_file"
       exit 1
     fi
@@ -87,9 +76,7 @@ if (
 ); then
   component_end "fzf_bash_history" 0
 else
-  _rc=$?
-  component_end "fzf_bash_history" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "fzf_bash_history" "$_rc"; exit "$_rc"
 fi
 
 # --- tmux ---
@@ -101,9 +88,7 @@ if (
 ); then
   component_end "tmux" 0
 else
-  _rc=$?
-  component_end "tmux" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "tmux" "$_rc"; exit "$_rc"
 fi
 
 # --- mosh ---
@@ -114,32 +99,13 @@ if (
 ); then
   component_end "mosh" 0
 else
-  _rc=$?
-  component_end "mosh" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "mosh" "$_rc"; exit "$_rc"
 fi
 
 # --- herdr ---
 component_begin "herdr"
 if (
   set -e
-  _retire_legacy_herdr_file() {
-    local path=$1 expected_checksum=$2 description=$3 actual_checksum
-    if [ ! -e "$path" ] && [ ! -L "$path" ]; then
-      return 0
-    fi
-    if [ -L "$path" ] || [ ! -f "$path" ]; then
-      error "legacy Herdr $description requires manual remediation (not a regular file): $path"
-      return 1
-    fi
-    actual_checksum="$(sha256_file "$path")"
-    if [ "$actual_checksum" != "$expected_checksum" ]; then
-      error "legacy Herdr $description requires manual remediation (content modified): $path"
-      return 1
-    fi
-    rm -- "$path"
-  }
-
   _install_herdr() {
     local arch bun_path checksum remote_bin
     install_package unzip
@@ -155,22 +121,12 @@ if (
       return 1
     fi
     case "$(detect_arch)" in
-    x86_64)
-      arch=x86_64
-      checksum=976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4
-      ;;
-    aarch64 | arm64)
-      arch=aarch64
-      checksum=f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d
-      ;;
-    *)
-      error "unsupported arch for Herdr: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) arch=x86_64; checksum=976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4 ;;
+      aarch64|arm64) arch=aarch64; checksum=f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d ;;
+      *) error "unsupported arch for Herdr: $(detect_arch)"; return 1 ;;
     esac
     download_bin_sha256 herdr "https://github.com/herdrdev/herdr/releases/download/v0.8.2/herdr-linux-${arch}" "$checksum" "0.8.2" --version
     ensure_dir "$HOME/.local/bin"
-    _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "9684922654ce0e5b00544aca2d0db39906b7d1c28d235318f8ebcb90b07627d9" "herd-agent launcher"
     remote_bin="$HOME/.local/bin/herdr"
     if [ -d "$remote_bin" ] || { [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }; then
       error "unsafe Herdr remote binary destination: $remote_bin"
@@ -182,21 +138,13 @@ if (
       return 1
     fi
     install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
-    if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
-      "$remote_bin" plugin uninstall herdr-sidebar
-    fi
-    if "$remote_bin" plugin list --plugin "persiyanov.reviewr" --json | grep -q '"plugin_id":"persiyanov.reviewr"'; then
-      "$remote_bin" plugin uninstall "persiyanov.reviewr"
-    fi
     PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes
   }
   _install_herdr
 ); then
   component_end "herdr" 0
 else
-  _rc=$?
-  component_end "herdr" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "herdr" "$_rc"; exit "$_rc"
 fi
 
 # --- helix ---
@@ -206,18 +154,15 @@ if (
   _install_helix_linux() {
     local tarch tmp dir
     case "$(detect_arch)" in
-    x86_64) tarch=x86_64 ;;
-    aarch64 | arm64) tarch=aarch64 ;;
-    *)
-      error "unsupported arch for helix: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) tarch=x86_64 ;;
+      aarch64|arm64) tarch=aarch64 ;;
+      *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
     esac
     install_package xz-utils
     tmp="$(mktemp -d)"
     dir="helix-25.07.1-${tarch}-linux"
-    curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" |
-      tar -xJ -C "$tmp"
+    curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" \
+      | tar -xJ -C "$tmp"
     ensure_dir "$HOME/bin"
     install -m 0755 "$tmp/$dir/hx" "$HOME/bin/hx"
     ensure_dir "$HOME/.config/helix"
@@ -232,9 +177,7 @@ if (
 ); then
   component_end "helix" 0
 else
-  _rc=$?
-  component_end "helix" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "helix" "$_rc"; exit "$_rc"
 fi
 
 # --- starship ---
@@ -247,9 +190,7 @@ if (
 ); then
   component_end "starship" 0
 else
-  _rc=$?
-  component_end "starship" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
 fi
 
 # --- shellcheck ---
@@ -260,9 +201,7 @@ if (
 ); then
   component_end "shellcheck" 0
 else
-  _rc=$?
-  component_end "shellcheck" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "shellcheck" "$_rc"; exit "$_rc"
 fi
 
 # --- zoxide ---
@@ -273,9 +212,7 @@ if (
 ); then
   component_end "zoxide" 0
 else
-  _rc=$?
-  component_end "zoxide" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zoxide" "$_rc"; exit "$_rc"
 fi
 
 # --- kubectl ---
@@ -284,32 +221,23 @@ if (
   set -e
   _kube_arch() {
     case "$(detect_arch)" in
-    x86_64) echo amd64 ;;
-    aarch64 | arm64) echo arm64 ;;
-    *)
-      error "unsupported arch: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) echo amd64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
   _kubectx_arch() {
     case "$(detect_arch)" in
-    x86_64) echo x86_64 ;;
-    aarch64 | arm64) echo arm64 ;;
-    *)
-      error "unsupported arch: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) echo x86_64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
   _kubie_arch() {
     case "$(detect_arch)" in
-    x86_64) echo amd64 ;;
-    aarch64 | arm64) echo arm64 ;;
-    *)
-      error "unsupported arch: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) echo amd64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
   _install_kubectl_linux() {
@@ -351,9 +279,7 @@ if (
 ); then
   component_end "kubectl" 0
 else
-  _rc=$?
-  component_end "kubectl" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "kubectl" "$_rc"; exit "$_rc"
 fi
 
 # --- python_tools ---
@@ -362,12 +288,12 @@ if (
   set -e
   install_packages build-essential libssl-dev libffi-dev
   install_script uv https://astral.sh/uv/install.sh
+  export PATH="$HOME/.local/bin:$PATH"
+  uv tool install python-lsp-server
 ); then
   component_end "python_tools" 0
 else
-  _rc=$?
-  component_end "python_tools" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "python_tools" "$_rc"; exit "$_rc"
 fi
 
 # --- claude_code ---
@@ -405,9 +331,7 @@ if (
 ); then
   component_end "claude_code" 0
 else
-  _rc=$?
-  component_end "claude_code" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "claude_code" "$_rc"; exit "$_rc"
 fi
 
 # --- gh ---
@@ -422,9 +346,7 @@ if (
 ); then
   component_end "gh" 0
 else
-  _rc=$?
-  component_end "gh" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "gh" "$_rc"; exit "$_rc"
 fi
 
 # --- git_signing ---
@@ -452,9 +374,7 @@ if (
 ); then
   component_end "git_signing" 0
 else
-  _rc=$?
-  component_end "git_signing" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "git_signing" "$_rc"; exit "$_rc"
 fi
 
 # --- rust ---
@@ -464,12 +384,11 @@ if (
   install_script rustup https://sh.rustup.rs -y --default-toolchain stable
   [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
   rustup target add wasm32-wasip2
+  rustup component add rust-analyzer
 ); then
   component_end "rust" 0
 else
-  _rc=$?
-  component_end "rust" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "rust" "$_rc"; exit "$_rc"
 fi
 
 # --- taplo ---
@@ -479,18 +398,9 @@ if (
   _install_taplo() (
     local arch checksum installed tmp actual
     case "$(detect_arch)" in
-    x86_64)
-      arch=x86_64
-      checksum=dad2faf6377d2daa4f4fabf459fe7ccfb98a5448f0d4bca8270ca9acb0409bfe
-      ;;
-    aarch64 | arm64)
-      arch=aarch64
-      checksum=82df9d765856d0d94d2147cc0912016e4a2bfb96cbe947347b7cc04c7f4431ba
-      ;;
-    *)
-      error "unsupported arch for Taplo: $(detect_arch)"
-      exit 1
-      ;;
+      x86_64) arch=x86_64; checksum=dad2faf6377d2daa4f4fabf459fe7ccfb98a5448f0d4bca8270ca9acb0409bfe ;;
+      aarch64|arm64) arch=aarch64; checksum=82df9d765856d0d94d2147cc0912016e4a2bfb96cbe947347b7cc04c7f4431ba ;;
+      *) error "unsupported arch for Taplo: $(detect_arch)"; exit 1 ;;
     esac
     installed="$HOME/bin/taplo"
     if [ -e "$installed" ] || [ -L "$installed" ]; then
@@ -505,7 +415,7 @@ if (
     ensure_dir "$HOME/bin"
     tmp="$(mktemp "$HOME/bin/.taplo.XXXXXX")"
     trap 'rm -f -- "$tmp"' EXIT
-    curl -fsSL "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-${arch}.gz" | gzip -dc >"$tmp"
+    curl -fsSL "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-${arch}.gz" | gzip -dc > "$tmp"
     actual="$(sha256_file "$tmp")"
     if [ "$actual" != "$checksum" ]; then
       error "checksum mismatch for Taplo"
@@ -523,9 +433,7 @@ if (
 ); then
   component_end "taplo" 0
 else
-  _rc=$?
-  component_end "taplo" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "taplo" "$_rc"; exit "$_rc"
 fi
 
 # --- terraform ---
@@ -539,16 +447,13 @@ if (
   _install_terragrunt_linux() {
     local arch checksum
     case "$(detect_arch)" in
-    x86_64) arch=amd64 ;;
-    aarch64 | arm64) arch=arm64 ;;
-    *)
-      error "unsupported arch for Terragrunt: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) arch=amd64 ;;
+      aarch64|arm64) arch=arm64 ;;
+      *) error "unsupported arch for Terragrunt: $(detect_arch)"; return 1 ;;
     esac
     case "$arch" in
-    amd64) checksum="513eff2f87e2f5ec84369cc0f9d6c6766b43ca765fec4a3ac3598b933dc3218f" ;;
-    arm64) checksum="5cf6006c99b4d05e03eea1375cf8a591ade8b06a40e804b0b73f89f7589347c3" ;;
+      amd64) checksum="513eff2f87e2f5ec84369cc0f9d6c6766b43ca765fec4a3ac3598b933dc3218f" ;;
+      arm64) checksum="5cf6006c99b4d05e03eea1375cf8a591ade8b06a40e804b0b73f89f7589347c3" ;;
     esac
     download_bin_sha256 terragrunt \
       "https://github.com/gruntwork-io/terragrunt/releases/download/v0.96.1/terragrunt_linux_${arch}" \
@@ -558,9 +463,7 @@ if (
 ); then
   component_end "terraform" 0
 else
-  _rc=$?
-  component_end "terraform" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "terraform" "$_rc"; exit "$_rc"
 fi
 
 # --- zig ---
@@ -571,18 +474,9 @@ if (
   _install_zig() (
     local arch checksum zig_dir parent stage archive actual
     case "$(detect_arch)" in
-    x86_64)
-      arch=x86_64
-      checksum=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
-      ;;
-    aarch64 | arm64)
-      arch=aarch64
-      checksum=ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17
-      ;;
-    *)
-      error "unsupported arch for Zig: $(detect_arch)"
-      exit 1
-      ;;
+      x86_64) arch=x86_64; checksum=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 ;;
+      aarch64|arm64) arch=aarch64; checksum=ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17 ;;
+      *) error "unsupported arch for Zig: $(detect_arch)"; exit 1 ;;
     esac
     zig_dir="$HOME/.local/share/zig"
     if [ -e "$zig_dir" ] || [ -L "$zig_dir" ]; then
@@ -618,9 +512,7 @@ if (
 ); then
   component_end "zig" 0
 else
-  _rc=$?
-  component_end "zig" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zig" "$_rc"; exit "$_rc"
 fi
 
 # --- node_fnm ---
@@ -642,9 +534,7 @@ if (
 ); then
   component_end "node_fnm" 0
 else
-  _rc=$?
-  component_end "node_fnm" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
 fi
 
 # --- npm_config ---
@@ -655,9 +545,7 @@ if (
 ); then
   component_end "npm_config" 0
 else
-  _rc=$?
-  component_end "npm_config" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "npm_config" "$_rc"; exit "$_rc"
 fi
 
 # --- pi_agent ---
@@ -665,8 +553,7 @@ component_begin "pi_agent"
 if (
   set -e
   install_package bubblewrap
-  install_npm_global @earendil-works/pi-coding-agent @spences10/pi-lsp pi-mcp-adapter pi-subagents pi-edit-hooks @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
-  npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension
+  install_npm_global @earendil-works/pi-coding-agent @earendil-works/pi-server @earendil-works/pi-client
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
@@ -680,9 +567,7 @@ if (
 ); then
   component_end "pi_agent" 0
 else
-  _rc=$?
-  component_end "pi_agent" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
 fi
 
 # --- postgres ---
@@ -696,9 +581,7 @@ if (
 ); then
   component_end "postgres" 0
 else
-  _rc=$?
-  component_end "postgres" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "postgres" "$_rc"; exit "$_rc"
 fi
 
 # --- go_lang ---
@@ -713,12 +596,9 @@ if (
     rm -rf "$GO_DIR"
     ARCH="$(detect_arch)"
     case "$ARCH" in
-    x86_64) GO_ARCH="amd64" ;;
-    arm64 | aarch64) GO_ARCH="arm64" ;;
-    *)
-      error "unsupported arch: $ARCH"
-      return 1
-      ;;
+      x86_64) GO_ARCH="amd64" ;;
+      arm64|aarch64) GO_ARCH="arm64" ;;
+      *) error "unsupported arch: $ARCH"; return 1 ;;
     esac
     OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
     download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
@@ -726,9 +606,7 @@ if (
 ); then
   component_end "go_lang" 0
 else
-  _rc=$?
-  component_end "go_lang" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "go_lang" "$_rc"; exit "$_rc"
 fi
 
 # --- gcloud ---
@@ -743,9 +621,7 @@ if (
 ); then
   component_end "gcloud" 0
 else
-  _rc=$?
-  component_end "gcloud" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "gcloud" "$_rc"; exit "$_rc"
 fi
 
 # --- aws ---
@@ -757,12 +633,9 @@ if (
     local arch zip_arch tmp
     arch="$(detect_arch)"
     case "$arch" in
-    x86_64) zip_arch=x86_64 ;;
-    aarch64 | arm64) zip_arch=aarch64 ;;
-    *)
-      error "unsupported arch for awscli: $arch"
-      return 1
-      ;;
+      x86_64) zip_arch=x86_64 ;;
+      aarch64|arm64) zip_arch=aarch64 ;;
+      *) error "unsupported arch for awscli: $arch"; return 1 ;;
     esac
     tmp="$(mktemp -d)"
     curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${zip_arch}.zip" -o "$tmp/awscli.zip"
@@ -777,9 +650,7 @@ if (
 ); then
   component_end "aws" 0
 else
-  _rc=$?
-  component_end "aws" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "aws" "$_rc"; exit "$_rc"
 fi
 
 # --- doppler ---
@@ -793,9 +664,7 @@ if (
 ); then
   component_end "doppler" 0
 else
-  _rc=$?
-  component_end "doppler" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "doppler" "$_rc"; exit "$_rc"
 fi
 
 # --- fonts ---
@@ -819,9 +688,7 @@ if (
 ); then
   component_end "fonts" 0
 else
-  _rc=$?
-  component_end "fonts" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
 fi
 
 # --- tmuxinator ---
@@ -853,9 +720,7 @@ if (
 ); then
   component_end "tmuxinator" 0
 else
-  _rc=$?
-  component_end "tmuxinator" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "tmuxinator" "$_rc"; exit "$_rc"
 fi
 
 # --- docker ---
@@ -915,24 +780,18 @@ if (
     iptables_command="$(command -v iptables 2>/dev/null || true)"
     if [ -z "$iptables_command" ]; then
       for candidate in /usr/sbin/iptables /sbin/iptables; do
-        if [ -x "$candidate" ]; then
-          iptables_command="$candidate"
-          break
-        fi
+        if [ -x "$candidate" ]; then iptables_command="$candidate"; break; fi
       done
     fi
     [ -n "$iptables_command" ] || {
-      _docker_fail "iptables is missing after Docker installation; remediate the Docker packages"
-      return 1
+      _docker_fail "iptables is missing after Docker installation; remediate the Docker packages"; return 1
     }
     version="$("$iptables_command" --version 2>/dev/null)" || {
-      _docker_fail "could not determine the iptables backend; remediate iptables"
-      return 1
+      _docker_fail "could not determine the iptables backend; remediate iptables"; return 1
     }
     case "$version" in *legacy*) module=ip_tables ;; esac
     sudo modprobe "$module" || {
-      _docker_fail "failed to load the $module kernel module required by rootless Docker"
-      return 1
+      _docker_fail "failed to load the $module kernel module required by rootless Docker"; return 1
     }
   }
 
@@ -954,84 +813,42 @@ if (
     local marker_unit="$HOME/.config/systemd/user/docker.service" marker_context="$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json" marker_state
     local docker_source root_socket_state runtime mode_text mode_value owner endpoint socket_path
 
-    if ! (. /etc/os-release && [ "$ID" = debian ] && [ "$VERSION_ID" = 13 ] && [ "$VERSION_CODENAME" = trixie ]); then
-      _docker_fail "rootless Docker requires Debian 13 Trixie; remediate the operating system"
-      return 1
+    if ! ( . /etc/os-release && [ "$ID" = debian ] && [ "$VERSION_ID" = 13 ] && [ "$VERSION_CODENAME" = trixie ] ); then
+      _docker_fail "rootless Docker requires Debian 13 Trixie; remediate the operating system"; return 1
     fi
     arch="$(dpkg --print-architecture)"
-    case "$arch" in amd64 | arm64) ;; *)
-      _docker_fail "unsupported Debian architecture $arch; use amd64 or arm64"
-      return 1
-      ;;
-    esac
-    [ "$(ps -p 1 -o comm= 2>/dev/null | tr -d '[:space:]')" = systemd ] || {
-      _docker_fail "PID 1 must be systemd; boot a systemd host"
-      return 1
-    }
-    [ -d /run/systemd/system ] || {
-      _docker_fail "systemd runtime is unavailable; boot a systemd host"
-      return 1
-    }
-    case "$(systemctl show --property=SystemState --value)" in running | degraded) ;; *)
-      _docker_fail "system manager is not running; remediate systemd"
-      return 1
-      ;;
-    esac
-    systemctl is-active --quiet systemd-logind.service || {
-      _docker_fail "systemd-logind is inactive; enable logind"
-      return 1
-    }
-    [ -r /sys/fs/cgroup/cgroup.controllers ] || {
-      _docker_fail "cgroup v2 is required; enable the unified cgroup hierarchy"
-      return 1
-    }
+    case "$arch" in amd64|arm64) ;; *) _docker_fail "unsupported Debian architecture $arch; use amd64 or arm64"; return 1 ;; esac
+    [ "$(ps -p 1 -o comm= 2>/dev/null | tr -d '[:space:]')" = systemd ] || { _docker_fail "PID 1 must be systemd; boot a systemd host"; return 1; }
+    [ -d /run/systemd/system ] || { _docker_fail "systemd runtime is unavailable; boot a systemd host"; return 1; }
+    case "$(systemctl show --property=SystemState --value)" in running|degraded) ;; *) _docker_fail "system manager is not running; remediate systemd"; return 1 ;; esac
+    systemctl is-active --quiet systemd-logind.service || { _docker_fail "systemd-logind is inactive; enable logind"; return 1; }
+    [ -r /sys/fs/cgroup/cgroup.controllers ] || { _docker_fail "cgroup v2 is required; enable the unified cgroup hierarchy"; return 1; }
 
-    user="$(id -un)"
-    uid="$(id -u)"
-    gid="$(id -g)"
-    [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || {
-      _docker_fail "invalid login name; use a regular account"
-      return 1
-    }
-    [[ "$uid" =~ ^[1-9][0-9]*$ && "$gid" =~ ^[1-9][0-9]*$ ]] || {
-      _docker_fail "UID and GID must be nonzero decimal values"
-      return 1
-    }
-    passwd_record="$(getent passwd "$user")" || {
-      _docker_fail "missing passwd record for $user"
-      return 1
-    }
-    IFS=: read -r passwd_name _ passwd_uid passwd_gid _ passwd_home _ <<<"$passwd_record"
+    user="$(id -un)"; uid="$(id -u)"; gid="$(id -g)"
+    [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || { _docker_fail "invalid login name; use a regular account"; return 1; }
+    [[ "$uid" =~ ^[1-9][0-9]*$ && "$gid" =~ ^[1-9][0-9]*$ ]] || { _docker_fail "UID and GID must be nonzero decimal values"; return 1; }
+    passwd_record="$(getent passwd "$user")" || { _docker_fail "missing passwd record for $user"; return 1; }
+    IFS=: read -r passwd_name _ passwd_uid passwd_gid _ passwd_home _ <<< "$passwd_record"
     if [ "$passwd_name" != "$user" ] || [ "$passwd_uid" != "$uid" ] || [ "$passwd_gid" != "$gid" ] || [ "$passwd_home" != "$HOME" ]; then
-      _docker_fail "passwd record does not match the deployment account"
-      return 1
+      _docker_fail "passwd record does not match the deployment account"; return 1
     fi
-    [ "$(id -u "$user")" = "$uid" ] && [ "$(id -g "$user")" = "$gid" ] || {
-      _docker_fail "account identity lookup mismatch"
-      return 1
-    }
+    [ "$(id -u "$user")" = "$uid" ] && [ "$(id -g "$user")" = "$gid" ] || { _docker_fail "account identity lookup mismatch"; return 1; }
 
     install_package uidmap || return 1
-    for tool in newuidmap newgidmap getsubids; do bin_exists "$tool" || {
-      _docker_fail "$tool is missing after uidmap installation; remediate uidmap"
-      return 1
-    }; done
+    for tool in newuidmap newgidmap getsubids; do bin_exists "$tool" || { _docker_fail "$tool is missing after uidmap installation; remediate uidmap"; return 1; }; done
     _docker_validate_subids /etc/subuid "$user" "$uid" "$uid" uid || return 1
     _docker_validate_subids /etc/subgid "$user" "$gid" "$gid" gid || return 1
 
-    if [ -e "$marker_unit" ] && [ -e "$marker_context" ]; then
-      marker_state=both
+    if [ -e "$marker_unit" ] && [ -e "$marker_context" ]; then marker_state=both
     elif [ -e "$marker_unit" ] || [ -e "$marker_context" ]; then
-      _docker_fail "partial rootless Docker state exists; manually repair or remove exactly the user unit or context before rerun"
-      return 1
+      _docker_fail "partial rootless Docker state exists; manually repair or remove exactly the user unit or context before rerun"; return 1
     else marker_state=none; fi
 
     service_mask docker.service docker.socket || return 1
     if [ -e /var/run/docker.sock ] || [ -L /var/run/docker.sock ]; then
       root_socket_state=stale/unknown
       if bin_exists ss && ss -xl 2>/dev/null | grep -F /var/run/docker.sock >/dev/null; then root_socket_state=live; fi
-      _docker_fail "rootful Docker socket is $root_socket_state; ask an administrator to stop/remove /var/run/docker.sock"
-      return 1
+      _docker_fail "rootful Docker socket is $root_socket_state; ask an administrator to stop/remove /var/run/docker.sock"; return 1
     fi
     printf -v docker_source '%s\n' \
       'Types: deb' \
@@ -1051,14 +868,8 @@ if (
 
     sudo loginctl enable-linger "$user" || return 1
     runtime="$(loginctl show-user "$user" --property=RuntimePath --value)"
-    [ "$runtime" = "/run/user/$uid" ] || {
-      _docker_fail "unexpected RuntimePath $runtime; remediate logind"
-      return 1
-    }
-    [ -z "$incoming_runtime" ] || [ "$incoming_runtime" = "$runtime" ] || {
-      _docker_fail "incoming XDG_RUNTIME_DIR conflicts with logind runtime path"
-      return 1
-    }
+    [ "$runtime" = "/run/user/$uid" ] || { _docker_fail "unexpected RuntimePath $runtime; remediate logind"; return 1; }
+    [ -z "$incoming_runtime" ] || [ "$incoming_runtime" = "$runtime" ] || { _docker_fail "incoming XDG_RUNTIME_DIR conflicts with logind runtime path"; return 1; }
     export XDG_RUNTIME_DIR="$runtime"
     export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
     export XDG_CONFIG_HOME="$HOME/.config"
@@ -1066,40 +877,21 @@ if (
     unset DOCKER_HOST DOCKER_CONTEXT
     if ! systemctl is-active --quiet "user@$uid.service"; then sudo systemctl start "user@$uid.service" || return 1; fi
     _docker_wait_user_manager "$user" "$uid" "$runtime" || return 1
-    owner="$(stat -c %u "$runtime")"
-    mode_text="$(stat -c %a "$runtime")"
-    [[ "$mode_text" =~ ^[0-7]+$ ]] || {
-      _docker_fail "invalid runtime directory mode"
-      return 1
-    }
+    owner="$(stat -c %u "$runtime")"; mode_text="$(stat -c %a "$runtime")"
+    [[ "$mode_text" =~ ^[0-7]+$ ]] || { _docker_fail "invalid runtime directory mode"; return 1; }
     mode_value=$((8#$mode_text))
-    [ "$owner" = "$uid" ] && [ $((mode_value & 077)) -eq 0 ] || {
-      _docker_fail "runtime directory ownership or permissions are unsafe"
-      return 1
-    }
+    [ "$owner" = "$uid" ] && [ $((mode_value & 077)) -eq 0 ] || { _docker_fail "runtime directory ownership or permissions are unsafe"; return 1; }
     if [ "$marker_state" = none ]; then
       env -u DOCKER_HOST -u DOCKER_CONTEXT dockerd-rootless-setuptool.sh install || return 1
     fi
     systemctl --user enable --now docker.service || return 1
     env -u DOCKER_HOST -u DOCKER_CONTEXT docker context use rootless || return 1
     endpoint="$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker context inspect rootless --format '{{.Endpoints.docker.Host}}')"
-    [ "$endpoint" = "unix:///run/user/$uid/docker.sock" ] || {
-      _docker_fail "rootless context endpoint is not canonical"
-      return 1
-    }
+    [ "$endpoint" = "unix:///run/user/$uid/docker.sock" ] || { _docker_fail "rootless context endpoint is not canonical"; return 1; }
     socket_path="/run/user/$uid/docker.sock"
-    [ -S "$socket_path" ] && [ "$(stat -c %u "$socket_path")" = "$uid" ] || {
-      _docker_fail "rootless Docker socket is missing or owned by another user"
-      return 1
-    }
-    env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{json .SecurityOptions}}' | grep -q rootless || {
-      _docker_fail "Docker security options do not report rootless"
-      return 1
-    }
-    [ "$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{.CgroupVersion}}')" = 2 ] || {
-      _docker_fail "Docker does not report cgroup v2"
-      return 1
-    }
+    [ -S "$socket_path" ] && [ "$(stat -c %u "$socket_path")" = "$uid" ] || { _docker_fail "rootless Docker socket is missing or owned by another user"; return 1; }
+    env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{json .SecurityOptions}}' | grep -q rootless || { _docker_fail "Docker security options do not report rootless"; return 1; }
+    [ "$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{.CgroupVersion}}')" = 2 ] || { _docker_fail "Docker does not report cgroup v2"; return 1; }
     _docker_verify_rootful
   }
 
@@ -1107,16 +899,14 @@ if (
 ); then
   component_end "docker" 0
 else
-  _rc=$?
-  component_end "docker" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "docker" "$_rc"; exit "$_rc"
 fi
 
 # --- zed_host_bridge ---
 component_begin "zed_host_bridge"
 if (
   set -e
-
+  \
   _zed_bridge_assert_dir() {
     local directory=$1
     if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
@@ -1157,7 +947,7 @@ if (
   _zed_bridge_assert_dir "$HOME/.local/libexec"
   _zed_bridge_safe_dir "$HOME/.local/libexec/dotgen" 0700
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/bridge.mjs" "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" 0644
-
+  \
   _zed_bridge_assert_dir "$HOME/bin"
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/zed" "$HOME/bin/zed" 0755
   _zed_bridge_assert_dir "$HOME/.cache"
@@ -1194,9 +984,7 @@ if (
 ); then
   component_end "zed_host_bridge" 0
 else
-  _rc=$?
-  component_end "zed_host_bridge" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zed_host_bridge" "$_rc"; exit "$_rc"
 fi
 
 # --- git_setup ---
@@ -1208,9 +996,7 @@ if (
 ); then
   component_end "git_setup" 0
 else
-  _rc=$?
-  component_end "git_setup" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "git_setup" "$_rc"; exit "$_rc"
 fi
 
 # --- dotfiles_deploy ---
@@ -1227,9 +1013,7 @@ if (
 ); then
   component_end "dotfiles_deploy" 0
 else
-  _rc=$?
-  component_end "dotfiles_deploy" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "dotfiles_deploy" "$_rc"; exit "$_rc"
 fi
 
 log "setup complete"

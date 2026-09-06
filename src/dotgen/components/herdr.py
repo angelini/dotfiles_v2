@@ -8,7 +8,6 @@ _VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
 _BUN_INSTALL_URL = "https://bun.com/install"
 _COLLIE_SOURCE = "AltanS/collie"
-_REVIEWR_ID = "persiyanov.reviewr"
 _ASSET_OS: dict[OS, str] = {
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
@@ -23,10 +22,6 @@ _SHA256: dict[OS, dict[str, str]] = {
         "aarch64": "a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574",
     },
 }
-_LEGACY_HELPER_SHA256 = "9684922654ce0e5b00544aca2d0db39906b7d1c28d235318f8ebcb90b07627d9"
-_LEGACY_CONFIG_SHA256 = "62cfffc211aa22adb45c2224cff284a9714f2bc8caa85b00a8765aeb5f39af17"
-
-
 def _config(*, theme: str, manage_ssh_config: bool) -> str:
     remote = "\n[remote]\nmanage_ssh_config = true\n" if manage_ssh_config else ""
     return f"""\
@@ -107,13 +102,6 @@ def _setup(os: OS) -> str:
     asset_os = _ASSET_OS[os]
     checksums = _SHA256[os]
     if os is OS.MACOS:
-        migration = f"""\
-  _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "{_LEGACY_HELPER_SHA256}" "herd-agent launcher"
-  _retire_legacy_herdr_file "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/config.toml" "{_LEGACY_CONFIG_SHA256}" "default config"
-  if brew list --cask --versions supacode >/dev/null 2>&1; then
-    brew uninstall --cask supacode
-  fi
-"""
         install = """\
   install_config "$DIR/config/herdr/local.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"
   install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
@@ -121,30 +109,10 @@ def _setup(os: OS) -> str:
   install -m 0755 "$DIR/config/herdr/herd-remote" "$HOME/.local/bin/herd-remote"
 """
     else:
-        migration = f"""\
-  _retire_legacy_herdr_file "$HOME/.local/bin/herd-agent" "{_LEGACY_HELPER_SHA256}" "herd-agent launcher"
-"""
         install = """\
   install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
 """
     return f"""\
-_retire_legacy_herdr_file() {{
-  local path=$1 expected_checksum=$2 description=$3 actual_checksum
-  if [ ! -e "$path" ] && [ ! -L "$path" ]; then
-    return 0
-  fi
-  if [ -L "$path" ] || [ ! -f "$path" ]; then
-    error "legacy Herdr $description requires manual remediation (not a regular file): $path"
-    return 1
-  fi
-  actual_checksum="$(sha256_file "$path")"
-  if [ "$actual_checksum" != "$expected_checksum" ]; then
-    error "legacy Herdr $description requires manual remediation (content modified): $path"
-    return 1
-  fi
-  rm -- "$path"
-}}
-
 _install_herdr() {{
   local arch bun_path checksum remote_bin
   install_package unzip
@@ -166,7 +134,7 @@ _install_herdr() {{
   esac
   download_bin_sha256 herdr "{_RELEASE_BASE}/herdr-{asset_os}-${{arch}}" "$checksum" "{_VERSION}" --version
   ensure_dir "$HOME/.local/bin"
-{migration}  remote_bin="$HOME/.local/bin/herdr"
+  remote_bin="$HOME/.local/bin/herdr"
   if [ -d "$remote_bin" ] || {{ [ -e "$remote_bin" ] && [ ! -f "$remote_bin" ] && [ ! -L "$remote_bin" ]; }}; then
     error "unsafe Herdr remote binary destination: $remote_bin"
     return 1
@@ -176,13 +144,7 @@ _install_herdr() {{
     error "failed to publish Herdr remote binary: $remote_bin"
     return 1
   fi
-{install}  if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
-    "$remote_bin" plugin uninstall herdr-sidebar
-  fi
-  if "$remote_bin" plugin list --plugin "{_REVIEWR_ID}" --json | grep -q '"plugin_id":"{_REVIEWR_ID}"'; then
-    "$remote_bin" plugin uninstall "{_REVIEWR_ID}"
-  fi
-  PATH="$bun_path:$PATH" "$remote_bin" plugin install "{_COLLIE_SOURCE}" --yes
+{install}  PATH="$bun_path:$PATH" "$remote_bin" plugin install "{_COLLIE_SOURCE}" --yes
 }}
 _install_herdr
 """

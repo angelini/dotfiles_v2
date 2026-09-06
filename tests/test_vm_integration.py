@@ -487,7 +487,7 @@ while IFS= read -r line; do
   process_substitution_output+="$line"
 done < <(printf 'process-substitution\n')
 [ "$process_substitution_output" = process-substitution ]
-transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+transformers_cache="$HOME/.pi/agent/npm/node_modules/@xenova/transformers/.cache"
 [ "$JITI_FS_CACHE" = 1 ]
 if [ "$(uname -s)" = Darwin ]; then
   jiti_cache="$TMPDIR/jiti"
@@ -589,7 +589,7 @@ if [ "$(uname -s)" = Darwin ]; then
   [ "$(cat "${TMPDIR:-/tmp}/dotgen-sandbox-smoke")" = temp ]
   rm -f "${TMPDIR:-/tmp}/dotgen-sandbox-smoke"
 fi
-transformers_cache="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+transformers_cache="$HOME/.pi/agent/npm/node_modules/@xenova/transformers/.cache"
 if [ -f "$HOME/.pi/memory/transformers-cache/sandbox-smoke" ]; then
   [ "$(cat "$HOME/.pi/memory/transformers-cache/sandbox-smoke")" = cache ]
 else

@@ -29,10 +29,13 @@ def _pi_angelini_root() -> Path:
     return Path(__file__).resolve().parents[4] / "pi-angelini"
 
 
-_PI_PACKAGES = (
+_PI_GLOBAL_PACKAGES = (
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-server",
     "@earendil-works/pi-client",
+)
+
+_PI_EXTENSION_PACKAGES = (
     "@spences10/pi-lsp",
     "pi-mcp-adapter",
     "pi-subagents",
@@ -215,7 +218,7 @@ main() {
   pi_bin="$(command -v pi)" || _die "pi binary not found in $node_bin"
   [ -x "$pi_bin" ] || _die "pi binary is not executable: $pi_bin"
   transformers_cache="$memory_dir/transformers-cache"
-  transformers_cache_target="$(npm root -g)/@samfp/pi-memory/node_modules/@xenova/transformers/.cache"
+  transformers_cache_target="$HOME/.pi/agent/npm/node_modules/@xenova/transformers/.cache"
   mkdir -p \
 __SANDBOX_HOME_DIRS__
     "$transformers_cache" \
@@ -406,9 +409,8 @@ pi-unsafe() {
 
 _SETUP_BASE = (
     "install_npm_global "
-    + shlex.join(_PI_PACKAGES)
+    + shlex.join(_PI_GLOBAL_PACKAGES)
     + r"""
-npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"
 ensure_dir "$HOME/.local/bin"

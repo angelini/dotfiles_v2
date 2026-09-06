@@ -2,20 +2,15 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${1-}" in
-deploy) ;;
--h | --help | help)
-  printf 'usage: %s deploy\n' "$0"
-  printf '  deploy apply changes (overwrites configs)\n'
-  exit 0
-  ;;
-"")
-  printf 'usage: %s deploy\n' "$0" >&2
-  exit 2
-  ;;
-*)
-  printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2
-  exit 2
-  ;;
+  deploy) ;;
+  -h|--help|help)
+    printf 'usage: %s deploy\n' "$0"
+    printf '  deploy apply changes (overwrites configs)\n'
+    exit 0 ;;
+  "")
+    printf 'usage: %s deploy\n' "$0" >&2; exit 2 ;;
+  *)
+    printf 'unknown mode: %s\nusage: %s deploy\n' "${1-}" "$0" >&2; exit 2 ;;
 esac
 source "$DIR/os_shim.sh"
 if [ "$(id -u)" -eq 0 ]; then
@@ -52,9 +47,7 @@ if (
 ); then
   component_end "core_utils" 0
 else
-  _rc=$?
-  component_end "core_utils" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "core_utils" "$_rc"; exit "$_rc"
 fi
 
 # --- fzf_bash_history ---
@@ -67,11 +60,7 @@ if (
     exit 1
   fi
   if [ ! -e "$history_file" ]; then
-    if ! (
-      umask 077
-      set -o noclobber
-      : >"$history_file"
-    ) 2>/dev/null; then
+    if ! (umask 077; set -o noclobber; : > "$history_file") 2>/dev/null; then
       error "unable to create Bash history file safely: $history_file"
       exit 1
     fi
@@ -87,9 +76,7 @@ if (
 ); then
   component_end "fzf_bash_history" 0
 else
-  _rc=$?
-  component_end "fzf_bash_history" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "fzf_bash_history" "$_rc"; exit "$_rc"
 fi
 
 # --- helix ---
@@ -99,18 +86,15 @@ if (
   _install_helix_linux() {
     local tarch tmp dir
     case "$(detect_arch)" in
-    x86_64) tarch=x86_64 ;;
-    aarch64 | arm64) tarch=aarch64 ;;
-    *)
-      error "unsupported arch for helix: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) tarch=x86_64 ;;
+      aarch64|arm64) tarch=aarch64 ;;
+      *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
     esac
     install_package xz-utils
     tmp="$(mktemp -d)"
     dir="helix-25.07.1-${tarch}-linux"
-    curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" |
-      tar -xJ -C "$tmp"
+    curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" \
+      | tar -xJ -C "$tmp"
     ensure_dir "$HOME/bin"
     install -m 0755 "$tmp/$dir/hx" "$HOME/bin/hx"
     ensure_dir "$HOME/.config/helix"
@@ -125,9 +109,7 @@ if (
 ); then
   component_end "helix" 0
 else
-  _rc=$?
-  component_end "helix" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "helix" "$_rc"; exit "$_rc"
 fi
 
 # --- starship ---
@@ -140,9 +122,7 @@ if (
 ); then
   component_end "starship" 0
 else
-  _rc=$?
-  component_end "starship" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "starship" "$_rc"; exit "$_rc"
 fi
 
 # --- zoxide ---
@@ -153,9 +133,7 @@ if (
 ); then
   component_end "zoxide" 0
 else
-  _rc=$?
-  component_end "zoxide" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "zoxide" "$_rc"; exit "$_rc"
 fi
 
 # --- kubectl ---
@@ -164,32 +142,23 @@ if (
   set -e
   _kube_arch() {
     case "$(detect_arch)" in
-    x86_64) echo amd64 ;;
-    aarch64 | arm64) echo arm64 ;;
-    *)
-      error "unsupported arch: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) echo amd64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
   _kubectx_arch() {
     case "$(detect_arch)" in
-    x86_64) echo x86_64 ;;
-    aarch64 | arm64) echo arm64 ;;
-    *)
-      error "unsupported arch: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) echo x86_64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
   _kubie_arch() {
     case "$(detect_arch)" in
-    x86_64) echo amd64 ;;
-    aarch64 | arm64) echo arm64 ;;
-    *)
-      error "unsupported arch: $(detect_arch)"
-      return 1
-      ;;
+      x86_64) echo amd64 ;;
+      aarch64|arm64) echo arm64 ;;
+      *) error "unsupported arch: $(detect_arch)"; return 1 ;;
     esac
   }
   _install_kubectl_linux() {
@@ -231,9 +200,7 @@ if (
 ); then
   component_end "kubectl" 0
 else
-  _rc=$?
-  component_end "kubectl" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "kubectl" "$_rc"; exit "$_rc"
 fi
 
 # --- gh ---
@@ -248,9 +215,7 @@ if (
 ); then
   component_end "gh" 0
 else
-  _rc=$?
-  component_end "gh" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "gh" "$_rc"; exit "$_rc"
 fi
 
 # --- node_fnm ---
@@ -272,9 +237,7 @@ if (
 ); then
   component_end "node_fnm" 0
 else
-  _rc=$?
-  component_end "node_fnm" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
 fi
 
 # --- npm_config ---
@@ -285,9 +248,7 @@ if (
 ); then
   component_end "npm_config" 0
 else
-  _rc=$?
-  component_end "npm_config" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "npm_config" "$_rc"; exit "$_rc"
 fi
 
 # --- pi_agent ---
@@ -295,8 +256,7 @@ component_begin "pi_agent"
 if (
   set -e
   install_package bubblewrap
-  install_npm_global @earendil-works/pi-coding-agent @spences10/pi-lsp pi-mcp-adapter pi-subagents pi-edit-hooks @dreki-gg/pi-context7 @juicesharp/rpiv-ask-user-question @juicesharp/rpiv-btw @juicesharp/rpiv-todo @samfp/pi-memory @vanillagreen/pi-web-tools
-  npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension
+  install_npm_global @earendil-works/pi-coding-agent @earendil-works/pi-server @earendil-works/pi-client
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
@@ -310,9 +270,7 @@ if (
 ); then
   component_end "pi_agent" 0
 else
-  _rc=$?
-  component_end "pi_agent" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "pi_agent" "$_rc"; exit "$_rc"
 fi
 
 # --- git_setup ---
@@ -324,9 +282,7 @@ if (
 ); then
   component_end "git_setup" 0
 else
-  _rc=$?
-  component_end "git_setup" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "git_setup" "$_rc"; exit "$_rc"
 fi
 
 # --- dotfiles_deploy ---
@@ -343,9 +299,7 @@ if (
 ); then
   component_end "dotfiles_deploy" 0
 else
-  _rc=$?
-  component_end "dotfiles_deploy" "$_rc"
-  exit "$_rc"
+  _rc=$?; component_end "dotfiles_deploy" "$_rc"; exit "$_rc"
 fi
 
 log "setup complete"
