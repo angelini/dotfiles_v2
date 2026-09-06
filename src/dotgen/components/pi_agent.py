@@ -31,6 +31,8 @@ def _pi_angelini_root() -> Path:
 
 _PI_PACKAGES = (
     "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-server",
+    "@earendil-works/pi-client",
     "@spences10/pi-lsp",
     "pi-mcp-adapter",
     "pi-subagents",

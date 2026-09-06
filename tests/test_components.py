@@ -1144,6 +1144,8 @@ def test_pi_agent_setup() -> None:
     npm_lines = [line for line in frag.setup.splitlines() if line.startswith("install_npm_global ")]
     assert len(npm_lines) == 1
     assert shlex.split(npm_lines[0]) == ["install_npm_global", *_PI_PACKAGES]
+    assert "@earendil-works/pi-server" in _PI_PACKAGES
+    assert "@earendil-works/pi-client" in _PI_PACKAGES
     assert "npm uninstall -g pi-lens pi-simplify @plannotator/pi-extension" in frag.setup
     assert "pi-web-access" not in npm_lines[0]
     assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
