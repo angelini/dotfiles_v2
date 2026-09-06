@@ -141,7 +141,19 @@ if (
   }
 
   _install_herdr() {
-    local arch checksum remote_bin
+    local arch bun_path checksum remote_bin
+    install_package unzip
+    if [ ! -x "$HOME/.bun/bin/bun" ]; then
+      BUN_INSTALL="$HOME/.bun" install_script bun "https://bun.com/install"
+    fi
+    if [ -x "$HOME/.bun/bin/bun" ]; then
+      bun_path="$HOME/.bun/bin"
+    elif bin_exists bun; then
+      bun_path="$(dirname "$(command -v bun)")"
+    else
+      error "Bun installer completed; bun unavailable"
+      return 1
+    fi
     case "$(detect_arch)" in
     x86_64)
       arch=x86_64
@@ -173,8 +185,10 @@ if (
     if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
       "$remote_bin" plugin uninstall herdr-sidebar
     fi
-    "$remote_bin" plugin install "persiyanov/herdr-reviewr" --ref "v0.36.0" --yes
-    install_config "$DIR/config/herdr/plugins/config/persiyanov.reviewr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/persiyanov.reviewr/config.toml"
+    if "$remote_bin" plugin list --plugin "persiyanov.reviewr" --json | grep -q '"plugin_id":"persiyanov.reviewr"'; then
+      "$remote_bin" plugin uninstall "persiyanov.reviewr"
+    fi
+    PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes
   }
   _install_herdr
 ); then

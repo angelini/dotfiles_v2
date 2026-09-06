@@ -435,17 +435,27 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert 'error "unsafe Herdr remote binary destination: $remote_bin"' in fragment.setup
         assert 'link_file "$HOME/bin/herdr" "$remote_bin"' in fragment.setup
         assert 'error "failed to publish Herdr remote binary: $remote_bin"' in fragment.setup
-        assert '"$remote_bin" plugin install "persiyanov/herdr-reviewr" --ref "v0.36.0" --yes' in fragment.setup
-        assert (
-            'install_config "$DIR/config/herdr/plugins/config/persiyanov.reviewr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/persiyanov.reviewr/config.toml"' in fragment.setup
-        )
+        assert "install_package unzip" in fragment.setup
+        assert 'BUN_INSTALL="$HOME/.bun" install_script bun "https://bun.com/install"' in fragment.setup
+        assert 'bun_path="$HOME/.bun/bin"' in fragment.setup
+        assert 'PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes' in fragment.setup
+        assert 'error "Bun installer completed; bun unavailable"' in fragment.setup
+        assert '"$remote_bin" plugin list --plugin "persiyanov.reviewr" --json' in fragment.setup
+        assert '"$remote_bin" plugin uninstall "persiyanov.reviewr"' in fragment.setup
+        assert '"$remote_bin" plugin install "AltanS/collie" --yes' in fragment.setup
+        assert "persiyanov/herdr-reviewr" not in fragment.setup
+        assert "plugins/config/persiyanov.reviewr" not in fragment.setup
         assert "alexarthurs/herdr-sidebar" not in fragment.setup
+        assert 'export BUN_INSTALL="$HOME/.bun"' in fragment.bashrc
+        assert 'export PATH="$BUN_INSTALL/bin:$PATH"' in fragment.bashrc
+        assert all("reviewr" not in config.content.lower() for config in fragment.configs)
+        assert all("collie" not in config.dest.lower() and "collie" not in config.content.lower() for config in fragment.configs)
         assert '"$HOME/.local/bin/herd-agent"' in fragment.setup
         assert "requires manual remediation" in fragment.setup
 
     debian = herdr.render(ENVIRONMENTS["debian"])
     debian_configs = {config.dest: config for config in debian.configs}
-    assert set(debian_configs) == {"herdr/config.toml", "herdr/plugins/config/persiyanov.reviewr/config.toml"}
+    assert set(debian_configs) == {"herdr/config.toml"}
     assert 'name = "catppuccin-latte"' in debian_configs["herdr/config.toml"].content
     assert "[remote]\nmanage_ssh_config = true" in debian_configs["herdr/config.toml"].content
     assert not any("herd-" in dest for dest in debian_configs)
@@ -459,7 +469,6 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         "herdr/herd-remote",
         "herdr/local.toml",
         "herdr/remote.toml",
-        "herdr/plugins/config/persiyanov.reviewr/config.toml",
     }
     assert macos_configs["herdr/herd-local"].mode == 0o755
     assert macos_configs["herdr/herd-remote"].mode == 0o755
@@ -500,6 +509,9 @@ def test_herdr_setup_rejects_unsafe_remote_binary_destination(tmp_path: Path, de
 error() {{ printf '%s\\n' "$*" >&2; }}
 detect_arch() {{ printf 'arm64\\n'; }}
 download_bin_sha256() {{ :; }}
+bin_exists() {{ command -v "$1" >/dev/null 2>&1; }}
+install_package() {{ :; }}
+install_script() {{ mkdir -p "$HOME/.bun/bin"; printf '#!/usr/bin/env bash\\nexit 0\\n' > "$HOME/.bun/bin/bun"; chmod +x "$HOME/.bun/bin/bun"; }}
 ensure_dir() {{ mkdir -p "$1"; }}
 link_file() {{ ln -sf "$1" "$2"; }}
 install_config() {{ : > "$CONFIG_TOUCHED"; }}
@@ -566,6 +578,9 @@ fi
 error() {{ printf '%s\\n' "$*" >&2; }}
 detect_arch() {{ printf 'arm64\\n'; }}
 download_bin_sha256() {{ :; }}
+bin_exists() {{ command -v "$1" >/dev/null 2>&1; }}
+install_package() {{ :; }}
+install_script() {{ mkdir -p "$HOME/.bun/bin"; printf '#!/usr/bin/env bash\\nexit 0\\n' > "$HOME/.bun/bin/bun"; chmod +x "$HOME/.bun/bin/bun"; }}
 ensure_dir() {{ mkdir -p "$1"; }}
 link_file() {{ ln -sf "$1" "$2"; }}
 install_config() {{ mkdir -p "$(dirname "$2")"; install -m 0644 "$1" "$2"; }}
@@ -593,7 +608,10 @@ def test_herdr_macos_upgrade_migration_is_safe_and_idempotent(tmp_path: Path) ->
     legacy_config = Path(env["XDG_CONFIG_HOME"]) / "herdr/config.toml"
     legacy_config.parent.mkdir(parents=True)
     debian_config = next(c for c in Herdr().render(ENVIRONMENTS["debian"]).configs if c.dest == "herdr/config.toml")
-    legacy_config.write_text(debian_config.content)
+    legacy_config.write_text(
+        debian_config.content
+        + '\n[[keys.command]]\nkey = "cmd+r"\ntype = "plugin_action"\ncommand = "persiyanov.reviewr.toggle"\ndescription = "toggle reviewr"\n'
+    )
     brew_state.touch()
 
     for _ in range(2):

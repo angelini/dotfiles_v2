@@ -6,8 +6,9 @@ from dotgen.types import OS
 
 _VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
-_REVIEWR_VERSION = "0.36.0"
-_REVIEWR_SOURCE = "persiyanov/herdr-reviewr"
+_BUN_INSTALL_URL = "https://bun.com/install"
+_COLLIE_SOURCE = "AltanS/collie"
+_REVIEWR_ID = "persiyanov.reviewr"
 _ASSET_OS: dict[OS, str] = {
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
@@ -44,19 +45,16 @@ enabled = false
 channel = "stable"
 version_check = false
 manifest_check = true
-{remote}
-[[keys.command]]
-key = "cmd+r"
-type = "plugin_action"
-command = "persiyanov.reviewr.toggle"
-description = "toggle reviewr"
-"""
+{remote}"""
 
 
 _DEBIAN_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=True)
 _LOCAL_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=False)
 _REMOTE_CONFIG = _config(theme="rose-pine-dawn", manage_ssh_config=True)
-_REVIEWR_CONFIG = "auto_open = false\n"
+_BASHRC = """\
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+"""
 
 _LOCAL_LAUNCHER = r"""#!/usr/bin/env bash
 set -euo pipefail
@@ -148,7 +146,19 @@ _retire_legacy_herdr_file() {{
 }}
 
 _install_herdr() {{
-  local arch checksum remote_bin
+  local arch bun_path checksum remote_bin
+  install_package unzip
+  if [ ! -x "$HOME/.bun/bin/bun" ]; then
+    BUN_INSTALL="$HOME/.bun" install_script bun "{_BUN_INSTALL_URL}"
+  fi
+  if [ -x "$HOME/.bun/bin/bun" ]; then
+    bun_path="$HOME/.bun/bin"
+  elif bin_exists bun; then
+    bun_path="$(dirname "$(command -v bun)")"
+  else
+    error "Bun installer completed; bun unavailable"
+    return 1
+  fi
   case "$(detect_arch)" in
     x86_64) arch=x86_64; checksum={checksums["x86_64"]} ;;
     aarch64|arm64) arch=aarch64; checksum={checksums["aarch64"]} ;;
@@ -169,8 +179,10 @@ _install_herdr() {{
 {install}  if "$remote_bin" plugin list --plugin herdr-sidebar --json | grep -q '"plugin_id":"herdr-sidebar"'; then
     "$remote_bin" plugin uninstall herdr-sidebar
   fi
-  "$remote_bin" plugin install "{_REVIEWR_SOURCE}" --ref "v{_REVIEWR_VERSION}" --yes
-  install_config "$DIR/config/herdr/plugins/config/persiyanov.reviewr/config.toml" "${{XDG_CONFIG_HOME:-$HOME/.config}}/herdr/plugins/config/persiyanov.reviewr/config.toml"
+  if "$remote_bin" plugin list --plugin "{_REVIEWR_ID}" --json | grep -q '"plugin_id":"{_REVIEWR_ID}"'; then
+    "$remote_bin" plugin uninstall "{_REVIEWR_ID}"
+  fi
+  PATH="$bun_path:$PATH" "$remote_bin" plugin install "{_COLLIE_SOURCE}" --yes
 }}
 _install_herdr
 """
@@ -184,7 +196,7 @@ class Herdr:
         return env.name in {"debian", "macos"}
 
     def render(self, env: Environment) -> Fragment:
-        configs = [ConfigFile(dest="herdr/plugins/config/persiyanov.reviewr/config.toml", content=_REVIEWR_CONFIG)]
+        configs: list[ConfigFile] = []
         if env.os is OS.MACOS:
             configs.extend(
                 (
@@ -196,4 +208,4 @@ class Herdr:
             )
         else:
             configs.append(ConfigFile(dest="herdr/config.toml", content=_DEBIAN_CONFIG))
-        return Fragment(setup=_setup(env.os), configs=tuple(configs))
+        return Fragment(setup=_setup(env.os), bashrc=_BASHRC, configs=tuple(configs))

@@ -67,6 +67,10 @@ if [ "${__DOTGEN_FZF_BASH_INITIALIZED:-0}" != 1 ]; then
   fi
 fi
 
+# --- herdr ---
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
 # --- helix ---
 export EDITOR=hx
 export VISUAL=hx
