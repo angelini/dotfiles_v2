@@ -17,6 +17,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
+from dotgen.components.marksman import Marksman
 from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
@@ -46,6 +47,7 @@ _SHARED: tuple[Component, ...] = (
     Mosh(),
     Herdr(),
     Helix(),
+    Marksman(),
     Starship(),
     Shellcheck(),
     Zoxide(),
@@ -90,6 +92,7 @@ _DOCKER_SKIP = {
     "tmux",
     "mosh",
     "herdr",
+    "marksman",
 }
 
 # GitSetup depends on Gh. ZedHostBridge depends on NodeFnm and, on macOS, Zed.

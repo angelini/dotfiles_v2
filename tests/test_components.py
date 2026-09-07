@@ -27,6 +27,7 @@ from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
+from dotgen.components.marksman import Marksman
 from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
@@ -83,7 +84,7 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
     assert isinstance(frag, Fragment)
 
 
-@pytest.mark.parametrize("cls", [Rust, Taplo, Terraform, Zig, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, OrbStack, PiAgent])
+@pytest.mark.parametrize("cls", [Rust, Taplo, Marksman, Terraform, Zig, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, OrbStack, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
     for env_name in ("macos", "debian", "debian-docker"):
         env = ENVIRONMENTS[env_name]
@@ -103,6 +104,30 @@ def test_taplo_installs_for_normal_environments() -> None:
     assert '"0.10.0" --version' in macos
     assert "install_package" not in macos
     assert not Taplo().applies_to(ENVIRONMENTS["debian-docker"])
+
+
+def test_marksman_installs_for_normal_environments() -> None:
+    marksman = Marksman()
+    assert marksman.applies_to(ENVIRONMENTS["debian"])
+    assert marksman.applies_to(ENVIRONMENTS["macos"])
+    assert not marksman.applies_to(ENVIRONMENTS["debian-docker"])
+
+    for env_name in ("debian", "macos"):
+        names = [component.name for component in ENVIRONMENTS[env_name].components]
+        assert names.count("marksman") == 1
+    assert "marksman" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
+
+    debian = marksman.render(ENVIRONMENTS["debian"]).setup
+    assert "marksman-linux-x64" in debian
+    assert "marksman-linux-arm64" in debian
+    assert "be5098e8213219269c47fc0d916a66fa31ce0602ec967475c722260aabf26087" in debian
+    assert "db8e124527f7f8048e3e6c91821b9c52ef173d92c01e47d221bf1337afd962fb" in debian
+    assert '"2026-02-08" --version' in debian
+
+    macos = marksman.render(ENVIRONMENTS["macos"]).setup
+    assert "marksman-macos" in macos
+    assert "6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b" in macos
+    assert '"2026-02-08" --version' in macos
 
 
 def test_terraform_tools_install_for_normal_environments() -> None:
@@ -1193,7 +1218,7 @@ def test_pi_agent_sandbox_configs() -> None:
     vertex = parsed_models["providers"]["google-vertex"]
     assert vertex["api"] == "google-vertex"
     assert "apiKey" not in vertex
-    assert vertex["models"][0]["id"] == "gemini-3-flash-preview"
+    assert vertex["models"][0]["id"] == "gemini-3.8-flash"
 
 
 _VENDOR_SRC = Path(__file__).parent / "fixtures" / "vendor_src"

@@ -177,6 +177,26 @@ else
   _rc=$?; component_end "helix" "$_rc"; exit "$_rc"
 fi
 
+# --- marksman ---
+component_begin "marksman"
+if (
+  set -e
+  _install_marksman() {
+    local asset checksum
+    case "$(detect_arch)" in
+      x86_64) asset=marksman-macos; checksum=6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b ;;
+      aarch64|arm64) asset=marksman-macos; checksum=6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b ;;
+      *) error "unsupported arch for Marksman: $(detect_arch)"; return 1 ;;
+    esac
+    download_bin_sha256 marksman "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/${asset}" "$checksum" "2026-02-08" --version
+  }
+  _install_marksman
+); then
+  component_end "marksman" 0
+else
+  _rc=$?; component_end "marksman" "$_rc"; exit "$_rc"
+fi
+
 # --- starship ---
 component_begin "starship"
 if (
