@@ -253,6 +253,10 @@ _run_macos() {
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
+    "HERDR_ENV=${HERDR_ENV:-}" \
+    "HERDR_PANE_ID=${HERDR_PANE_ID:-}" \
+    "HERDR_SOCKET_PATH=${HERDR_SOCKET_PATH:-}" \
+    "HERDR_BIN_PATH=${HERDR_BIN_PATH:-}" \
     sandbox-exec \
     -D "HOME=$HOME" \
     -D "HOME_PARENT=$(dirname "$HOME")" \
@@ -283,6 +287,10 @@ _run_linux() {
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
+    "HERDR_ENV=${HERDR_ENV:-}" \
+    "HERDR_PANE_ID=${HERDR_PANE_ID:-}" \
+    "HERDR_SOCKET_PATH=${HERDR_SOCKET_PATH:-}" \
+    "HERDR_BIN_PATH=${HERDR_BIN_PATH:-}" \
     bwrap \
     --unshare-user-try \
     --unshare-ipc \
@@ -430,6 +438,8 @@ def _setup_for(env: Environment) -> str:
     if env.os is OS.DEBIAN:
         parts.append("install_package bubblewrap")
     parts.append(_SETUP_BASE)
+    if env.name in {"debian", "macos"}:
+        parts.append('"$HOME/.local/bin/herdr" integration install pi')
     return "\n".join(parts)
 
 

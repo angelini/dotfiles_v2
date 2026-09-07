@@ -483,6 +483,8 @@ if (
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
   install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
+
+  "$HOME/.local/bin/herdr" integration install pi
 ); then
   component_end "pi_agent" 0
 else

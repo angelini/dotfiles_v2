@@ -991,7 +991,13 @@ def test_pi_agent_setup() -> None:
     assert not set(_PI_EXTENSION_PACKAGES) & set(_PI_GLOBAL_PACKAGES)
     assert "npm uninstall" not in frag.setup
     assert "pi-web-access" not in npm_lines[0]
-    assert 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"' in frag.setup
+    pi_config_install = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"'
+    herdr_integration_install = '"$HOME/.local/bin/herdr" integration install pi'
+    assert pi_config_install in frag.setup
+    assert herdr_integration_install in frag.setup
+    assert frag.setup.index(pi_config_install) < frag.setup.index(herdr_integration_install)
+    assert herdr_integration_install in PiAgent().render(ENVIRONMENTS["debian"]).setup
+    assert herdr_integration_install not in PiAgent().render(ENVIRONMENTS["debian-docker"]).setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
@@ -1179,6 +1185,8 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" in script.content
     assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
     assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
+    for variable in ("HERDR_ENV", "HERDR_PANE_ID", "HERDR_SOCKET_PATH", "HERDR_BIN_PATH"):
+        assert script.content.count(f'"{variable}=${{{variable}:-}}"') == 2
     assert "__SANDBOX_" not in script.content
     assert "__MACOS_" not in profile.content
     parsed_models = json.loads(models.content)
