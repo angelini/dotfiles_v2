@@ -82,10 +82,26 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         pi_managed_patch = config / "managed-settings" / "pi.json"
         assert pi_managed_patch.is_file()
         assert pi_managed_patch.stat().st_mode & 0o777 == 0o600
+        assert json.loads(pi_managed_patch.read_text())["subagents"] == {"disableBuiltins": True}
         assert "  managed-settings/pi.json" in manifest
         assert "  pi/agent/settings.json" not in manifest
         assert (config / "pi" / "agent" / "AGENTS.md").is_file()
         assert (config / "pi" / "agent" / "APPEND_SYSTEM.md").is_file()
+        for agent in (
+            "scout",
+            "planner",
+            "plan-reviewer",
+            "implementer",
+            "verifier",
+            "implementation-reviewer",
+            "history-reviewer",
+            "researcher",
+        ):
+            profile = config / "pi" / "agent" / "agents" / "claude-pipeline" / f"{agent}.md"
+            assert profile.is_file()
+            frontmatter = profile.read_text().split("---", 2)[1]
+            assert f"\nname: {agent}\n" in f"\n{frontmatter}"
+            assert "\npackage:" not in f"\n{frontmatter}"
         assert (config / "pi" / "sandbox" / "pi-sandbox.sh").is_file()
         assert (config / "pi" / "sandbox" / "pi-macos.sb").is_file()
         for path in ("auth.json", "sessions", "mcp-oauth", "extensions/context7/cache"):
