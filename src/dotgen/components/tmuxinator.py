@@ -65,31 +65,31 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-[ -d "$repos" ] && [ ! -L "$repos" ] || die "repository directory is missing or unsafe: $repos"
-[ -d "$root" ] && [ ! -L "$root" ] || die "project root is missing or unsafe: $root"
-[ -f "$managed" ] && [ ! -L "$managed" ] || die "managed template is missing or unsafe: $managed"
+if [ ! -d "$repos" ] || [ -L "$repos" ]; then die "repository directory is missing or unsafe: $repos"; fi
+if [ ! -d "$root" ] || [ -L "$root" ]; then die "project root is missing or unsafe: $root"; fi
+if [ ! -f "$managed" ] || [ -L "$managed" ]; then die "managed template is missing or unsafe: $managed"; fi
 
 if [ -e "$config_dir" ] || [ -L "$config_dir" ]; then
-  [ -d "$config_dir" ] && [ ! -L "$config_dir" ] || die "config directory is unsafe: $config_dir"
+  if [ ! -d "$config_dir" ] || [ -L "$config_dir" ]; then die "config directory is unsafe: $config_dir"; fi
 else
   mkdir -p -- "$config_dir"
   chmod 0700 "$config_dir"
 fi
 validate_config() {
   if [ -e "$config" ] || [ -L "$config" ]; then
-    [ -f "$config" ] && [ ! -L "$config" ] || die "project config is unsafe: $config"
+    if [ ! -f "$config" ] || [ -L "$config" ]; then die "project config is unsafe: $config"; fi
   fi
 }
 validate_config
 if [ -e "$state_dir" ] || [ -L "$state_dir" ]; then
-  [ -d "$state_dir" ] && [ ! -L "$state_dir" ] || die "state directory is unsafe: $state_dir"
+  if [ ! -d "$state_dir" ] || [ -L "$state_dir" ]; then die "state directory is unsafe: $state_dir"; fi
 else
   mkdir -p -- "$state_dir"
   chmod 0700 "$state_dir"
 fi
 
 if [ -e "$lock" ] || [ -L "$lock" ]; then
-  [ -f "$lock" ] && [ ! -L "$lock" ] || die "lock file is unsafe: $lock"
+  if [ ! -f "$lock" ] || [ -L "$lock" ]; then die "lock file is unsafe: $lock"; fi
 fi
 exec 9>"$lock"
 flock -x 9
@@ -100,7 +100,7 @@ render_project() {
   install -m 0644 "$managed" "$render_dir/default.yml"
   EDITOR=true TMUXINATOR_CONFIG="$render_dir" tmuxinator new "$project" >/dev/null
   candidate="$render_dir/$project.yml"
-  [ -f "$candidate" ] && [ ! -L "$candidate" ] || die "tmuxinator did not create a safe project config"
+  if [ ! -f "$candidate" ] || [ -L "$candidate" ]; then die "tmuxinator did not create a safe project config"; fi
   TMUXINATOR_CONFIG="$render_dir" tmuxinator debug "$project" >/dev/null
   staged="$(mktemp "$config_dir/.$project.yml.XXXXXX")"
   install -m 0644 "$candidate" "$staged"

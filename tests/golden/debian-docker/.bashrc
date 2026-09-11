@@ -93,6 +93,9 @@ if bin_exists kubie; then
   source <(kubie generate-completion)
 fi
 
+# --- uv ---
+[ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+
 # --- node_fnm ---
 export PATH="$HOME/.local/share/fnm:$PATH"
 if bin_exists fnm; then

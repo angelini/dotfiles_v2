@@ -19,7 +19,8 @@
     "npm:@juicesharp/rpiv-todo",
     "npm:@samfp/pi-memory",
     "npm:@vanillagreen/pi-web-tools",
-    "~/repos/pi-angelini"
+    "~/repos/pi-angelini",
+    "~/.local/share/steps"
   ],
   "quietStartup": false,
   "theme": "light"

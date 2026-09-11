@@ -8,6 +8,7 @@ import pytest
 
 from dotgen.component import Component
 from dotgen.components import agent_config as agent_config_module
+from dotgen.components import steps as steps_module
 from dotgen.components.agent_config import _agent_config_root, managed_settings, pi_models  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
@@ -37,10 +38,12 @@ from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.starship import Starship
+from dotgen.components.steps import Steps, _steps_root  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.taplo import Taplo
 from dotgen.components.terraform import Terraform
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
+from dotgen.components.uv import Uv
 from dotgen.components.zed import Zed
 from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
@@ -72,7 +75,9 @@ def env(request: pytest.FixtureRequest) -> Environment:
         Zoxide,
         Kubectl,
         ClaudeCode,
+        Uv,
         PythonTools,
+        Steps,
         Gh,
         GitSigning,
         NpmConfig,
@@ -699,22 +704,34 @@ def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
 
 
-def test_claude_code_runs_after_python_tools() -> None:
+def test_uv_precedes_every_consumer() -> None:
     for env in ENVIRONMENTS.values():
         names = [c.name for c in env.components]
-        if "python_tools" in names and "claude_code" in names:
-            assert names.index("python_tools") < names.index("claude_code"), f"{env.name}: claude_code must follow python_tools so uv is available"
+        assert names.count("uv") == 1
+        assert names.count("steps") == 1
+        assert names.index("uv") < names.index("steps") < names.index("pi_agent")
+        for consumer in ("python_tools", "claude_code"):
+            if consumer in names:
+                assert names.index("uv") < names.index(consumer)
+
+
+def test_uv_owns_installer_and_shell_path() -> None:
+    for env in ENVIRONMENTS.values():
+        fragment = Uv().render(env)
+        assert fragment.setup == "install_script uv https://astral.sh/uv/install.sh\n"
+        assert fragment.bashrc == '[ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"\n'
 
 
 def test_python_tools_per_os_build_deps() -> None:
     debian = PythonTools().render(ENVIRONMENTS["debian"]).setup
     macos = PythonTools().render(ENVIRONMENTS["macos"]).setup
     assert "build-essential" in debian
-    assert "install_packages" not in macos.split("install_script uv")[0]
+    assert "install_packages" not in macos
     for setup in (debian, macos):
-        assert "install_script uv https://astral.sh/uv/install.sh" in setup
-        assert 'export PATH="$HOME/.local/bin:$PATH"' in setup
-        assert "uv tool install python-lsp-server" in setup
+        assert "install_script uv" not in setup
+        assert 'uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"' in setup
+        assert '[ ! -x "$uv_bin" ]' in setup
+        assert '"$uv_bin" tool install python-lsp-server' in setup
 
 
 def test_go_lang_has_no_macos_package_dependency() -> None:
@@ -747,8 +764,10 @@ def test_environment_component_distribution() -> None:
         "starship",
         "zoxide",
         "kubectl",
+        "uv",
         "python_tools",
         "claude_code",
+        "steps",
         "gh",
         "git_signing",
         "rust",
@@ -1050,6 +1069,7 @@ def test_pi_agent_setup() -> None:
     assert "npm:@vanillagreen/pi-web-tools" in settings.content
     assert "npm:pi-web-access" not in settings.content
     assert '"~/repos/pi-angelini"' in settings.content
+    assert '"~/.local/share/steps"' in settings.content
     assert "install_npm_global ~/repos/pi-angelini" not in frag.setup
     assert 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"' in frag.setup
     dests = {cf.dest for cf in frag.configs}
@@ -1069,9 +1089,6 @@ def test_pi_agent_setup() -> None:
         "AGENTS.md",
         "APPEND_SYSTEM.md",
         "agents/claude-pipeline/*.md",
-        "chains/pipeline.chain.md",
-        "prompts/pipeline.md",
-        "skills/pipeline/**",
     )
     assert angelini_vendor.source == _pi_angelini_root()
     assert angelini_vendor.dest == "pi-angelini"
@@ -1223,11 +1240,52 @@ def test_pi_agent_sandbox_configs() -> None:
 
 _VENDOR_SRC = Path(__file__).parent / "fixtures" / "vendor_src"
 _AGENT_CONFIG_SRC = _VENDOR_SRC / "build" / "agent-config"
+_STEPS_SRC = _VENDOR_SRC / "build" / "steps"
 
 
 def _vendored(v: VendorDir, out: Path) -> dict[str, bytes]:
     _vendor_dir(v, out)
     return {p.relative_to(out).as_posix(): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()}
+
+
+def test_steps_root_override_and_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOTGEN_STEPS_ROOT", "/fixture/steps")
+    assert _steps_root() == Path("/fixture/steps")
+    monkeypatch.delenv("DOTGEN_STEPS_ROOT")
+    assert _steps_root() == Path(steps_module.__file__).resolve().parents[4] / "steps"
+
+
+def test_steps_component_vendors_and_installs_one_source_tree(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DOTGEN_STEPS_ROOT", str(_STEPS_SRC))
+    fragment = Steps().render(ENVIRONMENTS["macos"])
+
+    assert fragment.setup.count('install_config_dir "$DIR/config/steps" "$HOME/.local/share/steps" "steps"') == 1
+    assert fragment.setup.count('"$uv_bin" tool install --reinstall "$HOME/.local/share/steps"') == 1
+    assert "--force" not in fragment.setup
+    assert 'uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"' in fragment.setup
+    assert '[ ! -x "$uv_bin" ]' in fragment.setup
+    assert len(fragment.vendors) == 1
+    vendor = fragment.vendors[0]
+    assert vendor.source == _STEPS_SRC
+    assert vendor.dest == "steps"
+    assert vendor.include_globs == (
+        "pyproject.toml",
+        "README.md",
+        "package.json",
+        "src/**",
+        "skills/**",
+        "agents/**",
+    )
+    assert not vendor.exclude_dirs
+    assert not vendor.exclude_globs
+    assert set(_vendored(vendor, tmp_path / "steps")) == {
+        "README.md",
+        "agents/steps-pipeline/scout.md",
+        "package.json",
+        "pyproject.toml",
+        "skills/handoff/SKILL.md",
+        "src/steps/cli.py",
+    }
 
 
 def test_agent_config_root_override_and_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1298,9 +1356,6 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
         "AGENTS.md",
         "APPEND_SYSTEM.md",
         "agents/claude-pipeline/*.md",
-        "chains/pipeline.chain.md",
-        "prompts/pipeline.md",
-        "skills/pipeline/**",
     )
     assert set(_vendored(claude_vendor, tmp_path / "claude")) == {
         "CLAUDE.md",
@@ -1314,9 +1369,6 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
         "AGENTS.md",
         "APPEND_SYSTEM.md",
         "agents/claude-pipeline/reviewer.md",
-        "chains/pipeline.chain.md",
-        "prompts/pipeline.md",
-        "skills/pipeline/SKILL.md",
     }
     assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
     assert "extensions/context7/cache/generated.json" not in _vendored(pi_vendor, tmp_path / "pi-again")

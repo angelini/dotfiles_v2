@@ -28,10 +28,12 @@ from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.shellcheck import Shellcheck
 from dotgen.components.starship import Starship
+from dotgen.components.steps import Steps
 from dotgen.components.taplo import Taplo
 from dotgen.components.terraform import Terraform
 from dotgen.components.tmux import Tmux
 from dotgen.components.tmuxinator import Tmuxinator
+from dotgen.components.uv import Uv
 from dotgen.components.zed import Zed
 from dotgen.components.zed_host_bridge import ZedHostBridge
 from dotgen.components.zig import Zig
@@ -52,6 +54,7 @@ _SHARED: tuple[Component, ...] = (
     Shellcheck(),
     Zoxide(),
     Kubectl(),
+    Uv(),
     PythonTools(),
     ClaudeCode(),
     Gh(),
@@ -62,6 +65,7 @@ _SHARED: tuple[Component, ...] = (
     Zig(),
     NodeFnm(),
     NpmConfig(),
+    Steps(),
     PiAgent(),
     Postgres(),
     GoLang(),

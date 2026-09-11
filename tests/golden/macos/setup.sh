@@ -243,13 +243,27 @@ else
   _rc=$?; component_end "kubectl" "$_rc"; exit "$_rc"
 fi
 
+# --- uv ---
+component_begin "uv"
+if (
+  set -e
+  install_script uv https://astral.sh/uv/install.sh
+); then
+  component_end "uv" 0
+else
+  _rc=$?; component_end "uv" "$_rc"; exit "$_rc"
+fi
+
 # --- python_tools ---
 component_begin "python_tools"
 if (
   set -e
-  install_script uv https://astral.sh/uv/install.sh
-  export PATH="$HOME/.local/bin:$PATH"
-  uv tool install python-lsp-server
+  uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+  if [ ! -x "$uv_bin" ]; then
+    error "python_tools: uv not found"
+    exit 1
+  fi
+  "$uv_bin" tool install python-lsp-server
 ); then
   component_end "python_tools" 0
 else
@@ -486,6 +500,23 @@ if (
   component_end "npm_config" 0
 else
   _rc=$?; component_end "npm_config" "$_rc"; exit "$_rc"
+fi
+
+# --- steps ---
+component_begin "steps"
+if (
+  set -e
+  uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+  if [ ! -x "$uv_bin" ]; then
+    error "steps: uv not found"
+    exit 1
+  fi
+  install_config_dir "$DIR/config/steps" "$HOME/.local/share/steps" "steps"
+  "$uv_bin" tool install --reinstall "$HOME/.local/share/steps"
+); then
+  component_end "steps" 0
+else
+  _rc=$?; component_end "steps" "$_rc"; exit "$_rc"
 fi
 
 # --- pi_agent ---

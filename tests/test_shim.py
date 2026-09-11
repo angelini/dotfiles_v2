@@ -1491,6 +1491,7 @@ def test_deb822_repository_status_matrix_is_independent_and_atomic(tmp_path: Pat
     for path, state, content in ((key, key_state, fixture), (source, source_state, stanza)):
         if state != "absent":
             path.write_text(content if state == "equal" else "drift\n")
+            path.chmod(0o644)
             os_module.utime(path, ns=(1_000_000_000, 1_000_000_000))
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (key, source) if path.exists()}
     result = _run_debian_harness(tmp_path, f'add_repo apt-deb822 docker "{stanza}" https://key.test')

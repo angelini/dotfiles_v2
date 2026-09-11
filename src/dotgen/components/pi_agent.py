@@ -470,9 +470,6 @@ class PiAgent:
                         "AGENTS.md",
                         "APPEND_SYSTEM.md",
                         "agents/claude-pipeline/*.md",
-                        "chains/pipeline.chain.md",
-                        "prompts/pipeline.md",
-                        "skills/pipeline/**",
                     ),
                 ),
                 VendorDir(

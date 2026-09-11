@@ -1,6 +1,6 @@
 0600  167a6ee1c8993debd269e587e47259020844fc7d1c1fdcab6e140abaf0017415  managed-settings/claude.json
-0600  3b1c275baafccb2007ae529d1241d004206ffe594d825bdc433c539b954ab3e5  managed-settings/pi.json
 0600  567d070b394161cb7f51d551cfcb64d5bdbd03cb8444e7a271823476dc0fd1e6  aws/config
+0600  934ffdd12d91bafbd57788a2ac8eb35ccf7f705d5773efa76ce6dd44d08b8417  managed-settings/pi.json
 0600  d18088735ac3b98dc79e0af36a22d44d1b595420b958ade5875612cd1c4fb9b1  pi/agent/models.json
 0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
@@ -16,11 +16,12 @@
 0644  f9f3cc61dfe2bba162e2ba06109255d4ae35756693ced5a0fed8595ccb5aff15  tmuxinator/default.yml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
 0644  fbf21eed560c101db1bf6e098676922fac9214c09cfb649e5f54bd7eb15b0f22  tmux/tmux.conf
+0755  29c00b95bd2ea25ca2acc6ea1a9dbabc865993cad6247786bb0a97ce5c5769ec  tmuxinator/dotgen-agent-session
 0755  3dc960151cb0d0249a54741f543082c277ecf698f05d58ba5be4b2e45d4bea1b  zed-host-bridge/zed
 0755  5c0177913ef495ca03dd304d02c0d260a37a7bfbc79236ef0c44f5d0b68a746c  pi/launcher/pi.sh
-0755  8fc3401d60e1d9b79c1dc2c9e6ede758edb7232024cecc8b0324db8ec7d5c10a  tmuxinator/dotgen-agent-session
 0755  c8d581ebef4cedf58af34a7a61f14f3ab97a21bc29aa54c09b187a1479f98d5e  pi/sandbox/pi-sandbox.sh
 dir  claude
 dir  pi-angelini
 dir  pi/agent
 dir  repositories/platform
+dir  steps

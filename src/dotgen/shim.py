@@ -288,7 +288,10 @@ install_config_dir() {
     while IFS= read -r -d '' record; do dirs+=("${record#./}"); done <"$inventory_dirs"
     while IFS= read -r -d '' record; do files+=("${record#./}"); done <"$inventory_files"
     for rel in "${dirs[@]}" "${files[@]}"; do
-      [ -n "$rel" ] && [[ "$rel" != /* ]] || { error "install_config_dir: invalid source path"; return 1; }
+      if [ -z "$rel" ] || [[ "$rel" = /* ]]; then
+        error "install_config_dir: invalid source path"
+        return 1
+      fi
       IFS=/ read -r -a components <<< "$rel"
       for part in "${components[@]}"; do
         case "$part" in ''|.|..) error "install_config_dir: invalid source path: $rel"; return 1 ;; esac
@@ -300,7 +303,10 @@ install_config_dir() {
       done
     done
     for preserve in "${preserves[@]}"; do
-      [ -n "$preserve" ] && [[ "$preserve" != /* ]] && [[ "$preserve" != */ ]] || { error "install_config_dir: invalid preserved path: $preserve"; return 1; }
+      if [ -z "$preserve" ] || [[ "$preserve" = /* ]] || [[ "$preserve" = */ ]]; then
+        error "install_config_dir: invalid preserved path: $preserve"
+        return 1
+      fi
       IFS=/ read -r -a components <<< "$preserve"
       for part in "${components[@]}"; do
         case "$part" in ''|.|..) error "install_config_dir: invalid preserved path: $preserve"; return 1 ;; esac
@@ -336,7 +342,10 @@ install_config_dir() {
       done
       exec 9<&-
       for rel in "${old_files[@]}"; do
-        [ -n "$rel" ] && [[ "$rel" != /* ]] || { error "install_config_dir: invalid manifest path"; return 1; }
+        if [ -z "$rel" ] || [[ "$rel" = /* ]]; then
+          error "install_config_dir: invalid manifest path"
+          return 1
+        fi
         IFS=/ read -r -a components <<< "$rel"
         for part in "${components[@]}"; do case "$part" in ''|.|..) error "install_config_dir: invalid manifest path: $rel"; return 1;; esac; done
       done
@@ -375,7 +384,10 @@ install_config_dir() {
       [ "$seen" = 0 ] || continue
       target="$dst/$rel"
       [ ! -e "$target" ] && [ ! -L "$target" ] && continue
-      [ -f "$target" ] && [ ! -L "$target" ] || { error "install_config_dir: retired managed path is not a regular file: $target"; return 1; }
+      if [ ! -f "$target" ] || [ -L "$target" ]; then
+        error "install_config_dir: retired managed path is not a regular file: $target"
+        return 1
+      fi
     done
     for rel in "${old_files[@]}"; do
       preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done

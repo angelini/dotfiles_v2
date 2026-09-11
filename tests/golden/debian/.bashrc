@@ -97,7 +97,7 @@ if bin_exists kubie; then
   source <(kubie generate-completion)
 fi
 
-# --- python_tools ---
+# --- uv ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
 
 # --- rust ---

@@ -4,11 +4,11 @@ A Python build system that emits per-environment Bash bundles for fresh-machine 
 
 ## Artifact policy
 
-Artifacts are built on the owner's macOS machine and transferred directly to each target. They are never uploaded, published, or hosted. Secrets are not embedded, but bundles contain personal configuration and a sanitized copy of the sibling `pi-angelini` repository, so treat them as private.
+Artifacts are built on the owner's macOS machine and transferred directly to each target. They are never uploaded, published, or hosted. Secrets are not embedded, but bundles contain personal configuration and sanitized copies of the sibling `pi-angelini` and `steps` repositories, so treat them as private.
 
 ## Build on macOS
 
-The `dotfiles_v2` and `pi-angelini` repositories must be siblings unless `DOTGEN_PI_ANGELINI_ROOT` points to the latter.
+The `dotfiles_v2`, `pi-angelini`, and `steps` repositories must be siblings unless `DOTGEN_PI_ANGELINI_ROOT` and `DOTGEN_STEPS_ROOT` point to their respective checkouts.
 
 ```bash
 just build-all          # all envs → dist/<env>/ + dist/<env>.tar.gz
@@ -216,9 +216,11 @@ Setup does not delete these administrator-owned or partial states.
 
 ## Pi system
 
+The shared Uv component installs `uv` in every environment. The Steps component bundles the runtime source from the sibling `steps` checkout, copies it to `~/.local/share/steps`, and installs the `steps` CLI with `uv tool install --reinstall`. Pi loads that same managed source tree for the `/skill:handoff` and `/skill:pipeline` workflows and the six package-qualified pipeline agents.
+
 The Pi component installs the Pi CLI/packages, writes managed config under `~/.pi/agent`, and installs the sandbox wrapper. It also bundles a sanitized copy of the sibling `pi-angelini` repository into the artifact and syncs it to `~/repos/pi-angelini` during deploy. The bundle excludes `.git`, `node_modules`, lockfiles, caches, tests, and plan artifacts; Pi then loads it as the local package source `~/repos/pi-angelini`.
 
-Managed Pi config includes the Claude-style scout/planner/reviewer/architect/editor pipeline agents, chain, and prompt. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
+Managed Pi config retains the standalone history reviewer and researcher while the Steps package owns its pipeline resources. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
 
 ## Herdr launchers
 

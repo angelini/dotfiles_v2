@@ -10,14 +10,13 @@ _BUILD_DEPS: dict[OS, tuple[str, ...]] = {
     OS.MACOS: (),
 }
 
-_UV_INSTALL = """\
-install_script uv https://astral.sh/uv/install.sh
-export PATH="$HOME/.local/bin:$PATH"
-uv tool install python-lsp-server
-"""
-
-_BASHRC = """\
-[ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+_INSTALL = """\
+uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+if [ ! -x "$uv_bin" ]; then
+  error "python_tools: uv not found"
+  exit 1
+fi
+"$uv_bin" tool install python-lsp-server
 """
 
 
@@ -33,8 +32,5 @@ class PythonTools:
         body = ""
         if deps:
             body += argv("install_packages", *deps) + "\n"
-        body += _UV_INSTALL
-        return Fragment(
-            setup=body,
-            bashrc=_BASHRC,
-        )
+        body += _INSTALL
+        return Fragment(setup=body)

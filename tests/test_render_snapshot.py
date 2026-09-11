@@ -60,6 +60,8 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
     pi_call = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"'
     pi_patch_call = 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600'
     angelini_call = 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"'
+    steps_call = 'install_config_dir "$DIR/config/steps" "$HOME/.local/share/steps" "steps"'
+    steps_install = '"$uv_bin" tool install --reinstall "$HOME/.local/share/steps"'
     claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"'
     claude_patch_call = 'install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600'
     platform_call = 'install_config "$DIR/config/repositories/platform/CLAUDE.md" "$HOME/repos/platform/CLAUDE.md"'
@@ -74,6 +76,9 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert setup.count(pi_call) == 1
         assert setup.count(pi_patch_call) == 1
         assert setup.count(angelini_call) == 1
+        assert setup.count(steps_call) == 1
+        assert setup.count(steps_install) == 1
+        assert setup.index(steps_call) < setup.index(steps_install) < setup.index(pi_call)
         assert 'install_config "$DIR/config/pi/agent/' not in setup
         for name in pi_mutable:
             assert (config / "pi" / "agent" / name).is_file()
@@ -82,21 +87,14 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         pi_managed_patch = config / "managed-settings" / "pi.json"
         assert pi_managed_patch.is_file()
         assert pi_managed_patch.stat().st_mode & 0o777 == 0o600
-        assert json.loads(pi_managed_patch.read_text())["subagents"] == {"disableBuiltins": True}
+        managed_pi = json.loads(pi_managed_patch.read_text())
+        assert managed_pi["subagents"] == {"disableBuiltins": True}
+        assert managed_pi["packages"][-1] == "~/.local/share/steps"
         assert "  managed-settings/pi.json" in manifest
         assert "  pi/agent/settings.json" not in manifest
         assert (config / "pi" / "agent" / "AGENTS.md").is_file()
         assert (config / "pi" / "agent" / "APPEND_SYSTEM.md").is_file()
-        for agent in (
-            "scout",
-            "planner",
-            "plan-reviewer",
-            "implementer",
-            "verifier",
-            "implementation-reviewer",
-            "history-reviewer",
-            "researcher",
-        ):
+        for agent in ("history-reviewer", "researcher"):
             profile = config / "pi" / "agent" / "agents" / "claude-pipeline" / f"{agent}.md"
             assert profile.is_file()
             frontmatter = profile.read_text().split("---", 2)[1]
@@ -106,8 +104,23 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert (config / "pi" / "sandbox" / "pi-macos.sb").is_file()
         for path in ("auth.json", "sessions", "mcp-oauth", "extensions/context7/cache"):
             assert not (config / "pi" / "agent" / path).exists()
+        steps_config = config / "steps"
+        for path in (
+            "README.md",
+            "package.json",
+            "pyproject.toml",
+            "skills/handoff/SKILL.md",
+            "skills/pipeline/SKILL.md",
+            "src/steps/cli.py",
+        ):
+            assert (steps_config / path).is_file()
+        for agent in ("scout", "planner", "plan-reviewer", "implementer", "verifier", "implementation-reviewer"):
+            assert (steps_config / "agents" / "steps-pipeline" / f"{agent}.md").is_file()
+        for path in ("AGENT_CONFIG_INSTALLATION.md", "dist", "docs", "tests", ".git"):
+            assert not (steps_config / path).exists()
         assert manifest.count("dir  pi/agent") == 1
         assert manifest.count("dir  pi-angelini") == 1
+        assert manifest.count("dir  steps") == 1
         for path in (
             "AGENTS.md",
             "agents/claude-pipeline/reviewer.md",
@@ -265,7 +278,7 @@ install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "pi
     merged = json.loads(settings.read_text())
     assert merged["defaultModel"] == "gpt-5.6-sol"
     assert merged["defaultThinkingLevel"] == "high"
-    assert merged["packages"][-1] == "~/repos/pi-angelini"
+    assert merged["packages"][-1] == "~/.local/share/steps"
     assert merged["theme"] == "light"
     assert merged["lastChangelogVersion"] == "0.82.1"
     assert merged["unmanaged"] == "keep"
