@@ -309,6 +309,12 @@ if (
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
   install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
+
+  pi-unsafe() {
+    "$HOME/.local/bin/pi" "$@"
+  }
+  pi-unsafe update
+  pi-unsafe update --extensions
 ); then
   component_end "pi_agent" 0
 else

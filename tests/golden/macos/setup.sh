@@ -549,6 +549,12 @@ if (
 
   install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
 
+  pi-unsafe() {
+    "$HOME/.local/bin/pi" "$@"
+  }
+  pi-unsafe update
+  pi-unsafe update --extensions
+
   "$HOME/.local/bin/herdr" integration install pi
 ); then
   component_end "pi_agent" 0

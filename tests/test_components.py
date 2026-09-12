@@ -1046,6 +1046,11 @@ def test_pi_agent_setup() -> None:
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"' in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
+    pi_unsafe_function = 'pi-unsafe() {\n  "$HOME/.local/bin/pi" "$@"\n}'
+    assert pi_unsafe_function in frag.setup
+    assert frag.setup.count("pi-unsafe update\n") == 1
+    assert frag.setup.count("pi-unsafe update --extensions\n") == 1
+    assert frag.setup.index(pi_config_install) < frag.setup.index("pi-unsafe update\n") < frag.setup.index("pi-unsafe update --extensions\n")
     assert "GEMINI_API_KEY" not in frag.secrets
     assert "GOOGLE_CLOUD_PROJECT" in frag.secrets
     assert "GOOGLE_CLOUD_LOCATION" in frag.secrets
