@@ -216,7 +216,7 @@ Setup does not delete these administrator-owned or partial states.
 
 ## Pi system
 
-The shared Uv component installs `uv` in every environment. The Steps component bundles the runtime source from the sibling `steps` checkout, copies it to `~/.local/share/steps`, and installs the `steps` CLI with `uv tool install --reinstall`. Pi loads that same managed source tree for the `/skill:handoff` and `/skill:pipeline` workflows and the six package-qualified pipeline agents.
+The shared Uv and Node components install `uv` and `npm` in every environment. The Steps component bundles the runtime source, Pi extensions, and npm lockfile from the sibling `steps` checkout, copies them to `~/.local/share/steps`, installs locked production npm dependencies with `npm ci --omit=dev`, and installs the `steps` CLI with `uv tool install --reinstall`. Pi loads that same managed source tree for the `/skill:handoff` and `/skill:pipeline` workflows, the trusted `steps.pipeline` workflow resource, and the six package-qualified pipeline agents.
 
 The Pi component installs the Pi CLI/packages, writes managed config under `~/.pi/agent`, and installs the sandbox wrapper. It also bundles a sanitized copy of the sibling `pi-angelini` repository into the artifact and syncs it to `~/repos/pi-angelini` during deploy. The bundle excludes `.git`, `node_modules`, lockfiles, caches, tests, and plan artifacts; Pi then loads it as the local package source `~/repos/pi-angelini`.
 

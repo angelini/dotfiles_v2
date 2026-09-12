@@ -61,6 +61,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
     pi_patch_call = 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600'
     angelini_call = 'install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"'
     steps_call = 'install_config_dir "$DIR/config/steps" "$HOME/.local/share/steps" "steps"'
+    steps_npm_install = "npm ci --omit=dev --ignore-scripts --no-audit --no-fund"
     steps_install = '"$uv_bin" tool install --reinstall "$HOME/.local/share/steps"'
     claude_call = 'install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"'
     claude_patch_call = 'install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600'
@@ -77,8 +78,9 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert setup.count(pi_patch_call) == 1
         assert setup.count(angelini_call) == 1
         assert setup.count(steps_call) == 1
+        assert setup.count(steps_npm_install) == 1
         assert setup.count(steps_install) == 1
-        assert setup.index(steps_call) < setup.index(steps_install) < setup.index(pi_call)
+        assert setup.index(steps_call) < setup.index(steps_npm_install) < setup.index(steps_install) < setup.index(pi_call)
         assert 'install_config "$DIR/config/pi/agent/' not in setup
         for name in pi_mutable:
             assert (config / "pi" / "agent" / name).is_file()
@@ -107,6 +109,9 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         steps_config = config / "steps"
         for path in (
             "README.md",
+            "extensions/steps-pipeline-workflow.ts",
+            "extensions/steps-pipeline.ts",
+            "package-lock.json",
             "package.json",
             "pyproject.toml",
             "skills/handoff/SKILL.md",
@@ -116,7 +121,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
             assert (steps_config / path).is_file()
         for agent in ("scout", "planner", "plan-reviewer", "implementer", "verifier", "implementation-reviewer"):
             assert (steps_config / "agents" / "steps-pipeline" / f"{agent}.md").is_file()
-        for path in ("AGENT_CONFIG_INSTALLATION.md", "dist", "docs", "tests", ".git"):
+        for path in ("AGENT_CONFIG_INSTALLATION.md", "dist", "docs", "node_modules", "tests", "types", "tsconfig.json", ".git"):
             assert not (steps_config / path).exists()
         assert manifest.count("dir  pi/agent") == 1
         assert manifest.count("dir  pi-angelini") == 1

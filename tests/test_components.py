@@ -1,6 +1,7 @@
 import json
 import os
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -1256,31 +1257,45 @@ def test_steps_root_override_and_default(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_steps_component_vendors_and_installs_one_source_tree(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("DOTGEN_STEPS_ROOT", str(_STEPS_SRC))
+    source = tmp_path / "source"
+    shutil.copytree(_STEPS_SRC, source)
+    ignored_package = source / "node_modules" / "ignored" / "package.json"
+    ignored_package.parent.mkdir(parents=True)
+    ignored_package.write_text('{"name":"must-not-be-vendored"}\n')
+    monkeypatch.setenv("DOTGEN_STEPS_ROOT", str(source))
     fragment = Steps().render(ENVIRONMENTS["macos"])
 
     assert fragment.setup.count('install_config_dir "$DIR/config/steps" "$HOME/.local/share/steps" "steps"') == 1
     assert fragment.setup.count('"$uv_bin" tool install --reinstall "$HOME/.local/share/steps"') == 1
+    assert fragment.setup.count("npm ci --omit=dev --ignore-scripts --no-audit --no-fund") == 1
     assert "--force" not in fragment.setup
     assert 'uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"' in fragment.setup
     assert '[ ! -x "$uv_bin" ]' in fragment.setup
+    assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in fragment.setup
+    assert 'eval "$("$fnm_bin" env --shell bash)"' in fragment.setup
+    assert 'error "steps: npm unavailable; node_fnm must run before Steps installation"' in fragment.setup
+    assert fragment.setup.index('install_config_dir "$DIR/config/steps"') < fragment.setup.index("npm ci") < fragment.setup.index('"$uv_bin" tool install')
     assert len(fragment.vendors) == 1
     vendor = fragment.vendors[0]
-    assert vendor.source == _STEPS_SRC
+    assert vendor.source == source
     assert vendor.dest == "steps"
     assert vendor.include_globs == (
         "pyproject.toml",
         "README.md",
         "package.json",
+        "package-lock.json",
         "src/**",
         "skills/**",
         "agents/**",
+        "extensions/**",
     )
-    assert not vendor.exclude_dirs
+    assert vendor.exclude_dirs == GIT_ARTIFACTS | PY_ARTIFACTS | BUILD_ARTIFACTS | frozenset({"node_modules"})
     assert not vendor.exclude_globs
-    assert set(_vendored(vendor, tmp_path / "steps")) == {
+    assert set(_vendored(vendor, tmp_path / "vendored")) == {
         "README.md",
         "agents/steps-pipeline/scout.md",
+        "extensions/steps-pipeline.ts",
+        "package-lock.json",
         "package.json",
         "pyproject.toml",
         "skills/handoff/SKILL.md",
