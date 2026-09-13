@@ -451,6 +451,9 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
         assert "install_package unzip" in fragment.setup
         assert 'BUN_INSTALL="$HOME/.bun" install_script bun "https://bun.com/install"' in fragment.setup
         assert 'bun_path="$HOME/.bun/bin"' in fragment.setup
+        assert 'plugin list --plugin "herdr.collie" --json' in fragment.setup
+        assert '.source.owner == "AltanS"' in fragment.setup
+        assert '.source.repo == "collie"' in fragment.setup
         assert 'PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes' in fragment.setup
         assert 'error "Bun installer completed; bun unavailable"' in fragment.setup
         assert '"$remote_bin" plugin install "AltanS/collie" --yes' in fragment.setup
@@ -542,6 +545,75 @@ DIR={shlex.quote(str(tmp_path / "bundle"))}
         assert not list(remote_bin.iterdir())
     else:
         assert remote_bin.stat().st_mode & 0o170000 == 0o010000
+
+
+def test_herdr_setup_does_not_rebuild_installed_collie_plugin(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    bun = home / ".bun/bin/bun"
+    bun.parent.mkdir(parents=True)
+    bun.write_text("#!/usr/bin/env bash\nexit 0\n")
+    bun.chmod(0o755)
+    fake_herdr = tmp_path / "fake-herdr"
+    fake_herdr.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1 $2" = "plugin list" ]; then
+  printf '%s\\n' "$PLUGIN_LIST"
+elif [ "$1 $2" = "plugin install" ]; then
+  : > "$PLUGIN_INSTALL"
+else
+  exit 2
+fi
+"""
+    )
+    fake_herdr.chmod(0o755)
+    plugin_install = tmp_path / "plugin-install"
+    setup = Herdr().render(ENVIRONMENTS["debian"]).setup
+    script = tmp_path / "setup.sh"
+    script.write_text(
+        f"""set -euo pipefail
+error() {{ printf '%s\\n' "$*" >&2; }}
+detect_arch() {{ printf 'x86_64\\n'; }}
+download_bin_sha256() {{ mkdir -p "$HOME/bin"; install -m 0755 "$FAKE_HERDR" "$HOME/bin/herdr"; }}
+bin_exists() {{ command -v "$1" >/dev/null 2>&1; }}
+install_package() {{ :; }}
+install_script() {{ :; }}
+ensure_dir() {{ mkdir -p "$1"; }}
+link_file() {{ ln -sf "$1" "$2"; }}
+install_config() {{ :; }}
+DIR={shlex.quote(str(tmp_path / "bundle"))}
+{setup}
+"""
+    )
+    plugin_list = json.dumps(
+        {
+            "result": {
+                "plugins": [
+                    {
+                        "plugin_id": "herdr.collie",
+                        "source": {"kind": "github", "owner": "AltanS", "repo": "collie"},
+                    }
+                ]
+            }
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(script)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={
+            "HOME": str(home),
+            "FAKE_HERDR": str(fake_herdr),
+            "PLUGIN_INSTALL": str(plugin_install),
+            "PLUGIN_LIST": plugin_list,
+            "PATH": "/usr/bin:/bin",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not plugin_install.exists()
 
 
 @pytest.mark.parametrize(

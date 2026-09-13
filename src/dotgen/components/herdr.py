@@ -7,6 +7,7 @@ from dotgen.types import OS
 _VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
 _BUN_INSTALL_URL = "https://bun.com/install"
+_COLLIE_ID = "herdr.collie"
 _COLLIE_SOURCE = "AltanS/collie"
 _ASSET_OS: dict[OS, str] = {
     OS.DEBIAN: "linux",
@@ -114,7 +115,7 @@ def _setup(os: OS) -> str:
 """
     return f"""\
 _install_herdr() {{
-  local arch bun_path checksum remote_bin
+  local arch bun_path checksum plugin_json remote_bin
   install_package unzip
   if [ ! -x "$HOME/.bun/bin/bun" ]; then
     BUN_INSTALL="$HOME/.bun" install_script bun "{_BUN_INSTALL_URL}"
@@ -144,7 +145,18 @@ _install_herdr() {{
     error "failed to publish Herdr remote binary: $remote_bin"
     return 1
   fi
-{install}  PATH="$bun_path:$PATH" "$remote_bin" plugin install "{_COLLIE_SOURCE}" --yes
+{install}  plugin_json="$("$remote_bin" plugin list --plugin "{_COLLIE_ID}" --json)"
+  if ! jq -e '
+    .result.plugins[]
+    | select(
+        .plugin_id == "{_COLLIE_ID}"
+        and .source.kind == "github"
+        and .source.owner == "AltanS"
+        and .source.repo == "collie"
+      )
+  ' <<<"$plugin_json" >/dev/null; then
+    PATH="$bun_path:$PATH" "$remote_bin" plugin install "{_COLLIE_SOURCE}" --yes
+  fi
 }}
 _install_herdr
 """

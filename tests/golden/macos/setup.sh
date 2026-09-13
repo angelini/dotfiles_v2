@@ -122,7 +122,7 @@ component_begin "herdr"
 if (
   set -e
   _install_herdr() {
-    local arch bun_path checksum remote_bin
+    local arch bun_path checksum plugin_json remote_bin
     install_package unzip
     if [ ! -x "$HOME/.bun/bin/bun" ]; then
       BUN_INSTALL="$HOME/.bun" install_script bun "https://bun.com/install"
@@ -156,7 +156,18 @@ if (
     install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
     install -m 0755 "$DIR/config/herdr/herd-local" "$HOME/.local/bin/herd-local"
     install -m 0755 "$DIR/config/herdr/herd-remote" "$HOME/.local/bin/herd-remote"
-    PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes
+    plugin_json="$("$remote_bin" plugin list --plugin "herdr.collie" --json)"
+    if ! jq -e '
+      .result.plugins[]
+      | select(
+          .plugin_id == "herdr.collie"
+          and .source.kind == "github"
+          and .source.owner == "AltanS"
+          and .source.repo == "collie"
+        )
+    ' <<<"$plugin_json" >/dev/null; then
+      PATH="$bun_path:$PATH" "$remote_bin" plugin install "AltanS/collie" --yes
+    fi
   }
   _install_herdr
 ); then
