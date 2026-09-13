@@ -18,7 +18,6 @@ from dotgen.components.helix import Helix
 from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.marksman import Marksman
-from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
 from dotgen.components.orbstack import OrbStack
@@ -31,8 +30,6 @@ from dotgen.components.starship import Starship
 from dotgen.components.steps import Steps
 from dotgen.components.taplo import Taplo
 from dotgen.components.terraform import Terraform
-from dotgen.components.tmux import Tmux
-from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.uv import Uv
 from dotgen.components.zed import Zed
 from dotgen.components.zed_host_bridge import ZedHostBridge
@@ -45,8 +42,6 @@ _SHARED: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
     FzfBashHistory(),
-    Tmux(),
-    Mosh(),
     Herdr(),
     Helix(),
     Marksman(),
@@ -75,7 +70,7 @@ _SHARED: tuple[Component, ...] = (
     Fonts(),
 )
 
-_DEBIAN_FULL: tuple[Component, ...] = (Tmuxinator(), Docker())
+_DEBIAN_FULL: tuple[Component, ...] = (Docker(),)
 
 _MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), OrbStack())
 
@@ -93,8 +88,6 @@ _DOCKER_SKIP = {
     "claude_code",
     "postgres",
     "doppler",
-    "tmux",
-    "mosh",
     "herdr",
     "marksman",
 }

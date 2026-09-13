@@ -13,29 +13,6 @@ alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'
 alias gl="git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25"
 alias l='eza --long --all --group-directories-first --git'
 
-# --- tmux ---
-ta() {
-  if [ "$#" -gt 1 ]; then
-    printf 'usage: ta [session]\n' >&2
-    return 2
-  fi
-  local session="${1-dev}"
-  case "$session" in
-    ""|*[!A-Za-z0-9_-]*)
-      printf 'ta: invalid session name: %s\n' "$session" >&2
-      return 2
-      ;;
-  esac
-  if [ -n "${TMUX:-}" ]; then
-    if ! command tmux has-session -t "=$session" 2>/dev/null; then
-      command tmux new-session -d -s "$session" || return
-    fi
-    command tmux switch-client -t "=$session"
-  else
-    command tmux new-session -A -s "$session"
-  fi
-}
-
 # --- kubectl ---
 alias kc='kubectl'
 alias kcn='kubectl ns'

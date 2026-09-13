@@ -30,7 +30,6 @@ from dotgen.components.helix import Helix
 from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.marksman import Marksman
-from dotgen.components.mosh import Mosh
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
 from dotgen.components.orbstack import OrbStack
@@ -42,8 +41,6 @@ from dotgen.components.starship import Starship
 from dotgen.components.steps import Steps, _steps_root  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.taplo import Taplo
 from dotgen.components.terraform import Terraform
-from dotgen.components.tmux import Tmux
-from dotgen.components.tmuxinator import Tmuxinator
 from dotgen.components.uv import Uv
 from dotgen.components.zed import Zed
 from dotgen.components.zig import Zig
@@ -66,9 +63,6 @@ def env(request: pytest.FixtureRequest) -> Environment:
         BashBase,
         CoreUtils,
         FzfBashHistory,
-        Tmux,
-        Mosh,
-        Tmuxinator,
         GitSetup,
         Helix,
         Herdr,
@@ -830,8 +824,6 @@ def test_environment_component_distribution() -> None:
         "bash_base",
         "core_utils",
         "fzf_bash_history",
-        "tmux",
-        "mosh",
         "herdr",
         "helix",
         "starship",
@@ -892,7 +884,7 @@ def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None
         assert "docker" not in [component.name for component in ENVIRONMENTS[name].components]
     names = [component.name for component in ENVIRONMENTS["debian"].components]
     assert names.count("docker") == 1
-    assert names[-5:] == ["tmuxinator", "docker", "zed_host_bridge", "git_setup", "dotfiles_deploy"]
+    assert names[-4:] == ["docker", "zed_host_bridge", "git_setup", "dotfiles_deploy"]
 
 
 def test_docker_render_contract() -> None:

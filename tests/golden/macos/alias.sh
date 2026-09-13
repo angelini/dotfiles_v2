@@ -13,66 +13,6 @@ alias gpfo='git push origin +$(git rev-parse --abbrev-ref HEAD)'
 alias gl="git log --graph --pretty=format:'%Cred%h%Creset %Creset%Cblue%an%Creset %s %Cgreen(%cr)%Cred%d%Creset' --abbrev-commit --date=relative --max-count=25"
 alias l='eza --long --all --group-directories-first --git'
 
-# --- tmux ---
-ta() {
-  if [ "$#" -gt 1 ]; then
-    printf 'usage: ta [session]\n' >&2
-    return 2
-  fi
-  local session="${1-dev}"
-  case "$session" in
-    ""|*[!A-Za-z0-9_-]*)
-      printf 'ta: invalid session name: %s\n' "$session" >&2
-      return 2
-      ;;
-  esac
-  if [ -n "${TMUX:-}" ]; then
-    if ! command tmux has-session -t "=$session" 2>/dev/null; then
-      command tmux new-session -d -s "$session" || return
-    fi
-    command tmux switch-client -t "=$session"
-  else
-    command tmux new-session -A -s "$session"
-  fi
-}
-
-# --- mosh ---
-mosh-agent() {
-  local kill_session=0
-  if [ "${1-}" = -k ]; then
-    kill_session=1
-    shift
-  fi
-  if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-    printf 'usage: mosh-agent [-k] <host> [project]\n' >&2
-    return 2
-  fi
-  local host="$1" project="${2-}"
-  case "$host" in
-    ""|-*)
-      printf 'mosh-agent: invalid host: %s\n' "$host" >&2
-      return 2
-      ;;
-  esac
-  if [ "$#" -eq 1 ]; then
-    if [ "$kill_session" -eq 1 ]; then
-      command mosh -- "$host" tmux kill-session -t "=dev"
-    else
-      command mosh -- "$host" tmux new-session -A -s dev
-    fi
-    return
-  fi
-  case "$project" in
-    ""|-*|dev|*[!A-Za-z0-9_-]*)
-      printf 'mosh-agent: invalid project name: %s\n' "$project" >&2
-      return 2
-      ;;
-  esac
-  local action="start"
-  [ "$kill_session" -eq 0 ] || action="kill"
-  command mosh -- "$host" /usr/local/bin/dotgen-agent-session "$action" "$project"
-}
-
 # --- kubectl ---
 alias kc='kubectl'
 alias kcn='kubectl ns'

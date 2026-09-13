@@ -21,7 +21,6 @@ def test_shellcheck_clean(built_root: Path) -> None:
     files = (
         sorted(built_root.glob("*/*.sh"))
         + sorted(built_root.glob("*/.bashrc"))
-        + sorted(built_root.glob("*/config/tmuxinator/dotgen-agent-session"))
         + [
             built_root / "debian/config/zed-host-bridge/zed",
             built_root / "macos/config/zed-host-bridge/serve",

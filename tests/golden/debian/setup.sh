@@ -79,29 +79,6 @@ else
   _rc=$?; component_end "fzf_bash_history" "$_rc"; exit "$_rc"
 fi
 
-# --- tmux ---
-component_begin "tmux"
-if (
-  set -e
-  install_package tmux
-  install_config "$DIR/config/tmux/tmux.conf" "$HOME/.tmux.conf"
-); then
-  component_end "tmux" 0
-else
-  _rc=$?; component_end "tmux" "$_rc"; exit "$_rc"
-fi
-
-# --- mosh ---
-component_begin "mosh"
-if (
-  set -e
-  install_package mosh
-); then
-  component_end "mosh" 0
-else
-  _rc=$?; component_end "mosh" "$_rc"; exit "$_rc"
-fi
-
 # --- herdr ---
 component_begin "herdr"
 if (
@@ -773,38 +750,6 @@ if (
   component_end "fonts" 0
 else
   _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
-fi
-
-# --- tmuxinator ---
-component_begin "tmuxinator"
-if (
-  set -e
-  install_package tmuxinator
-  install_config "$DIR/config/tmuxinator/default.yml" "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/tmuxinator/default.yml"
-
-  install_tmuxinator_helper() {
-    local src="$DIR/config/tmuxinator/dotgen-agent-session"
-    local dst="/usr/local/bin/dotgen-agent-session"
-    if [ ! -f "$src" ] || [ -L "$src" ] || [ ! -x "$src" ]; then
-      error "invalid bundled tmuxinator helper: $src"
-      return 1
-    fi
-    if [ -e "$dst" ] || [ -L "$dst" ]; then
-      if [ ! -f "$dst" ] || [ -L "$dst" ]; then
-        error "unsafe tmuxinator helper destination: $dst"
-        return 1
-      fi
-    fi
-    if [ -e "$dst" ] && cmp -s "$src" "$dst" && [ "$(stat -c '%a' "$dst")" = 755 ]; then
-      return 0
-    fi
-    sudo install -m 0755 "$src" "$dst"
-  }
-  install_tmuxinator_helper
-); then
-  component_end "tmuxinator" 0
-else
-  _rc=$?; component_end "tmuxinator" "$_rc"; exit "$_rc"
 fi
 
 # --- docker ---

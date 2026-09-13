@@ -13,10 +13,7 @@
 0644  bb3fd9de59f59ba79c5e89b37cd33e320fba9acb459fe3f01a299b78ff126f80  git/gitignore_global
 0644  c2518e2387fde7618206eaa9b05de69cc37e120b839bd9ec19341c87da846eee  git/gitconfig
 0644  dc167e0df9e1f12e1bd793508d40a7efe06a15e98aa165402550a5518eb77fa2  zed-host-bridge/bridge.mjs
-0644  f9f3cc61dfe2bba162e2ba06109255d4ae35756693ced5a0fed8595ccb5aff15  tmuxinator/default.yml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
-0644  fbf21eed560c101db1bf6e098676922fac9214c09cfb649e5f54bd7eb15b0f22  tmux/tmux.conf
-0755  29c00b95bd2ea25ca2acc6ea1a9dbabc865993cad6247786bb0a97ce5c5769ec  tmuxinator/dotgen-agent-session
 0755  3dc960151cb0d0249a54741f543082c277ecf698f05d58ba5be4b2e45d4bea1b  zed-host-bridge/zed
 0755  5c0177913ef495ca03dd304d02c0d260a37a7bfbc79236ef0c44f5d0b68a746c  pi/launcher/pi.sh
 0755  c8d581ebef4cedf58af34a7a61f14f3ab97a21bc29aa54c09b187a1479f98d5e  pi/sandbox/pi-sandbox.sh
