@@ -1250,6 +1250,15 @@ def test_pi_agent_sandbox_configs() -> None:
 
     assert 'jiti_cache="$HOME/.pi-sandbox-cache/jiti"' in script.content
     assert script.content.count('"JITI_FS_CACHE=1"') == 2
+    assert "_start_signing_agent" in script.content
+    assert 'private_key="$HOME/.ssh/id_signing"' in script.content
+    assert "trap _cleanup_signing_agent EXIT" in script.content
+    assert script.content.count('"SSH_AUTH_SOCK=$SSH_AUTH_SOCK"') == 2
+    assert script.content.count('"GIT_CONFIG_COUNT=1"') == 2
+    assert script.content.count('"GIT_CONFIG_KEY_0=user.signingKey"') == 2
+    assert script.content.count('"GIT_CONFIG_VALUE_0=key::$_SIGNING_PUBLIC_KEY"') == 2
+    assert '--ro-bind "$_SIGNING_AGENT_DIR" "$_SIGNING_AGENT_DIR"' in script.content
+    assert '--ro-bind "$HOME/.ssh"' not in script.content
     assert "refusing symlinked Jiti cache directory" in script.content
     assert 'herdr_clipboard_images="/tmp/herdr-clipboard-images-$(id -u)"' in script.content
     assert "refusing symlinked Herdr clipboard image directory" in script.content
@@ -1260,8 +1269,8 @@ def test_pi_agent_sandbox_configs() -> None:
     clipboard_bind = '--ro-bind "$herdr_clipboard_images" "$herdr_clipboard_images"'
     jiti_bind = '--bind "$jiti_cache" /tmp/jiti'
     assert script.content.index("--tmpfs /tmp") < script.content.index(clipboard_bind) < script.content.index(jiti_bind)
-    assert script.content.index('herdr_clipboard_images="$(_prepare_herdr_clipboard_images "$herdr_clipboard_images")"') < script.content.rindex("exec env -i")
-    assert script.content.index('jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"') < script.content.rindex("exec env -i")
+    assert script.content.index('herdr_clipboard_images="$(_prepare_herdr_clipboard_images "$herdr_clipboard_images")"') < script.content.rindex("env -i")
+    assert script.content.index('jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"') < script.content.rindex("env -i")
     assert 'transformers_cache="$memory_dir/transformers-cache"' in script.content
     assert 'transformers_cache_target="$HOME/.pi/agent/npm/node_modules/@xenova/transformers/.cache"' in script.content
     assert 'transformers_cache_target="$(npm root -g)' not in script.content

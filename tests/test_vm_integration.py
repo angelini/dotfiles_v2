@@ -252,6 +252,37 @@ fi
     handle.assert_cmd(cmd, login=True)
 
 
+def test_pi_sandbox_signs_git_commits_without_exposing_private_key(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name == "debian-docker":
+        pytest.skip("Docker does not allow the unprivileged user namespace required by bubblewrap")
+    handle.assert_cmd(
+        r"""
+set -euo pipefail
+repo="$HOME/repos/sandbox-signing-smoke"
+rm -rf -- "$repo"
+mkdir -p "$repo"
+cat > "$repo/pi" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[ -S "$SSH_AUTH_SOCK" ]
+[ ! -e "$HOME/.ssh/id_signing" ]
+[ ! -e "$HOME/.ssh/id_signing.pub" ]
+git init -q
+printf 'signed\n' > signed.txt
+git add signed.txt
+git commit -q -m 'Sandbox signing smoke test'
+git cat-file commit HEAD | grep -Fq 'gpgsig -----BEGIN SSH SIGNATURE-----'
+SH
+chmod +x "$repo/pi"
+(cd "$repo" && PATH="$repo:$PATH" pi-sandbox)
+[ -r "$HOME/.ssh/id_signing" ]
+[ -r "$HOME/.ssh/id_signing.pub" ]
+""",
+        login=True,
+    )
+
+
 def test_node_and_npm_installed(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
     handle.assert_cmd("command -v node && command -v npm", login=True)

@@ -160,6 +160,40 @@ _resolve_path() {
   cd "$1" 2>/dev/null && pwd -P
 }
 
+_cleanup_signing_agent() {
+  local status=$?
+  if [ -n "${SSH_AGENT_PID:-}" ]; then
+    ssh-agent -k >/dev/null 2>&1 || true
+  fi
+  if [ -n "${_SIGNING_AGENT_DIR:-}" ]; then
+    rm -rf -- "$_SIGNING_AGENT_DIR"
+  fi
+  return "$status"
+}
+
+_start_signing_agent() {
+  local private_key="$HOME/.ssh/id_signing" public_key="$HOME/.ssh/id_signing.pub"
+  local key_type key_data _
+  [ -r "$private_key" ] || _die "missing Git signing key: $private_key"
+  [ -r "$public_key" ] || _die "missing Git signing public key: $public_key"
+  command -v ssh-agent >/dev/null 2>&1 || _die "ssh-agent is required for sandboxed Git signing"
+  command -v ssh-add >/dev/null 2>&1 || _die "ssh-add is required for sandboxed Git signing"
+
+  IFS=' ' read -r key_type key_data _ < "$public_key"
+  [ "$key_type" = ssh-ed25519 ] || _die "unexpected Git signing key type: $key_type"
+  [ -n "$key_data" ] || _die "invalid Git signing public key: $public_key"
+  _SIGNING_PUBLIC_KEY="$key_type $key_data"
+  _SIGNING_AGENT_DIR="$(mktemp -d /tmp/pi-sandbox-signing-agent.XXXXXX)" || _die "cannot create signing agent directory"
+  trap _cleanup_signing_agent EXIT
+  chmod 0700 "$_SIGNING_AGENT_DIR"
+  SSH_AUTH_SOCK="$_SIGNING_AGENT_DIR/agent.sock"
+  export SSH_AUTH_SOCK
+  eval "$(ssh-agent -a "$SSH_AUTH_SOCK" -s)" >/dev/null
+  if ! ssh-add "$private_key" >/dev/null 2>&1; then
+    _die "cannot load Git signing key into dedicated agent"
+  fi
+}
+
 _prepare_jiti_cache() {
   local cache="$1" cache_parent real_cache real_cache_parent real_home
   real_home="$(_resolve_path "$HOME")" || _die "cannot resolve home directory: $HOME"
@@ -226,6 +260,7 @@ __SANDBOX_HOME_DIRS__
   [ -e "$HOME/.config/git/config" ] || : > "$HOME/.config/git/config"
 
   _load_dotgen_secrets
+  _start_signing_agent
 
   case "$(uname -s)" in
     Darwin) _run_macos "$pi_bin" "$transformers_cache_target" "$@" ;;
@@ -240,7 +275,7 @@ _run_macos() {
   shift 2
   [ -r "$profile" ] || _die "missing sandbox profile: $profile"
   tmpdir="$(_resolve_path "${TMPDIR:-/tmp}")" || _die "cannot resolve temporary directory: ${TMPDIR:-/tmp}"
-  exec env -i \
+  env -i \
     "HOME=$HOME" \
     "PATH=${PATH:-/usr/bin:/bin}" \
     "SHELL=${SHELL:-/bin/bash}" \
@@ -249,6 +284,10 @@ _run_macos() {
     "TMPDIR=$tmpdir" \
     "DOTGEN_PI_SANDBOX=1" \
     "JITI_FS_CACHE=1" \
+    "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" \
+    "GIT_CONFIG_COUNT=1" \
+    "GIT_CONFIG_KEY_0=user.signingKey" \
+    "GIT_CONFIG_VALUE_0=key::$_SIGNING_PUBLIC_KEY" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
@@ -275,7 +314,7 @@ _run_linux() {
   command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
   herdr_clipboard_images="$(_prepare_herdr_clipboard_images "$herdr_clipboard_images")"
   jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"
-  exec env -i \
+  env -i \
     "HOME=$HOME" \
     "PATH=${PATH:-/usr/bin:/bin}" \
     "SHELL=${SHELL:-/bin/bash}" \
@@ -283,6 +322,10 @@ _run_linux() {
     "LANG=${LANG:-C.UTF-8}" \
     "DOTGEN_PI_SANDBOX=1" \
     "JITI_FS_CACHE=1" \
+    "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" \
+    "GIT_CONFIG_COUNT=1" \
+    "GIT_CONFIG_KEY_0=user.signingKey" \
+    "GIT_CONFIG_VALUE_0=key::$_SIGNING_PUBLIC_KEY" \
     "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" \
     "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
@@ -299,6 +342,7 @@ _run_linux() {
     --proc /proc \
     --dev-bind /dev /dev \
     --tmpfs /tmp \
+    --ro-bind "$_SIGNING_AGENT_DIR" "$_SIGNING_AGENT_DIR" \
     --ro-bind "$herdr_clipboard_images" "$herdr_clipboard_images" \
     --bind "$jiti_cache" /tmp/jiti \
     --dir /run \
