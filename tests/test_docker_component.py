@@ -59,6 +59,7 @@ class DockerHarness:
         rootless_socket: str = "auto",
         missing_tool: str = "",
         verification_failure: str = "",
+        storage_driver: str = "overlayfs",
         reset: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         root, state, fake, home = self.root, self.root / "state", self.root / "bin", self.root / "home"
@@ -208,7 +209,7 @@ class DockerHarness:
   *"context show"*) echo rootless ;;
   *"SecurityOptions"*) [ "$VERIFICATION_FAILURE" = security ] && echo '[]' || echo '["rootless"]' ;;
   *"CgroupVersion"*) [ "$VERIFICATION_FAILURE" = cgroup ] && echo 1 || echo 2 ;;
-  *"{{.Driver}}"*) [ "$VERIFICATION_FAILURE" = driver ] && echo vfs || echo overlay2 ;;
+  *"{{.Driver}}"*) [ "$VERIFICATION_FAILURE" = driver ] && echo vfs || echo "$STORAGE_DRIVER" ;;
   *"compose version"*) [ "$VERIFICATION_FAILURE" != compose ] ;;
   *"buildx version"*) [ "$VERIFICATION_FAILURE" != buildx ] ;;
   esac ;;
@@ -238,7 +239,6 @@ class DockerHarness:
             "newgidmap",
             "getsubids",
             "dockerd",
-            "dockerd-rootless.sh",
             "rootlesskit",
             "slirp4netns",
             "fuse-overlayfs",
@@ -255,7 +255,13 @@ class DockerHarness:
             sudo() { echo "SUDO $*" >> "$STATE/events"; while [[ "${1:-}" = *=* ]]; do shift; done; "$@"; }
             install_package() { echo "INSTALL $1" >> "$STATE/events"; }
             install_packages() { echo "INSTALLS $*" >> "$STATE/events"; [ -z "$PACKAGE_FAILURE" ] || return 1; }
-            download_script_sha256() { echo "DOWNLOAD_SCRIPT $*" >> "$STATE/events"; }
+            download_script_sha256() {
+              echo "DOWNLOAD_SCRIPT $*" >> "$STATE/events"
+              [ "$1" != "$MISSING_TOOL" ] || return 0
+              mkdir -p "$HOME/bin"
+              printf '#!/usr/bin/env bash\n' > "$HOME/bin/$1"
+              chmod 0755 "$HOME/bin/$1"
+            }
             add_repo() { echo "ADD_REPO" >> "$STATE/events"; }
             remove_packages() { echo "REMOVE $*" >> "$STATE/events"; }
             update_pkg_index() { echo "UPDATE_INDEX" >> "$STATE/events"; }
@@ -297,6 +303,7 @@ class DockerHarness:
             "ROOTFUL_ACTIVE": rootful_active,
             "ROOTLESS_SOCKET": rootless_socket,
             "VERIFICATION_FAILURE": verification_failure,
+            "STORAGE_DRIVER": storage_driver,
             "MISSING_TOOL": missing_tool,
         }
         if incoming_env:
@@ -485,12 +492,12 @@ def test_cachyos_package_and_manual_rootless_sequence_is_exact(docker_harness: D
     events = docker_harness.events()
     first_mask = events.index("MASK docker.service docker.socket")
     standard = events.index("INSTALLS docker docker-compose docker-buildx rootlesskit slirp4netns fuse-overlayfs shadow iptables")
-    download = next(i for i, event in enumerate(events) if event.startswith("DOWNLOAD_SCRIPT dockerd-rootless.sh "))
     remove = events.index("REMOVE docker-rootless-extras")
+    download = next(i for i, event in enumerate(events) if event.startswith("DOWNLOAD_SCRIPT dockerd-rootless.sh "))
     second_mask = events.index("MASK docker.service docker.socket", first_mask + 1)
     context = next(i for i, event in enumerate(events) if "context create rootless" in event)
     enable = next(i for i, event in enumerate(events) if event.startswith("ENABLE_USER"))
-    assert first_mask < standard < download < remove < second_mask < context < enable
+    assert first_mask < standard < remove < download < second_mask < context < enable
     assert "ADD_REPO" not in events and "UPDATE_INDEX" not in events
     setup = Docker().render(ENVIRONMENTS["cachyos"]).setup
     assert "dockerd-rootless-setuptool.sh" not in setup
@@ -527,8 +534,14 @@ def test_cachyos_package_failures_and_missing_tools_stop_setup(docker_harness: D
 
     result = docker_harness.run(env_name="cachyos", missing_tool="dockerd-rootless.sh")
     assert result.returncode != 0
-    assert "dockerd-rootless.sh is missing" in result.stderr
+    assert f"{docker_harness.root}/home/bin/dockerd-rootless.sh is missing" in result.stderr
     assert not any(event.startswith(("DAEMON_RELOAD", "ENABLE_USER", "DOCKER")) for event in docker_harness.events())
+
+
+@pytest.mark.parametrize("storage_driver", ["overlayfs", "overlay2", "fuse-overlayfs"])
+def test_cachyos_supported_storage_drivers(docker_harness: DockerHarness, storage_driver: str) -> None:
+    result = docker_harness.run(env_name="cachyos", storage_driver=storage_driver)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("failure", ["service", "endpoint", "security", "cgroup", "driver", "compose", "buildx"])

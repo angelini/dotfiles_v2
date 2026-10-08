@@ -332,6 +332,7 @@ _setup_rootless_docker_cachyos() {
 
   service_mask docker.service docker.socket || return 1
   install_packages docker docker-compose docker-buildx rootlesskit slirp4netns fuse-overlayfs shadow iptables || return 1
+  remove_packages docker-rootless-extras || return 1
   download_script_sha256 dockerd-rootless.sh \
     "__ROOTLESS_SCRIPT_URL__" \
     "__ROOTLESS_SCRIPT_SHA256__" || return 1
@@ -340,10 +341,12 @@ _setup_rootless_docker_cachyos() {
   fi
   install -d -m 0700 "$HOME/.config/systemd/user" || return 1
   install -m 0600 "$DIR/config/docker/docker.service" "$service_unit" || return 1
-  remove_packages docker-rootless-extras || return 1
   service_mask docker.service docker.socket || return 1
   _docker_verify_rootful || return 1
-  for tool in docker dockerd dockerd-rootless.sh rootlesskit slirp4netns fuse-overlayfs newuidmap newgidmap getsubids iptables; do
+  [ -x "$HOME/bin/dockerd-rootless.sh" ] || {
+    _docker_fail "$HOME/bin/dockerd-rootless.sh is missing after Docker installation; rerun the deployment to restore it"; return 1
+  }
+  for tool in docker dockerd rootlesskit slirp4netns fuse-overlayfs newuidmap newgidmap getsubids iptables; do
     bin_exists "$tool" || { _docker_fail "$tool is missing after Docker installation; remediate the selected packages"; return 1; }
   done
   _docker_ensure_iptables_module || return 1
@@ -377,7 +380,7 @@ _setup_rootless_docker_cachyos() {
   env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{json .SecurityOptions}}' | grep -q rootless || { _docker_fail "Docker security options do not report rootless"; return 1; }
   [ "$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{.CgroupVersion}}')" = 2 ] || { _docker_fail "Docker does not report cgroup v2"; return 1; }
   driver="$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{.Driver}}')"
-  case "$driver" in overlay2|fuse-overlayfs) ;; *) _docker_fail "unsupported rootless Docker storage driver $driver"; return 1 ;; esac
+  case "$driver" in overlayfs|overlay2|fuse-overlayfs) ;; *) _docker_fail "unsupported rootless Docker storage driver $driver"; return 1 ;; esac
   env -u DOCKER_HOST -u DOCKER_CONTEXT docker compose version >/dev/null || { _docker_fail "Docker Compose plugin verification failed"; return 1; }
   env -u DOCKER_HOST -u DOCKER_CONTEXT docker buildx version >/dev/null || { _docker_fail "Docker Buildx plugin verification failed"; return 1; }
   _docker_verify_rootful

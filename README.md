@@ -235,7 +235,7 @@ docker run --rm hello-world
 stat -c '%U %a %F %n' "/run/user/$UID/docker.sock"
 ```
 
-The system units must be masked/inactive; `docker context show` must be `rootless`; `docker info` must report rootless security, cgroup v2, and `overlay2` or `fuse-overlayfs`. Pi sandbox configuration deliberately excludes Docker environment passthrough, runtime-directory binds, and Docker sockets, so Docker access from a normal Pi sandbox must fail.
+The system units must be masked/inactive; `docker context show` must be `rootless`; `docker info` must report rootless security, cgroup v2, and `overlayfs`, `overlay2`, or `fuse-overlayfs`. Docker Engine 29 fresh installations use the containerd image store, whose default snapshotter reports `overlayfs`. Pi sandbox configuration deliberately excludes Docker environment passthrough, runtime-directory binds, and Docker sockets, so Docker access from a normal Pi sandbox must fail.
 
 The CachyOS Zed receiver is `~/.config/systemd/user/dev.dotgen.zed-host-bridge.service`. Its local socket is `~/.cache/dotgen/zed-host-bridge.sock`; its SSH include is `~/.ssh/config.d/dotgen-zed-host-bridge.conf`. Deploy the workstation, reconnect `herd-remote` so SSH recreates the remote forward, and use the Debian-side `zed` client. Supported client options are `-n`/`--new`, `-a`/`--add`, `-r`/`--reuse`, `-e`/`--existing`, `-w`/`--wait`, and `--`. Diagnose the receiver and forwarding with:
 
