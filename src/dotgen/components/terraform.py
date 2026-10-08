@@ -33,7 +33,11 @@ _install_terragrunt_linux() {{
 _install_terragrunt_linux
 """
 
+_SETUP_CACHYOS = _SETUP_DEBIAN[_SETUP_DEBIAN.index("_install_terragrunt_linux()") :]
+_SETUP_CACHYOS = "install_package terraform\n" + _SETUP_CACHYOS
+
 _SETUP_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: _SETUP_CACHYOS,
     OS.DEBIAN: _SETUP_DEBIAN,
     OS.MACOS: "add_repo tap hashicorp/tap\ninstall_package hashicorp/tap/terraform\ninstall_package terragrunt\n",
 }
@@ -44,7 +48,7 @@ class Terraform:
     name: str = "terraform"
 
     def applies_to(self, env: Environment) -> bool:
-        return env.name in {"debian", "macos"}
+        return env.name != "debian-docker" and env.os in _SETUP_BY_OS
 
     def render(self, env: Environment) -> Fragment:
         return Fragment(setup=_SETUP_BY_OS[env.os])

@@ -21,6 +21,7 @@ if ! bin_exists sudo; then
   error "deploy requires sudo"
   exit 2
 fi
+deployment_preflight
 if ! sudo -v; then
   error "unable to authenticate with sudo"
   exit 2
@@ -687,12 +688,23 @@ if (
   fi
   \
   _zed_bridge_assert_dir() {
-    local directory=$1
+    local directory=$1 parent
+    parent="$(dirname "$directory")"
     if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
       error "unsafe Zed host bridge directory: $directory"
       return 1
     fi
-    mkdir -p -- "$directory"
+    if [ ! -e "$directory" ]; then
+      if [ ! -d "$parent" ] || [ -L "$parent" ]; then
+        error "unsafe Zed host bridge parent directory: $parent"
+        return 1
+      fi
+      mkdir -- "$directory"
+    fi
+    if [ ! -O "$directory" ]; then
+      error "Zed host bridge directory is not owned by the current user: $directory"
+      return 1
+    fi
   }
 
   _zed_bridge_safe_dir() {
@@ -705,7 +717,7 @@ if (
     local source=$1 destination=$2 mode=$3 parent staging
     parent="$(dirname "$destination")"
     _zed_bridge_assert_dir "$parent"
-    if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+    if [ -L "$destination" ] || { [ -e "$destination" ] && { [ ! -f "$destination" ] || [ ! -O "$destination" ]; }; }; then
       error "unsafe Zed host bridge destination: $destination"
       return 1
     fi
@@ -714,7 +726,7 @@ if (
       rm -f -- "$staging"
       return 1
     fi
-    if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+    if [ -L "$destination" ] || { [ -e "$destination" ] && { [ ! -f "$destination" ] || [ ! -O "$destination" ]; }; }; then
       rm -f -- "$staging"
       error "unsafe Zed host bridge destination: $destination"
       return 1
@@ -722,6 +734,7 @@ if (
     mv -f -- "$staging" "$destination"
   }
 
+  _zed_bridge_assert_dir "$HOME"
   _zed_bridge_assert_dir "$HOME/.local"
   _zed_bridge_assert_dir "$HOME/.local/libexec"
   _zed_bridge_safe_dir "$HOME/.local/libexec/dotgen" 0700
@@ -731,7 +744,7 @@ if (
   _zed_bridge_assert_dir "${XDG_CONFIG_HOME:-$HOME/.config}"
   _zed_bridge_safe_dir "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen" 0700
   receiver_config="${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/zed-host-bridge.json"
-  if [ -L "$receiver_config" ] || { [ -e "$receiver_config" ] && [ ! -f "$receiver_config" ]; }; then
+  if [ -L "$receiver_config" ] || { [ -e "$receiver_config" ] && { [ ! -f "$receiver_config" ] || [ ! -O "$receiver_config" ]; }; }; then
     error "unsafe Zed host bridge destination: $receiver_config"
     exit 1
   fi
@@ -744,11 +757,11 @@ if (
   _zed_bridge_assert_dir "$HOME/Library/LaunchAgents"
   launch_agent="$HOME/Library/LaunchAgents/dev.dotgen.zed-host-bridge.plist"
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/dev.dotgen.zed-host-bridge.plist" "$launch_agent" 0600
-
+  \
   _zed_bridge_safe_dir "$HOME/.ssh" 0700
   _zed_bridge_safe_dir "$HOME/.ssh/config.d" 0700
   ssh_include="$HOME/.ssh/config.d/dotgen-zed-host-bridge.conf"
-  if [ -L "$ssh_include" ] || { [ -e "$ssh_include" ] && [ ! -f "$ssh_include" ]; }; then
+  if [ -L "$ssh_include" ] || { [ -e "$ssh_include" ] && { [ ! -f "$ssh_include" ] || [ ! -O "$ssh_include" ]; }; }; then
     error "unsafe Zed host bridge SSH include destination: $ssh_include"
     exit 1
   fi
@@ -757,12 +770,8 @@ if (
 
   ssh_main="$HOME/.ssh/config"
   managed_include='Include ~/.ssh/config.d/dotgen-zed-host-bridge.conf'
-  if [ -L "$ssh_main" ] || { [ -e "$ssh_main" ] && [ ! -f "$ssh_main" ]; }; then
+  if [ -L "$ssh_main" ] || { [ -e "$ssh_main" ] && { [ ! -f "$ssh_main" ] || [ ! -O "$ssh_main" ]; }; }; then
     error "unsafe SSH config destination: $ssh_main"
-    exit 1
-  fi
-  if [ -e "$ssh_main" ] && [ "$(stat -f '%u' "$ssh_main")" != "$(id -u)" ]; then
-    error "SSH config is not owned by the current user: $ssh_main"
     exit 1
   fi
   ssh_main_staging="$(mktemp "$HOME/.ssh/.dotgen-ssh-config.XXXXXX")"
@@ -793,7 +802,7 @@ if (
   fs.writeFileSync(dst, Buffer.concat([target, Buffer.from("\n"), ...kept]), { mode: 0o600 });
   ' "$ssh_main" "$ssh_main_staging" "$managed_include"
   chmod 0600 "$ssh_main_staging"
-  if [ -L "$ssh_main" ] || { [ -e "$ssh_main" ] && [ ! -f "$ssh_main" ]; }; then
+  if [ -L "$ssh_main" ] || { [ -e "$ssh_main" ] && { [ ! -f "$ssh_main" ] || [ ! -O "$ssh_main" ]; }; }; then
     rm -f -- "$ssh_main_staging"
     error "unsafe SSH config destination: $ssh_main"
     exit 1
@@ -809,6 +818,7 @@ if (
     error "Zed host bridge RemoteForward setting is not effective"
     exit 1
   }
+
 
   launch_domain="gui/$(id -u)"
   launch_label="$launch_domain/dev.dotgen.zed-host-bridge"
@@ -850,6 +860,10 @@ if (
     done
     if [ "$socket_ready" -ne 1 ]; then
       _zed_bridge_launch_failure "Zed host bridge LaunchAgent started without creating its socket"
+      exit 1
+    fi
+    if [ ! -O "$bridge_socket" ]; then
+      _zed_bridge_launch_failure "Zed host bridge socket is not owned by the current user"
       exit 1
     fi
     chmod 0600 "$bridge_socket"

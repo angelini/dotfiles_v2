@@ -56,6 +56,56 @@ def test_config_manifest_matches_golden(env_name: str) -> None:
     assert actual == golden.read_text(), f"config manifest drift for {env_name}; re-run with UPDATE_GOLDEN=1 if intended"
 
 
+def test_cachyos_generated_workstation_has_no_macos_operations_or_paths(built_root: Path) -> None:
+    root = built_root / "cachyos"
+    setup = (root / "setup.sh").read_text()
+    shim = (root / "os_shim.sh").read_text()
+    manifest = config_manifest(ENVIRONMENTS["cachyos"])
+
+    assert "install_aur_package" not in setup
+    assert "install_aur_package" not in shim
+    assert "sudo pacman -S --needed --noconfirm" in shim
+    assert "google-cloud-cli_587.0.0.orig_${asset_arch}.tar.gz" in setup
+    assert "doppler_3.76.5_linux_${doppler_arch}.tar.gz" in setup
+    assert "docker-v29.8.2/contrib/dockerd-rootless.sh" in setup
+    assert "docker/docker.service" in setup
+    for forbidden in (
+        "add_repo apt",
+        "apt-get",
+        "brew ",
+        "install_cask",
+        "/opt/homebrew",
+        "~/Library",
+        "pi-macos.sb",
+    ):
+        assert forbidden not in setup
+    for included in ("fonts", "ghostty", "zed"):
+        assert f"# --- {included} ---" in setup
+    assert "# --- docker ---" in setup
+    assert "# --- orbstack ---" not in setup
+    assert "# --- zed_host_bridge ---" in setup
+    assert "install_package ghostty" in setup
+    assert "install_package zed" in setup
+    assert "bin_exists zeditor" in setup
+    assert "pi/sandbox/pi-macos.sb" not in manifest
+    assert "herdr/herd-local" in manifest
+    assert "herdr/herd-remote" in manifest
+    assert "herdr/config.toml" not in manifest
+    assert "ghostty/config" in manifest
+    assert "zed/keymap.json" in manifest
+    assert "zed/settings.json" in manifest
+    assert "zed-host-bridge/dev.dotgen.zed-host-bridge.service" in manifest
+    assert "zed-host-bridge/serve-linux" in manifest
+    assert "zed-host-bridge/ssh-linux.conf.template" in manifest
+    sandbox = (root / "config/pi/sandbox/pi-sandbox.sh").read_text()
+    assert "docker.sock" not in sandbox
+    assert "DOCKER_HOST" not in sandbox and "DOCKER_CONTEXT" not in sandbox
+    assert '--bind "$runtime_dir"' not in sandbox
+    keymap = (root / "config/zed/keymap.json").read_text()
+    assert "super-w" in keymap
+    assert "cmd-" not in keymap
+
+
 def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
     pi_call = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"'
     pi_patch_call = 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600'
@@ -96,14 +146,16 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert "  pi/agent/settings.json" not in manifest
         assert (config / "pi" / "agent" / "AGENTS.md").is_file()
         assert (config / "pi" / "agent" / "APPEND_SYSTEM.md").is_file()
-        for agent in ("history-reviewer", "researcher"):
-            profile = config / "pi" / "agent" / "agents" / "claude-pipeline" / f"{agent}.md"
+        for agent in ("history-reviewer", "researcher", "session-auditor"):
+            profile = config / "pi" / "agent" / "agents" / f"{agent}.md"
             assert profile.is_file()
             frontmatter = profile.read_text().split("---", 2)[1]
             assert f"\nname: {agent}\n" in f"\n{frontmatter}"
             assert "\npackage:" not in f"\n{frontmatter}"
+        assert (config / "pi" / "agent" / "agents" / "session-auditor" / "session-audit.ts").is_file()
+        assert (config / "pi" / "agent" / "agents" / "session-auditor" / "session-audit-core.mjs").is_file()
         assert (config / "pi" / "sandbox" / "pi-sandbox.sh").is_file()
-        assert (config / "pi" / "sandbox" / "pi-macos.sb").is_file()
+        assert (config / "pi" / "sandbox" / "pi-macos.sb").is_file() is (env_name != "cachyos")
         for path in ("auth.json", "sessions", "mcp-oauth", "extensions/context7/cache"):
             assert not (config / "pi" / "agent" / path).exists()
         steps_config = config / "steps"
@@ -128,7 +180,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert manifest.count("dir  steps") == 1
         for path in (
             "AGENTS.md",
-            "agents/claude-pipeline/reviewer.md",
+            "agents/reviewer.md",
             "chains/pipeline.chain.md",
             "prompts/pipeline.md",
             "skills/pipeline/SKILL.md",
@@ -138,7 +190,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert not (config / "pi" / "agent" / "skills" / "supacode-cli").exists()
         assert "supacode" not in manifest.lower()
 
-        if env_name in ("debian", "macos"):
+        if env_name in ("cachyos", "debian", "macos"):
             assert setup.count(claude_call) == 1
             assert 'install_config "$DIR/config/claude/CLAUDE.md"' not in setup
             assert 'install_config "$DIR/config/claude/hooks/' not in setup

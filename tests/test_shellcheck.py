@@ -24,8 +24,12 @@ def test_shellcheck_clean(built_root: Path) -> None:
         + [
             built_root / "debian/config/zed-host-bridge/zed",
             built_root / "macos/config/zed-host-bridge/serve",
+            built_root / "cachyos/config/zed-host-bridge/serve-linux",
             built_root / "macos/config/herdr/herd-local",
             built_root / "macos/config/herdr/herd-remote",
+            built_root / "cachyos/config/herdr/herd-local",
+            built_root / "cachyos/config/herdr/herd-remote",
+            Path(__file__).parents[1] / "docs/cachyos/live-preflight.sh",
         ]
     )
     cmd = [

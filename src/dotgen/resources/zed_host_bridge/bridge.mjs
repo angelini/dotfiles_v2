@@ -271,7 +271,7 @@ function readOneResponse(socket, wait) {
       }
     });
     socket.on("timeout", () =>
-      reject(new BridgeError("macOS host bridge timed out")),
+      reject(new BridgeError("Zed host bridge timed out")),
     );
     socket.on("error", (error) => reject(error));
     socket.on("end", () => {
@@ -308,7 +308,7 @@ async function runClient(argv) {
     response = await responsePromise;
   } catch (error) {
     if (["ENOENT", "ECONNREFUSED", "ECONNRESET", "EPIPE"].includes(error?.code))
-      fail("macOS host bridge unavailable; attach with herd-agent <host>");
+      fail("Zed host bridge unavailable; reconnect with herd-remote <host>");
     throw error;
   }
   if (!isObject(response) || typeof response.ok !== "boolean")
@@ -323,7 +323,7 @@ async function runClient(argv) {
     fail(
       typeof response.error === "string" && response.error
         ? response.error
-        : "macOS host bridge rejected the request",
+        : "Zed host bridge rejected the request",
       exitCode,
     );
   }
@@ -356,17 +356,19 @@ async function loadServerConfig(configPath) {
 
 async function resolveZed() {
   const searchPath =
-    process.env.PATH || "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin";
+    process.env.PATH || "/usr/local/bin:/usr/bin:/bin";
   for (const directory of searchPath.split(path.delimiter)) {
     if (!directory || !path.isAbsolute(directory)) continue;
-    const candidate = path.join(directory, "zed");
-    try {
-      const info = await stat(candidate);
-      await access(candidate, fsConstants.X_OK);
-      if (info.isFile()) return candidate;
-    } catch {}
+    for (const executable of ["zed", "zeditor"]) {
+      const candidate = path.join(directory, executable);
+      try {
+        const info = await stat(candidate);
+        await access(candidate, fsConstants.X_OK);
+        if (info.isFile()) return candidate;
+      } catch {}
+    }
   }
-  fail("Zed CLI is unavailable on the macOS host");
+  fail("Zed CLI is unavailable on the bridge host");
 }
 
 function makeUrls(sshHost, paths) {
@@ -517,13 +519,12 @@ async function prepareSocket(socketPath) {
 }
 
 async function runServer() {
-  const home = process.env.HOME || os.homedir();
-  const configPath =
-    process.env.ZED_HOST_BRIDGE_CONFIG ||
-    path.join(home, ".config", "dotgen", "zed-host-bridge.json");
-  const socketPath =
-    process.env.ZED_HOST_BRIDGE_SOCKET ||
-    path.join(home, "Library", "Caches", "dotgen", "zed-host-bridge.sock");
+  const configPath = process.env.ZED_HOST_BRIDGE_CONFIG;
+  const socketPath = process.env.ZED_HOST_BRIDGE_SOCKET;
+  if (!configPath || !path.isAbsolute(configPath))
+    fail("ZED_HOST_BRIDGE_CONFIG must be an absolute path");
+  if (!socketPath || !path.isAbsolute(socketPath))
+    fail("ZED_HOST_BRIDGE_SOCKET must be an absolute path");
   const config = await loadServerConfig(configPath);
   await prepareSocket(socketPath);
   let active = 0;

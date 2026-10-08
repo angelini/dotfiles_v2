@@ -5,6 +5,7 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS
 
 _DEPS_BY_OS: dict[OS, tuple[str, ...]] = {
+    OS.CACHYOS: ("curl", "git", "make", "bison", "gcc", "glibc"),
     OS.MACOS: (),
     OS.DEBIAN: ("curl", "git", "make", "bison", "gcc", "libc6-dev"),
 }

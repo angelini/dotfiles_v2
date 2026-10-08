@@ -28,7 +28,7 @@ export VISUAL=hx
 
 _HELIX_VERSION = "25.07.1"
 
-_XZ_PKG: dict[OS, str] = {OS.DEBIAN: "xz-utils"}
+_XZ_PKG: dict[OS, str] = {OS.CACHYOS: "xz", OS.DEBIAN: "xz-utils"}
 
 
 def _linux_setup(os: OS) -> str:

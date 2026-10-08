@@ -3,6 +3,10 @@ detect_os() {
   echo macos
 }
 
+deployment_preflight() {
+  return 0
+}
+
 pkg_installed() {
   brew list --versions "$1" >/dev/null 2>&1
 }
@@ -525,7 +529,7 @@ bin_version_matches() {
 
 sha256_file() {
   case "$(detect_os)" in
-    debian) sha256sum "$1" | awk '{print $1}' ;;
+    cachyos|debian) sha256sum "$1" | awk '{print $1}' ;;
     macos) shasum -a 256 "$1" | awk '{print $1}' ;;
     *) error "sha256_file: unsupported OS: $(detect_os)"; return 1 ;;
   esac
@@ -582,6 +586,40 @@ download_bin_sha256() (
   tmp=""
 )
 
+download_script_sha256() (
+  if [ "$#" -ne 3 ]; then
+    error "download_script_sha256: expected name, URL, and SHA-256"
+    exit 2
+  fi
+  local name="$1" url="$2" checksum="$3" installed tmp="" actual
+  if [ "${#checksum}" -ne 64 ] || [[ "$checksum" = *[!0-9a-f]* ]]; then
+    error "download_script_sha256: invalid SHA-256 for $name"
+    exit 2
+  fi
+  installed="$HOME/bin/$name"
+  if [ -e "$installed" ] || [ -L "$installed" ]; then
+    if [ ! -f "$installed" ] || [ -L "$installed" ]; then
+      error "download_script_sha256: unsafe destination for $name: $installed"
+      exit 1
+    fi
+  fi
+  if [ -x "$installed" ] && [ "$(sha256_file "$installed")" = "$checksum" ]; then
+    exit 0
+  fi
+  ensure_dir "$HOME/bin"
+  tmp="$(mktemp "$HOME/bin/.$name.XXXXXX")"
+  trap 'rm -f -- "$tmp"' EXIT
+  curl -fsSL "$url" -o "$tmp"
+  actual="$(sha256_file "$tmp")"
+  if [ "$actual" != "$checksum" ]; then
+    error "download_script_sha256: checksum mismatch for $name"
+    exit 1
+  fi
+  chmod 0755 "$tmp"
+  mv -f -- "$tmp" "$installed"
+  tmp=""
+)
+
 download_tar_bin() {
   local name="$1" url="$2" inner="${3:-$1}" expected="${4:-}"
   if [ "$#" -gt 3 ]; then shift 4; else shift "$#"; fi
@@ -592,6 +630,48 @@ download_tar_bin() {
   curl -fsSL "$url" | tar -xzO "$inner" > "$HOME/bin/$name"
   chmod +x "$HOME/bin/$name"
 }
+
+download_tar_bin_sha256() (
+  if [ "$#" -lt 5 ]; then
+    error "download_tar_bin_sha256: expected name, URL, SHA-256, archive path, and version"
+    exit 2
+  fi
+  local name="$1" url="$2" checksum="$3" inner="$4" expected="$5"
+  local installed archive="" tmp="" actual
+  shift 5
+  if [ "${#checksum}" -ne 64 ] || [[ "$checksum" = *[!0-9a-f]* ]]; then
+    error "download_tar_bin_sha256: invalid SHA-256 for $name"
+    exit 2
+  fi
+  installed="$HOME/bin/$name"
+  if [ -e "$installed" ] || [ -L "$installed" ]; then
+    if [ ! -f "$installed" ] || [ -L "$installed" ]; then
+      error "download_tar_bin_sha256: unsafe destination for $name: $installed"
+      exit 1
+    fi
+  fi
+  if [ -x "$installed" ] && bin_version_matches "$installed" "$expected" "$@"; then
+    exit 0
+  fi
+  ensure_dir "$HOME/bin"
+  archive="$(mktemp)"
+  tmp="$(mktemp "$HOME/bin/.$name.XXXXXX")"
+  trap 'rm -f -- "$archive" "$tmp"' EXIT
+  curl -fsSL "$url" -o "$archive"
+  actual="$(sha256_file "$archive")"
+  if [ "$actual" != "$checksum" ]; then
+    error "download_tar_bin_sha256: checksum mismatch for $name"
+    exit 1
+  fi
+  tar -xzf "$archive" -O -- "$inner" > "$tmp"
+  chmod 0755 "$tmp"
+  if ! bin_version_matches "$tmp" "$expected" "$@"; then
+    error "download_tar_bin_sha256: version mismatch for $name"
+    exit 1
+  fi
+  mv -f -- "$tmp" "$installed"
+  tmp=""
+)
 
 download_script() {
   local name="$1" url="$2"

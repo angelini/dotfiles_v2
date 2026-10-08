@@ -6,6 +6,28 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS
 
 _PACKAGES: dict[OS, tuple[str, ...]] = {
+    OS.CACHYOS: (
+        "git",
+        "curl",
+        "git-delta",
+        "just",
+        "jq",
+        "yq",
+        "fzf",
+        "ripgrep",
+        "fd",
+        "eza",
+        "bat",
+        "tree",
+        "vim",
+        "htop",
+        "btop",
+        "cloc",
+        "gnupg",
+        "bash-completion",
+        "protobuf",
+        "shelly",
+    ),
     OS.DEBIAN: (
         "git",
         "git-delta",

@@ -7,6 +7,7 @@ from dotgen.types import OS
 # Ensure macOS login shells read .bashrc
 _BASH_PROFILE = '[ -r "$HOME/.bashrc" ] && source "$HOME/.bashrc"\n'
 _BASH_PROFILES = {
+    OS.CACHYOS: _BASH_PROFILE,
     OS.DEBIAN: _BASH_PROFILE,
     OS.MACOS: 'export LANG="${LANG:-en_US.UTF-8}"\n' + _BASH_PROFILE,
 }

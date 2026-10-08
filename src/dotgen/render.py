@@ -37,6 +37,7 @@ if ! bin_exists sudo; then
   error "deploy requires sudo"
   exit 2
 fi
+deployment_preflight
 if ! sudo -v; then
   error "unable to authenticate with sudo"
   exit 2

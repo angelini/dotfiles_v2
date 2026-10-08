@@ -6,14 +6,17 @@ from dotgen.types import OS
 
 _VERSION = "0.16.0"
 _ASSET_OS: dict[OS, str] = {
+    OS.CACHYOS: "linux",
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
 }
+_SHA256_LINUX = {
+    "x86_64": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
+    "aarch64": "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17",
+}
 _SHA256: dict[OS, dict[str, str]] = {
-    OS.DEBIAN: {
-        "x86_64": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
-        "aarch64": "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17",
-    },
+    OS.CACHYOS: _SHA256_LINUX,
+    OS.DEBIAN: _SHA256_LINUX,
     OS.MACOS: {
         "x86_64": "0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7",
         "aarch64": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
@@ -24,7 +27,7 @@ _SHA256: dict[OS, dict[str, str]] = {
 def _setup(os: OS) -> str:
     asset_os = _ASSET_OS[os]
     checksums = _SHA256[os]
-    dependency_setup = "install_package xz-utils\n" if os is OS.DEBIAN else ""
+    dependency_setup = f"install_package {'xz-utils' if os is OS.DEBIAN else 'xz'}\n" if os.is_linux else ""
     installer = f"""\
 _install_zig() (
   local arch checksum zig_dir parent stage archive actual
@@ -76,7 +79,7 @@ class Zig:
     name: str = "zig"
 
     def applies_to(self, env: Environment) -> bool:
-        return env.name in {"debian", "macos"}
+        return env.name != "debian-docker" and env.os in _ASSET_OS
 
     def render(self, env: Environment) -> Fragment:
         return Fragment(setup=_setup(env.os), bashrc=_BASHRC)

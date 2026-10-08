@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
-from dotgen.types import OS
+from dotgen.types import OS, EnvironmentRole
 
 _VERSION = "0.8.2"
 _RELEASE_BASE = f"https://github.com/herdrdev/herdr/releases/download/v{_VERSION}"
@@ -10,19 +10,24 @@ _BUN_INSTALL_URL = "https://bun.com/install"
 _COLLIE_ID = "herdr.collie"
 _COLLIE_SOURCE = "AltanS/collie"
 _ASSET_OS: dict[OS, str] = {
+    OS.CACHYOS: "linux",
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
 }
+_SHA256_LINUX = {
+    "x86_64": "976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4",
+    "aarch64": "f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d",
+}
 _SHA256: dict[OS, dict[str, str]] = {
-    OS.DEBIAN: {
-        "x86_64": "976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4",
-        "aarch64": "f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d",
-    },
+    OS.CACHYOS: _SHA256_LINUX,
+    OS.DEBIAN: _SHA256_LINUX,
     OS.MACOS: {
         "x86_64": "ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1",
         "aarch64": "a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574",
     },
 }
+
+
 def _config(*, theme: str, manage_ssh_config: bool) -> str:
     remote = "\n[remote]\nmanage_ssh_config = true\n" if manage_ssh_config else ""
     return f"""\
@@ -44,7 +49,7 @@ manifest_check = true
 {remote}"""
 
 
-_DEBIAN_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=True)
+_LINUX_CLI_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=True)
 _LOCAL_CONFIG = _config(theme="catppuccin-latte", manage_ssh_config=False)
 _REMOTE_CONFIG = _config(theme="rose-pine-dawn", manage_ssh_config=True)
 _BASHRC = """\
@@ -99,10 +104,10 @@ HERDR_CONFIG_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml" \
 """
 
 
-def _setup(os: OS) -> str:
+def _setup(os: OS, role: EnvironmentRole) -> str:
     asset_os = _ASSET_OS[os]
     checksums = _SHA256[os]
-    if os is OS.MACOS:
+    if role is EnvironmentRole.WORKSTATION:
         install = """\
   install_config "$DIR/config/herdr/local.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"
   install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
@@ -167,11 +172,11 @@ class Herdr:
     name: str = "herdr"
 
     def applies_to(self, env: Environment) -> bool:
-        return env.name in {"debian", "macos"}
+        return env.role in (EnvironmentRole.WORKSTATION, EnvironmentRole.SERVER) and env.os in _ASSET_OS
 
     def render(self, env: Environment) -> Fragment:
         configs: list[ConfigFile] = []
-        if env.os is OS.MACOS:
+        if env.role is EnvironmentRole.WORKSTATION:
             configs.extend(
                 (
                     ConfigFile(dest="herdr/local.toml", content=_LOCAL_CONFIG),
@@ -181,5 +186,5 @@ class Herdr:
                 )
             )
         else:
-            configs.append(ConfigFile(dest="herdr/config.toml", content=_DEBIAN_CONFIG))
-        return Fragment(setup=_setup(env.os), bashrc=_BASHRC, configs=tuple(configs))
+            configs.append(ConfigFile(dest="herdr/config.toml", content=_LINUX_CLI_CONFIG))
+        return Fragment(setup=_setup(env.os, env.role), bashrc=_BASHRC, configs=tuple(configs))

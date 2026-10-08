@@ -484,10 +484,16 @@ pi-unsafe update --extensions
 
 def _setup_for(env: Environment) -> str:
     parts: list[str] = []
-    if env.os is OS.DEBIAN:
+    if env.os.is_linux:
         parts.append("install_package bubblewrap")
-    parts.append(_SETUP_BASE)
-    if env.name in {"debian", "macos"}:
+    setup_base = _SETUP_BASE
+    if env.os is OS.CACHYOS:
+        setup_base = setup_base.replace(
+            'install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"\n',
+            "",
+        )
+    parts.append(setup_base)
+    if env.name != "debian-docker":
         parts.append('"$HOME/.local/bin/herdr" integration install pi')
     return "\n".join(parts)
 
@@ -500,17 +506,19 @@ class PiAgent:
         return True
 
     def render(self, env: Environment) -> Fragment:
+        configs = [
+            ConfigFile(dest="managed-settings/pi.json", content=managed_settings("pi"), mode=0o600),
+            ConfigFile(dest="pi/agent/models.json", content=pi_models(), mode=0o600),
+            ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
+            ConfigFile(dest="pi/launcher/pi.sh", content=_PI_LAUNCHER_SH, mode=0o755),
+            ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
+        ]
+        if env.os is not OS.CACHYOS:
+            configs.append(ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB))
         return Fragment(
             setup=_setup_for(env),
             alias=_ALIAS,
-            configs=(
-                ConfigFile(dest="managed-settings/pi.json", content=managed_settings("pi"), mode=0o600),
-                ConfigFile(dest="pi/agent/models.json", content=pi_models(), mode=0o600),
-                ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
-                ConfigFile(dest="pi/launcher/pi.sh", content=_PI_LAUNCHER_SH, mode=0o755),
-                ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
-                ConfigFile(dest="pi/sandbox/pi-macos.sb", content=_PI_MACOS_SB),
-            ),
+            configs=tuple(configs),
             vendors=(
                 VendorDir(
                     source=_agent_config_root() / "pi" / "agent",
@@ -518,7 +526,7 @@ class PiAgent:
                     include_globs=(
                         "AGENTS.md",
                         "APPEND_SYSTEM.md",
-                        "agents/claude-pipeline/*.md",
+                        "agents/**",
                     ),
                 ),
                 VendorDir(

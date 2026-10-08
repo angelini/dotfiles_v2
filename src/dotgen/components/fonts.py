@@ -20,6 +20,10 @@ if [ ! -d "$HOME/.local/share/fonts/UbuntuMono" ]; then
 fi
 """
 
+_SETUP_CACHYOS = """\
+install_packages fontconfig ttf-ubuntu-font-family ttf-ubuntu-mono-nerd
+"""
+
 _SETUP_MACOS = """\
 if [ ! -f "$HOME/Library/Fonts/Ubuntu-Regular.ttf" ]; then
   install_cask font-ubuntu
@@ -30,6 +34,7 @@ fi
 """
 
 _SETUP_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: _SETUP_CACHYOS,
     OS.MACOS: _SETUP_MACOS,
     OS.DEBIAN: _SETUP_DEBIAN,
 }

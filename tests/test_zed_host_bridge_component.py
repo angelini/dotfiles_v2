@@ -1,3 +1,4 @@
+import configparser
 import json
 import os
 import plistlib
@@ -13,7 +14,9 @@ from pathlib import Path
 import pytest
 
 from dotgen.components.zed_host_bridge import ZedHostBridge
+from dotgen.environment import Environment
 from dotgen.registry import ENVIRONMENTS
+from dotgen.types import OS, EnvironmentRole, PkgMgr
 
 BRIDGE = Path(__file__).resolve().parents[1] / "src/dotgen/resources/zed_host_bridge/bridge.mjs"
 
@@ -26,31 +29,51 @@ def _node() -> str:
 
 
 def test_component_distribution_ordering_and_deployment_input() -> None:
-    for name in ("debian", "macos"):
+    for name in ("debian", "macos", "cachyos"):
         components = [component.name for component in ENVIRONMENTS[name].components]
         assert components.count("zed_host_bridge") == 1
         assert components.index("node_fnm") < components.index("zed_host_bridge")
         assert components.index("zed_host_bridge") < components.index("git_setup")
-    macos = [component.name for component in ENVIRONMENTS["macos"].components]
-    assert macos.index("zed") < macos.index("zed_host_bridge")
+    for name in ("macos", "cachyos"):
+        components = [component.name for component in ENVIRONMENTS[name].components]
+        assert components.index("zed") < components.index("zed_host_bridge")
+    cachyos = [component.name for component in ENVIRONMENTS["cachyos"].components]
+    assert cachyos.index("docker") < cachyos.index("zed_host_bridge")
     assert "zed_host_bridge" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
 
-    debian_fragment = ZedHostBridge().render(ENVIRONMENTS["debian"])
-    macos_fragment = ZedHostBridge().render(ENVIRONMENTS["macos"])
-    assert not debian_fragment.secrets
-    assert macos_fragment.secrets == frozenset({"ZED_HOST_BRIDGE_SSH_HOST"})
-    assert {config.dest for config in debian_fragment.configs} == {
+    fragments = {name: ZedHostBridge().render(ENVIRONMENTS[name]) for name in ("debian", "macos", "cachyos")}
+    assert not fragments["debian"].secrets
+    assert fragments["macos"].secrets == frozenset({"ZED_HOST_BRIDGE_SSH_HOST"})
+    assert fragments["cachyos"].secrets == frozenset({"ZED_HOST_BRIDGE_SSH_HOST"})
+    assert {config.dest for config in fragments["debian"].configs} == {
         "zed-host-bridge/bridge.mjs",
         "zed-host-bridge/sshd.conf",
         "zed-host-bridge/zed",
     }
-    assert {config.dest for config in macos_fragment.configs} == {
+    assert {config.dest for config in fragments["macos"].configs} == {
         "zed-host-bridge/bridge.mjs",
         "zed-host-bridge/config.json.template",
         "zed-host-bridge/serve",
         "zed-host-bridge/dev.dotgen.zed-host-bridge.plist",
         "zed-host-bridge/ssh.conf.template",
     }
+    assert {config.dest for config in fragments["cachyos"].configs} == {
+        "zed-host-bridge/bridge.mjs",
+        "zed-host-bridge/config.json.template",
+        "zed-host-bridge/serve-linux",
+        "zed-host-bridge/dev.dotgen.zed-host-bridge.service",
+        "zed-host-bridge/ssh-linux.conf.template",
+    }
+
+
+def test_component_role_matrix_is_explicit() -> None:
+    component = ZedHostBridge()
+    assert component.applies_to(Environment("server", OS.DEBIAN, PkgMgr.APT, EnvironmentRole.SERVER))
+    assert not component.applies_to(Environment("container", OS.DEBIAN, PkgMgr.APT, EnvironmentRole.CONTAINER))
+    assert not component.applies_to(Environment("linux-workstation", OS.DEBIAN, PkgMgr.APT, EnvironmentRole.WORKSTATION))
+    assert component.applies_to(Environment("mac-receiver", OS.MACOS, PkgMgr.BREW, EnvironmentRole.WORKSTATION))
+    assert component.applies_to(Environment("linux-receiver", OS.CACHYOS, PkgMgr.PACMAN, EnvironmentRole.WORKSTATION))
+    assert not component.applies_to(Environment("cachyos-server", OS.CACHYOS, PkgMgr.PACMAN, EnvironmentRole.SERVER))
 
 
 def test_launch_agent_and_ssh_resources_are_scoped() -> None:
@@ -235,14 +258,14 @@ def test_client_rejects_traversal_and_symlink_escape(tmp_path: Path) -> None:
 
 
 @contextmanager
-def _server(tmp_path: Path, ssh_host: str = "debian-dev", exit_code: int = 0) -> Generator[tuple[Path, Path]]:
+def _server(tmp_path: Path, ssh_host: str = "debian-dev", exit_code: int = 0, executable: str = "zed") -> Generator[tuple[Path, Path]]:
     socket_path = _socket_path("server")
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"sshHost": ssh_host}))
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     argv_log = tmp_path / "zed-argv"
-    fake_zed = fake_bin / "zed"
+    fake_zed = fake_bin / executable
     fake_zed.write_text('#!/usr/bin/env bash\nprintf \'%s\\0\' "$@" > "$ZED_ARGV_LOG"\nexit "${ZED_EXIT_CODE:-0}"\n')
     fake_zed.chmod(0o755)
     process = subprocess.Popen(
@@ -340,9 +363,10 @@ def test_receiver_rejects_adversarial_requests_without_launching(tmp_path: Path,
         assert not argv_log.exists()
 
 
+@pytest.mark.parametrize("env_name", ["macos", "cachyos"])
 @pytest.mark.parametrize("alias", ["", "bad host", "*.example", "/host", "-option", "host_underscore", "host\ncontrol"])
-def test_macos_setup_rejects_invalid_alias_before_writing(tmp_path: Path, alias: str) -> None:
-    setup = ZedHostBridge().render(ENVIRONMENTS["macos"]).setup
+def test_receiver_setup_rejects_invalid_alias_before_writing(tmp_path: Path, env_name: str, alias: str) -> None:
+    setup = ZedHostBridge().render(ENVIRONMENTS[env_name]).setup
     script = tmp_path / "setup.sh"
     script.write_text(f"set -euo pipefail\nload_secrets() {{ :; }}\nerror() {{ printf '%s\\n' \"$*\" >&2; }}\n{setup}")
     home = tmp_path / "home"
@@ -414,3 +438,194 @@ def test_macos_setup_installs_atomic_scoped_ssh_include_and_defers_headless_laun
     assert include.read_text().startswith("Host debian-dev\n")
     receiver_config = json.loads((home / ".config/dotgen/zed-host-bridge.json").read_text())
     assert receiver_config == {"sshHost": "debian-dev"}
+
+
+def test_linux_receiver_resources_are_hardened_and_scoped() -> None:
+    fragment = ZedHostBridge().render(ENVIRONMENTS["cachyos"])
+    configs = {config.dest: config for config in fragment.configs}
+    unit_text = configs["zed-host-bridge/dev.dotgen.zed-host-bridge.service"].content
+    parser = configparser.ConfigParser(strict=True, interpolation=None)
+    parser.optionxform = str
+    parser.read_string(unit_text)
+
+    assert parser["Unit"]["After"] == "graphical-session.target"
+    assert parser["Unit"]["PartOf"] == "graphical-session.target"
+    assert parser["Service"]["ExecStart"] == "%h/.local/libexec/dotgen/zed-host-bridge-serve-linux"
+    assert parser["Service"]["Environment"] == "PATH=/usr/local/bin:/usr/bin:/bin"
+    assert parser["Service"]["Restart"] == "on-failure"
+    assert parser["Service"]["RestartSec"] == "5s"
+    assert parser["Service"]["UMask"] == "0077"
+    assert parser["Service"]["NoNewPrivileges"] == "true"
+    assert parser["Install"]["WantedBy"] == "graphical-session.target"
+    assert "Docker" not in unit_text
+    assert "docker" not in fragment.setup.lower()
+    assert "ListenStream" not in unit_text
+
+    ssh_config = configs["zed-host-bridge/ssh-linux.conf.template"].content
+    assert ssh_config.startswith("Host ${ZED_HOST_BRIDGE_SSH_HOST}\n")
+    assert "RemoteForward /home/%r/.cache/dotgen/zed-host-bridge.sock %d/.cache/dotgen/zed-host-bridge.sock" in ssh_config
+    assert "ExitOnForwardFailure yes" in ssh_config
+    launcher = configs["zed-host-bridge/serve-linux"]
+    assert launcher.mode == 0o755
+    assert "Library/" not in launcher.content
+    assert 'exec "$node_bin" "$bridge" serve' in launcher.content
+    subprocess.run(["bash", "-n"], input=launcher.content, text=True, check=True)
+
+
+def test_bridge_messages_are_platform_neutral() -> None:
+    text = BRIDGE.read_text()
+    assert "macOS host bridge" not in text
+    assert "macOS host" not in text
+    assert "/opt/homebrew" not in text
+    assert "Zed host bridge unavailable" in text
+    assert "Zed CLI is unavailable on the bridge host" in text
+
+
+def test_receiver_resolves_cachyos_zeditor(tmp_path: Path) -> None:
+    with _server(tmp_path, executable="zeditor") as (socket_path, argv_log):
+        response = _request(
+            socket_path,
+            {"version": 1, "behavior": "default", "wait": False, "paths": [{"relativePath": "project/file"}]},
+        )
+    assert response == {"ok": True, "exitCode": 0}
+    assert argv_log.read_bytes().split(b"\0")[:-1] == [b"ssh://debian-dev/~/repos/project/file"]
+
+
+def _write_linux_setup_harness(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
+    fragment = ZedHostBridge().render(ENVIRONMENTS["cachyos"])
+    bundle = tmp_path / "bundle"
+    for config in fragment.configs:
+        destination = bundle / "config" / config.dest
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(config.content)
+        destination.chmod(config.mode)
+
+    home = tmp_path / "home"
+    managed_node = home / ".local/share/fnm/aliases/default/bin/node"
+    managed_node.parent.mkdir(parents=True)
+    managed_node.symlink_to(_node())
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    command_log = tmp_path / "commands.log"
+    (fake_bin / "ssh").write_text(
+        "#!/usr/bin/env bash\n"
+        "printf '%s\\n' 'user remote-user' 'exitonforwardfailure yes' "
+        '"remoteforward /home/remote-user/.cache/dotgen/zed-host-bridge.sock $HOME/.cache/dotgen/zed-host-bridge.sock"\n'
+    )
+    (fake_bin / "systemctl").write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'printf \'systemctl %s\\n\' "$*" >> "$COMMAND_LOG"\n'
+        'if [ "${FAIL_DAEMON_RELOAD:-0}" = 1 ] && [ "$*" = "--user daemon-reload" ]; then exit 1; fi\n'
+        'case "$*" in\n'
+        '  "--user show-environment")\n'
+        '    if [ "${SYSTEMD_GRAPHICAL:-0}" = 1 ]; then\n'
+        "      printf '%s\\n' 'WAYLAND_DISPLAY=wayland-1' 'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus'\n"
+        "    fi ;;\n"
+        '  "--user restart dev.dotgen.zed-host-bridge.service")\n'
+        "    SOCKET=\"$HOME/.cache/dotgen/zed-host-bridge.sock\" python3 - <<'PY'\n"
+        "import os, socket\n"
+        "path = os.environ['SOCKET']\n"
+        "try:\n    os.unlink(path)\nexcept FileNotFoundError:\n    pass\n"
+        "server = socket.socket(socket.AF_UNIX)\nserver.bind(path)\nserver.close()\nos.chmod(path, 0o600)\n"
+        "PY\n"
+        "    ;;\n"
+        '  "--user is-active --quiet dev.dotgen.zed-host-bridge.service")\n'
+        '    [ "${SYSTEMD_GRAPHICAL:-0}" = 1 ] ;;\n'
+        "esac\n"
+    )
+    (fake_bin / "journalctl").write_text("#!/usr/bin/env bash\nprintf 'journalctl %s\\n' \"$*\" >> \"$COMMAND_LOG\"\nprintf '%s\\n' 'journal diagnostics' >&2\n")
+    for executable in fake_bin.iterdir():
+        executable.chmod(0o755)
+
+    script = tmp_path / "setup.sh"
+    script.write_text(
+        "set -euo pipefail\n"
+        "load_secrets() { :; }\n"
+        "error() { printf '%s\\n' \"$*\" >&2; }\n"
+        "log() { printf '%s\\n' \"$*\"; }\n"
+        'install_config_template() { local tmp; mkdir -p "$(dirname "$2")"; tmp=$(mktemp); '
+        'sed "s|\\${ZED_HOST_BRIDGE_SSH_HOST}|$ZED_HOST_BRIDGE_SSH_HOST|g" "$1" > "$tmp"; '
+        'install -m "${4:-0644}" "$tmp" "$2"; rm -f "$tmp"; }\n'
+        f"DIR={bundle}\n"
+        f"{fragment.setup}"
+    )
+    env = {
+        "HOME": str(home),
+        "PATH": f"{fake_bin}:/usr/bin:/bin",
+        "COMMAND_LOG": str(command_log),
+        "ZED_HOST_BRIDGE_SSH_HOST": "debian-dev",
+    }
+    return script, home, env
+
+
+def test_linux_setup_is_idempotent_and_defers_or_activates_safely(tmp_path: Path) -> None:
+    script, home, env = _write_linux_setup_harness(tmp_path)
+    for _ in range(2):
+        result = subprocess.run(["bash", str(script)], env=env, check=False, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert "activation deferred until a graphical login" in result.stdout
+
+    assert (home / ".cache/dotgen").stat().st_mode & 0o777 == 0o700
+    assert (home / ".config/dotgen").stat().st_mode & 0o777 == 0o700
+    assert (home / ".config/dotgen/zed-host-bridge.json").stat().st_mode & 0o777 == 0o600
+    assert (home / ".ssh/config").read_text().count("Include ~/.ssh/config.d/dotgen-zed-host-bridge.conf") == 1
+    assert (home / ".ssh/config.d/dotgen-zed-host-bridge.conf").stat().st_mode & 0o777 == 0o600
+    assert (home / ".config/systemd/user/dev.dotgen.zed-host-bridge.service").is_file()
+
+    graphical_env = {
+        **env,
+        "SYSTEMD_GRAPHICAL": "1",
+        "WAYLAND_DISPLAY": "wayland-1",
+        "DISPLAY": ":1",
+        "XDG_CURRENT_DESKTOP": "KDE",
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+        "UNRELATED_SECRET": "must-not-import",
+    }
+    result = subprocess.run(["bash", str(script)], env=graphical_env, check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    bridge_socket = home / ".cache/dotgen/zed-host-bridge.sock"
+    assert bridge_socket.is_socket()
+    assert bridge_socket.stat().st_mode & 0o777 == 0o600
+    commands = (tmp_path / "commands.log").read_text()
+    assert "systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS" in commands
+    assert "UNRELATED_SECRET" not in commands
+    assert "systemctl --user restart dev.dotgen.zed-host-bridge.service" in commands
+
+
+@pytest.mark.parametrize("collision", ["file", "directory", "symlink", "bad-mode-socket"])
+def test_linux_setup_rejects_unsafe_socket_collisions(tmp_path: Path, collision: str) -> None:
+    script, home, env = _write_linux_setup_harness(tmp_path)
+    socket_path = home / ".cache/dotgen/zed-host-bridge.sock"
+    socket_path.parent.mkdir(parents=True)
+    if collision == "file":
+        socket_path.write_text("unsafe")
+    elif collision == "directory":
+        socket_path.mkdir()
+    elif collision == "symlink":
+        socket_path.symlink_to(tmp_path / "target")
+    else:
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(socket_path))
+        socket_path.chmod(0o666)
+
+    result = subprocess.run(["bash", str(script)], env=env, check=False, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "socket" in result.stderr.lower()
+    assert socket_path.exists() or socket_path.is_symlink()
+
+
+def test_linux_setup_prints_systemd_and_journal_diagnostics(tmp_path: Path) -> None:
+    script, _, env = _write_linux_setup_harness(tmp_path)
+    result = subprocess.run(
+        ["bash", str(script)],
+        env={**env, "FAIL_DAEMON_RELOAD": "1"},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "failed to reload the systemd user manager" in result.stderr
+    commands = (tmp_path / "commands.log").read_text()
+    assert "systemctl --user status dev.dotgen.zed-host-bridge.service --no-pager" in commands
+    assert "journalctl --user-unit=dev.dotgen.zed-host-bridge.service -n 50 --no-pager" in commands

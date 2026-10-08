@@ -908,6 +908,79 @@ download_bin_sha256 tool https://example.test/tool {checksum} v2.0.0 --version
     assert not list(target.iterdir())
 
 
+def test_download_script_sha256_verifies_and_reuses(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    payload = tmp_path / "payload"
+    payload.write_text("#!/bin/sh\nprintf pinned\\n")
+    checksum = hashlib.sha256(payload.read_bytes()).hexdigest()
+    calls = tmp_path / "curl-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{OSShim(OS.CACHYOS).render()}
+export HOME={shlex.quote(str(home))}
+export PAYLOAD={shlex.quote(str(payload))}
+export CALLS={shlex.quote(str(calls))}
+curl() {{
+  printf x >> "$CALLS"
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then command cp "$PAYLOAD" "$2"; return 0; fi
+    shift
+  done
+  return 2
+}}
+download_script_sha256 tool https://example.test/tool {checksum}
+download_script_sha256 tool https://example.test/tool {checksum}
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "x"
+    target = home / "bin/tool"
+    assert target.read_bytes() == payload.read_bytes()
+    assert target.stat().st_mode & 0o777 == 0o755
+
+
+def test_download_tar_bin_sha256_verifies_archive_and_binary_version(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    archived_tool = tmp_path / "doppler"
+    _write_executable(archived_tool, '#!/bin/sh\n[ "$1" = --version ] || exit 7\nprintf "v2.0.0\\n"\n')
+    archive = tmp_path / "doppler.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(archived_tool, arcname="doppler")
+    checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+    calls = tmp_path / "curl-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{OSShim(OS.CACHYOS).render()}
+export HOME={shlex.quote(str(home))}
+export ARCHIVE={shlex.quote(str(archive))}
+export CALLS={shlex.quote(str(calls))}
+curl() {{
+  printf x >> "$CALLS"
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then command cp "$ARCHIVE" "$2"; return 0; fi
+    shift
+  done
+  return 2
+}}
+download_tar_bin_sha256 doppler https://example.test/doppler.tar.gz {checksum} doppler v2.0.0 --version
+download_tar_bin_sha256 doppler https://example.test/doppler.tar.gz {checksum} doppler v2.0.0 --version
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "x"
+    target = home / "bin/doppler"
+    assert subprocess.check_output([target, "--version"], text=True) == "v2.0.0\n"
+    assert not list(target.parent.glob(".doppler.*"))
+
+
 def test_download_tar_bin_reuses_matching_version(tmp_path: Path) -> None:
     home = tmp_path / "home"
     target = home / "bin" / "tool"
@@ -1607,3 +1680,184 @@ def test_macos_rejects_debian_helpers(tmp_path: Path) -> None:
         script = tmp_path / "run.sh"
         script.write_text(f"set -euo pipefail\n{macos}\n{call}\n")
         assert subprocess.run(["bash", str(script)], capture_output=True, text=True).returncode != 0
+
+
+def _run_cachyos_harness(
+    tmp_path: Path,
+    call: str,
+    *,
+    installed: tuple[str, ...] = (),
+    failure: str = "",
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    fake = tmp_path / "bin"
+    state = tmp_path / "state"
+    shutil.rmtree(fake, ignore_errors=True)
+    shutil.rmtree(state, ignore_errors=True)
+    fake.mkdir()
+    state.mkdir()
+    (state / "installed").write_text("".join(f"{package}\n" for package in installed))
+    dispatcher = fake / "command"
+    dispatcher.write_text(
+        r'''#!/usr/bin/env bash
+set -u
+log_command() {
+  printf '%s' "$(basename "$0")" >> "$STATE/commands"
+  for arg in "$@"; do printf ' <%s>' "$arg" >> "$STATE/commands"; done
+  printf '\n' >> "$STATE/commands"
+}
+case "$(basename "$0")" in
+pacman)
+  log_command "$@"
+  case "${1-}" in
+  --version) printf 'Pacman v7\n' ;;
+  -Qq)
+    package="${3-}"
+    grep -Fxq -- "$package" "$STATE/installed"
+    ;;
+  -S)
+    [ "$FAILURE" != install ] || exit 43
+    shift 4
+    for package in "$@"; do grep -Fxq -- "$package" "$STATE/installed" || printf '%s\n' "$package" >> "$STATE/installed"; done
+    ;;
+  -R)
+    [ "$FAILURE" != remove ] || exit 45
+    shift 3
+    for package in "$@"; do
+      grep -Fxv -- "$package" "$STATE/installed" > "$STATE/installed.next" || true
+      mv "$STATE/installed.next" "$STATE/installed"
+    done
+    ;;
+  -Syu) [ "$FAILURE" != upgrade ] || exit 46 ;;
+  *) exit 90 ;;
+  esac
+  ;;
+sudo)
+  log_command "$@"
+  "$@"
+  ;;
+systemctl)
+  log_command "$@"
+  case "${1-}" in
+  enable)
+    printf enabled > "$STATE/${3-}.enabled"
+    printf active > "$STATE/${3-}.active"
+    ;;
+  mask)
+    shift 2
+    for unit in "$@"; do printf masked > "$STATE/$unit.enabled"; printf inactive > "$STATE/$unit.active"; done
+    ;;
+  is-enabled) cat "$STATE/${2-}.enabled" 2>/dev/null || printf disabled ;;
+  is-active) [ "$(cat "$STATE/${@: -1}.active" 2>/dev/null || printf inactive)" = active ] ;;
+  esac
+  ;;
+esac
+'''
+    )
+    dispatcher.chmod(0o755)
+    for name in ("pacman", "sudo", "systemctl"):
+        (fake / name).symlink_to("command")
+    script = tmp_path / "run-cachyos.sh"
+    script.write_text(f"set -euo pipefail\n{OSShim(OS.CACHYOS).render()}\n{call}\n")
+    result = subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env=os_module.environ | {"PATH": f"{fake}:{os_module.environ['PATH']}", "STATE": str(state), "FAILURE": failure},
+    )
+    commands = (state / "commands").read_text().splitlines() if (state / "commands").exists() else []
+    return result, commands
+
+
+def test_cachyos_package_query_is_exact(tmp_path: Path) -> None:
+    call = """
+if pkg_installed present; then installed_status=0; else installed_status=$?; fi
+if pkg_installed missing; then missing_status=0; else missing_status=$?; fi
+printf '%s %s\n' "$installed_status" "$missing_status"
+"""
+    result, commands = _run_cachyos_harness(tmp_path, call, installed=("present",))
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "0 1\n"
+    assert commands == ["pacman <-Qq> <--> <present>", "pacman <-Qq> <--> <missing>"]
+
+
+def test_cachyos_package_operations_are_batched_and_idempotent(tmp_path: Path) -> None:
+    result, commands = _run_cachyos_harness(
+        tmp_path,
+        """
+install_packages present alpha beta
+install_packages present alpha beta
+remove_packages absent alpha beta
+remove_packages absent alpha beta
+""",
+        installed=("present",),
+    )
+
+    assert result.returncode == 0, result.stderr
+    mutations = [line for line in commands if line.startswith(("pacman <-S>", "pacman <-R>"))]
+    assert mutations == [
+        "pacman <-S> <--needed> <--noconfirm> <--> <alpha> <beta>",
+        "pacman <-R> <--noconfirm> <--> <alpha> <beta>",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("failure", "call", "expected_command"),
+    [
+        ("install", "install_package missing", "pacman <-S> <--needed> <--noconfirm> <--> <missing>"),
+        ("remove", "remove_packages present", "pacman <-R> <--noconfirm> <--> <present>"),
+        ("upgrade", "update_pkg_index", "pacman <-Syu> <--noconfirm>"),
+    ],
+)
+def test_cachyos_package_mutation_failures_propagate(tmp_path: Path, failure: str, call: str, expected_command: str) -> None:
+    result, commands = _run_cachyos_harness(tmp_path, call, installed=("present",), failure=failure)
+    assert result.returncode != 0
+    assert expected_command in commands
+
+
+def test_cachyos_remove_rejects_empty_input_without_calling_pacman(tmp_path: Path) -> None:
+    result, commands = _run_cachyos_harness(tmp_path, "remove_packages")
+    assert result.returncode != 0
+    assert "require at least one package" in result.stderr
+    assert commands == []
+
+
+def test_cachyos_upgrade_is_full_system_upgrade(tmp_path: Path) -> None:
+    result, commands = _run_cachyos_harness(tmp_path, "update_pkg_index")
+    assert result.returncode == 0, result.stderr
+    assert commands == ["sudo <pacman> <-Syu> <--noconfirm>", "pacman <-Syu> <--noconfirm>"]
+
+
+def test_cachyos_checksum_and_systemd_helpers(tmp_path: Path) -> None:
+    payload = tmp_path / "payload"
+    payload.write_text("fixture\n")
+    expected = hashlib.sha256(payload.read_bytes()).hexdigest()
+    result, commands = _run_cachyos_harness(
+        tmp_path,
+        f"""
+[ "$(sha256_file {shlex.quote(str(payload))})" = {expected} ]
+service_enable example.service
+service_mask old.service old.socket
+""",
+    )
+    assert result.returncode == 0, result.stderr
+    assert commands == [
+        "sudo <systemctl> <enable> <--now> <example.service>",
+        "systemctl <enable> <--now> <example.service>",
+        "sudo <systemctl> <mask> <--now> <old.service> <old.socket>",
+        "systemctl <mask> <--now> <old.service> <old.socket>",
+        "systemctl <is-enabled> <old.service>",
+        "systemctl <is-active> <--quiet> <old.service>",
+        "systemctl <is-enabled> <old.socket>",
+        "systemctl <is-active> <--quiet> <old.socket>",
+    ]
+
+
+def test_cachyos_detect_os_is_concrete(tmp_path: Path) -> None:
+    assert _run_shim_fn(tmp_path, OSShim(OS.CACHYOS).render(), "detect_os") == "cachyos\n"
+
+
+def test_unsupported_package_sources_fail_closed() -> None:
+    assert "install_aur_package" not in SHIM_FUNCTIONS
+    cachyos = OSShim(OS.CACHYOS).render()
+    assert "unsupported on CachyOS" in _function_body(cachyos, "add_repo")
+    assert "macOS only" in _function_body(cachyos, "install_cask")

@@ -36,8 +36,9 @@ class DockerHarness:
     def run(
         self,
         *,
-        os_release: str = "ID=debian\nVERSION_ID=13\nVERSION_CODENAME=trixie\n",
-        arch: str = "amd64",
+        env_name: str = "debian",
+        os_release: str | None = None,
+        arch: str | None = None,
         subuid: str = _VALID_SUBIDS,
         subgid: str = _VALID_SUBIDS,
         marker_state: str = "none",
@@ -54,6 +55,10 @@ class DockerHarness:
         logind: bool = True,
         cgroup: bool = True,
         account: str = "valid",
+        rootful_active: str = "",
+        rootless_socket: str = "auto",
+        missing_tool: str = "",
+        verification_failure: str = "",
         reset: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         root, state, fake, home = self.root, self.root / "state", self.root / "bin", self.root / "home"
@@ -66,6 +71,10 @@ class DockerHarness:
         if cgroup:
             (root / "sys/fs/cgroup").mkdir(parents=True, exist_ok=True)
         (root / "etc").mkdir(exist_ok=True)
+        if os_release is None:
+            os_release = "ID=cachyos\nID_LIKE=arch\n" if env_name == "cachyos" else "ID=debian\nVERSION_ID=13\nVERSION_CODENAME=trixie\n"
+        if arch is None:
+            arch = "x86_64" if env_name == "cachyos" else "amd64"
         (root / "etc/os-release").write_text(os_release)
         (root / "etc/subuid").write_text(subuid)
         (root / "etc/subgid").write_text(subgid)
@@ -75,11 +84,13 @@ class DockerHarness:
         runtime.mkdir(parents=True, exist_ok=True)
         if ready_after == 0 and not (runtime / "bus").exists():
             self._socket(runtime / "bus")
-        if marker_state in {"both", "unit"}:
-            marker = home / ".config/systemd/user/docker.service"
+        if marker_state in {"both", "unit", "unsafe"}:
+            marker = home / (".config/systemd/user/docker.service.d/10-dotgen-socket-mode.conf" if env_name == "cachyos" else ".config/systemd/user/docker.service")
             marker.parent.mkdir(parents=True, exist_ok=True)
-            marker.touch()
-        if marker_state in {"both", "context"}:
+            marker.write_text("unsafe\n" if marker_state == "unsafe" else "[Service]\nExecStartPost=/usr/bin/chmod 0600 %t/docker.sock\n")
+            if env_name == "cachyos":
+                (state / "user-docker.enabled").write_text("enabled\n")
+        if marker_state in {"both", "context", "unsafe"}:
             marker = home / ".docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json"
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.touch()
@@ -88,8 +99,18 @@ class DockerHarness:
             (root / "var/run/docker.sock").write_text("stale")
         if root_socket == "live":
             self._socket(root / "var/run/docker.sock")
+        if rootless_socket == "stale":
+            (runtime / "docker.sock").write_text("stale")
+        elif rootless_socket in {"live", "foreign"}:
+            self._socket(runtime / "docker.sock")
 
-        setup = Docker().render(ENVIRONMENTS["debian"]).setup
+        fragment = Docker().render(ENVIRONMENTS[env_name])
+        setup = fragment.setup
+        bundle = root / "bundle"
+        for config in fragment.configs:
+            target = bundle / "config" / config.dest
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(config.content)
         for production, isolated in {
             "/etc/os-release": root / "etc/os-release",
             "/etc/subuid": root / "etc/subuid",
@@ -114,6 +135,7 @@ class DockerHarness:
             case "$name" in
             ps) [ "$SYSTEMD" = 1 ] && echo systemd || echo init ;;
             dpkg) echo "$ARCH" ;;
+            uname) [ "${1:-}" = -r ] && echo test-kernel || echo "$ARCH" ;;
             id)
   case "${1:-}" in
   -un) [ "$ACCOUNT" = name ] && echo Alice || echo alice ;;
@@ -121,9 +143,17 @@ class DockerHarness:
   *) echo 1000 ;;
   esac ;;
             getent) [ "$ACCOUNT" = missing ] && exit 2; [ "$ACCOUNT" = mismatch ] && echo "alice:x:999:1000::${HOME}:/bin/bash" || echo "alice:x:1000:1000::${HOME}:/bin/bash" ;;
-            stat) [ "$2" = "%u" ] && echo "$RUNTIME_OWNER" || echo "$RUNTIME_MODE" ;;
+            stat)
+  if [[ "${*: -1}" = *docker.sock ]]; then
+    [ "$2" = "%u" ] && { [ "$ROOTLESS_SOCKET" = foreign ] && echo 1001 || echo 1000; } || echo 600
+  elif [[ "${*: -1}" = *10-dotgen-socket-mode.conf ]]; then
+    [ "$2" = "%u" ] && echo 1000 || echo 600
+  else
+    [ "$2" = "%u" ] && echo "$RUNTIME_OWNER" || echo "$RUNTIME_MODE"
+  fi ;;
             ss) [ "$ROOT_SOCKET" = live ] && echo "u_str LISTEN 0 0 $ROOT/var/run/docker.sock" ;;
             sleep) log WAIT; n=$(cat "$STATE/waits" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$STATE/waits"; if [ "$n" = "$READY_AFTER" ]; then socket "$ROOT/run/user/1000/bus"; fi ;;
+            grep) case "$*" in */proc/modules*|*/modules.builtin*) exit 1 ;; *) /usr/bin/grep "$@" ;; esac ;;
             loginctl)
   log "LOGINCTL $*"
   case "${1:-}" in
@@ -134,13 +164,26 @@ class DockerHarness:
               log "SYSTEMCTL $*"
               if [ "${1:-}" = --user ]; then
                 shift
-                case "${1:-}" in show-environment) [ -S "$ROOT/run/user/1000/bus" ] ;; enable) log "ENABLE_USER $*"; socket "$ROOT/run/user/1000/docker.sock" ;; esac
+                case "${1:-}" in
+                show-environment) [ -S "$ROOT/run/user/1000/bus" ] ;;
+                is-enabled) cat "$STATE/user-docker.enabled" 2>/dev/null || echo disabled ;;
+                enable)
+                  log "ENABLE_USER $*"
+                  [ "$VERIFICATION_FAILURE" != service ] || exit 1
+                  socket "$ROOT/run/user/1000/docker.sock"
+                  chmod 0600 "$ROOT/run/user/1000/docker.sock"
+                  echo enabled > "$STATE/user-docker.enabled"
+                  echo active > "$STATE/user-docker.active"
+                  ;;
+                is-active) [ "$(cat "$STATE/user-docker.active" 2>/dev/null || echo inactive)" = active ] ;;
+                daemon-reload) log DAEMON_RELOAD ;;
+                esac
               elif [ "${1:-}" = is-enabled ]; then unit="${@: -1}"; cat "$STATE/$unit.enabled" 2>/dev/null || echo disabled
               elif [ "${1:-}" = is-active ]; then
                 case "${*: -1}" in
                 systemd-logind.service) [ "$LOGIND" = 1 ] ;;
                 user@*) [ "$(cat "$STATE/user.active" 2>/dev/null || echo inactive)" = active ] ;;
-                *) [ "$(cat "$STATE/${*: -1}.active" 2>/dev/null || echo inactive)" = active ] ;;
+                *) [ "${*: -1}" = "$ROOTFUL_ACTIVE" ] || [ "$(cat "$STATE/${*: -1}.active" 2>/dev/null || echo inactive)" = active ] ;;
                 esac
               elif [ "${1:-}" = show ]; then echo "$SYSTEM_STATE"
               elif [ "${1:-}" = start ]; then echo active > "$STATE/user.active"
@@ -155,9 +198,19 @@ class DockerHarness:
   : > "$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json" ;;
             docker)
   log "DOCKER $* DOCKER_HOST=${DOCKER_HOST-unset} DOCKER_CONTEXT=${DOCKER_CONTEXT-unset} XDG_CONFIG_HOME=${XDG_CONFIG_HOME-unset} DOCKER_CONFIG=${DOCKER_CONFIG-unset}"
-  case "${1:-}" in
-  context) case "${2:-}" in inspect) echo "unix://$ROOT/run/user/1000/docker.sock" ;; esac ;;
-  info) [[ "$*" = *SecurityOptions* ]] && echo '["rootless"]' || echo 2 ;;
+  case "$*" in
+  *"context create rootless"*)
+    marker="$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json"
+    mkdir -p "${marker%/*}"
+    : > "$marker"
+    ;;
+  *"context inspect rootless"*) [ "$VERIFICATION_FAILURE" = endpoint ] && echo unix:///wrong/docker.sock || echo "unix://$ROOT/run/user/1000/docker.sock" ;;
+  *"context show"*) echo rootless ;;
+  *"SecurityOptions"*) [ "$VERIFICATION_FAILURE" = security ] && echo '[]' || echo '["rootless"]' ;;
+  *"CgroupVersion"*) [ "$VERIFICATION_FAILURE" = cgroup ] && echo 1 || echo 2 ;;
+  *"{{.Driver}}"*) [ "$VERIFICATION_FAILURE" = driver ] && echo vfs || echo overlay2 ;;
+  *"compose version"*) [ "$VERIFICATION_FAILURE" != compose ] ;;
+  *"buildx version"*) [ "$VERIFICATION_FAILURE" != buildx ] ;;
   esac ;;
             esac
             """
@@ -168,6 +221,8 @@ class DockerHarness:
         for name in (
             "ps",
             "dpkg",
+            "uname",
+            "grep",
             "id",
             "getent",
             "stat",
@@ -182,19 +237,27 @@ class DockerHarness:
             "newuidmap",
             "newgidmap",
             "getsubids",
+            "dockerd",
+            "dockerd-rootless.sh",
+            "rootlesskit",
+            "slirp4netns",
+            "fuse-overlayfs",
         ):
+            if name == missing_tool:
+                continue
             link = fake / name
             if not link.exists():
                 link.symlink_to(command.name)
         prelude = textwrap.dedent(
             """set -u
             error() { printf '%s\n' "$*" >&2; }
-            bin_exists() { command -v "$1" >/dev/null; }
+            bin_exists() { [ "$1" != "$MISSING_TOOL" ] && command -v "$1" >/dev/null; }
             sudo() { echo "SUDO $*" >> "$STATE/events"; while [[ "${1:-}" = *=* ]]; do shift; done; "$@"; }
             install_package() { echo "INSTALL $1" >> "$STATE/events"; }
             install_packages() { echo "INSTALLS $*" >> "$STATE/events"; [ -z "$PACKAGE_FAILURE" ] || return 1; }
+            download_script_sha256() { echo "DOWNLOAD_SCRIPT $*" >> "$STATE/events"; }
             add_repo() { echo "ADD_REPO" >> "$STATE/events"; }
-            remove_packages() { echo "REMOVE" >> "$STATE/events"; }
+            remove_packages() { echo "REMOVE $*" >> "$STATE/events"; }
             update_pkg_index() { echo "UPDATE_INDEX" >> "$STATE/events"; }
             service_mask() {
               for unit in "$@"; do
@@ -216,6 +279,7 @@ class DockerHarness:
             "PATH": f"{fake}:{os.environ['PATH']}",
             "STATE": str(state),
             "ROOT": str(root),
+            "DIR": str(bundle),
             "HOME": str(home),
             "ARCH": arch,
             "ROOT_SOCKET": root_socket,
@@ -230,6 +294,10 @@ class DockerHarness:
             "LOGIND": "1" if logind else "0",
             "SYSTEM_STATE": "running",
             "ACCOUNT": account,
+            "ROOTFUL_ACTIVE": rootful_active,
+            "ROOTLESS_SOCKET": rootless_socket,
+            "VERIFICATION_FAILURE": verification_failure,
+            "MISSING_TOOL": missing_tool,
         }
         if incoming_env:
             env.update(incoming_env)
@@ -243,12 +311,14 @@ def docker_harness() -> Iterator[DockerHarness]:
 
 
 def _barrier(events: list[str]) -> None:
-    assert not any(event.startswith(("MASK", "REMOVE", "ADD_REPO", "UPDATE_INDEX", "INSTALLS docker-ce")) for event in events)
+    assert not any(event.startswith(("MASK", "REMOVE", "DOWNLOAD_SCRIPT", "ADD_REPO", "UPDATE_INDEX", "INSTALLS")) for event in events)
+    assert "SUDO loginctl enable-linger alice" not in events
 
 
-def test_docker_setup_is_bash_syntax_clean(tmp_path: Path) -> None:
-    script = tmp_path / "docker.sh"
-    script.write_text(Docker().render(ENVIRONMENTS["debian"]).setup)
+@pytest.mark.parametrize("env_name", ["debian", "cachyos"])
+def test_docker_setup_is_bash_syntax_clean(tmp_path: Path, env_name: str) -> None:
+    script = tmp_path / f"docker-{env_name}.sh"
+    script.write_text(Docker().render(ENVIRONMENTS[env_name]).setup)
     assert subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True).returncode == 0
 
 
@@ -302,7 +372,7 @@ def test_package_safety_root_socket_and_idempotency(docker_harness: DockerHarnes
     events = docker_harness.events()
     mask_index = next(i for i, event in enumerate(events) if event.startswith("MASK"))
     repo_index = next(i for i, event in enumerate(events) if event == "ADD_REPO")
-    remove_index = next(i for i, event in enumerate(events) if event == "REMOVE")
+    remove_index = next(i for i, event in enumerate(events) if event.startswith("REMOVE "))
     update_index = next(i for i, event in enumerate(events) if event == "UPDATE_INDEX")
     assert mask_index < repo_index < remove_index < update_index
     assert sum(event.startswith("MASK") for event in events) == 1
@@ -366,3 +436,125 @@ def test_user_manager_timeout_is_diagnostic(docker_harness: DockerHarness) -> No
     assert result.returncode != 0
     assert "loginctl-diagnostic" in result.stderr
     assert "user-unit-diagnostic" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"arch": "aarch64"},
+        {"os_release": "ID=arch\nID_LIKE=arch\n"},
+        {"systemd": False},
+        {"logind": False},
+        {"cgroup": False},
+        {"account": "name"},
+        {"account": "zero"},
+        {"account": "missing"},
+        {"account": "mismatch"},
+        {"runtime_path": "/wrong"},
+        {"runtime_owner": "1001"},
+        {"runtime_mode": "755"},
+        {"ready_after": 31},
+        {"marker_state": "unit"},
+        {"marker_state": "context"},
+        {"marker_state": "unsafe"},
+        {"subuid": "bad\n"},
+        {"subuid": ""},
+        {"subuid": "alice:100000:65536\nalice:200000:65536\n"},
+        {"subuid": "alice:1:65536\n"},
+        {"subuid": "alice:4294967295:2\n"},
+        {"subuid": "alice:100000:65536\nbob:100100:65536\n"},
+        {"rootful_active": "docker.service"},
+        {"rootful_active": "docker.socket"},
+        {"root_socket": "stale"},
+        {"root_socket": "live"},
+        {"rootless_socket": "stale"},
+        {"rootless_socket": "live"},
+        {"marker_state": "both", "rootless_socket": "foreign"},
+    ],
+)
+def test_cachyos_preflight_is_mutation_free(docker_harness: DockerHarness, kwargs: dict[str, Any]) -> None:
+    result = docker_harness.run(env_name="cachyos", **kwargs)
+    assert result.returncode != 0
+    _barrier(docker_harness.events())
+    assert not any(event.startswith(("DAEMON_RELOAD", "ENABLE_USER", "DOCKER")) for event in docker_harness.events())
+
+
+def test_cachyos_package_and_manual_rootless_sequence_is_exact(docker_harness: DockerHarness) -> None:
+    result = docker_harness.run(env_name="cachyos")
+    assert result.returncode == 0, result.stderr
+    events = docker_harness.events()
+    first_mask = events.index("MASK docker.service docker.socket")
+    standard = events.index("INSTALLS docker docker-compose docker-buildx rootlesskit slirp4netns fuse-overlayfs shadow iptables")
+    download = next(i for i, event in enumerate(events) if event.startswith("DOWNLOAD_SCRIPT dockerd-rootless.sh "))
+    remove = events.index("REMOVE docker-rootless-extras")
+    second_mask = events.index("MASK docker.service docker.socket", first_mask + 1)
+    context = next(i for i, event in enumerate(events) if "context create rootless" in event)
+    enable = next(i for i, event in enumerate(events) if event.startswith("ENABLE_USER"))
+    assert first_mask < standard < download < remove < second_mask < context < enable
+    assert "ADD_REPO" not in events and "UPDATE_INDEX" not in events
+    setup = Docker().render(ENVIRONMENTS["cachyos"]).setup
+    assert "dockerd-rootless-setuptool.sh" not in setup
+    assert "--force" not in setup
+    assert "usermod" not in setup and "groupadd" not in setup
+    assert "/var/lib/docker" not in setup and "/var/lib/containerd" not in setup
+    assert "tcp://" not in setup
+
+
+def test_cachyos_install_rerun_and_existing_state_converge(docker_harness: DockerHarness) -> None:
+    first = docker_harness.run(env_name="cachyos")
+    assert first.returncode == 0, first.stderr
+    assert sum("context create rootless" in event for event in docker_harness.events()) == 1
+    second = docker_harness.run(env_name="cachyos", reset=False)
+    assert second.returncode == 0, second.stderr
+    assert sum("context create rootless" in event for event in docker_harness.events()) == 1
+
+    existing = docker_harness.run(env_name="cachyos", marker_state="both", rootless_socket="live")
+    assert existing.returncode == 0, existing.stderr
+    assert not any("context create rootless" in event for event in docker_harness.events())
+
+
+def test_cachyos_module_failure_stops_before_user_setup(docker_harness: DockerHarness) -> None:
+    result = docker_harness.run(env_name="cachyos", module_failure=True)
+    assert result.returncode != 0
+    assert "failed to load the nf_tables kernel module" in result.stderr
+    assert not any(event.startswith(("DAEMON_RELOAD", "ENABLE_USER", "DOCKER")) for event in docker_harness.events())
+
+
+def test_cachyos_package_failures_and_missing_tools_stop_setup(docker_harness: DockerHarness) -> None:
+    result = docker_harness.run(env_name="cachyos", package_failure="docker")
+    assert result.returncode != 0
+    assert not any(event.startswith(("DAEMON_RELOAD", "ENABLE_USER", "DOCKER")) for event in docker_harness.events())
+
+    result = docker_harness.run(env_name="cachyos", missing_tool="dockerd-rootless.sh")
+    assert result.returncode != 0
+    assert "dockerd-rootless.sh is missing" in result.stderr
+    assert not any(event.startswith(("DAEMON_RELOAD", "ENABLE_USER", "DOCKER")) for event in docker_harness.events())
+
+
+@pytest.mark.parametrize("failure", ["service", "endpoint", "security", "cgroup", "driver", "compose", "buildx"])
+def test_cachyos_verification_failures_propagate(docker_harness: DockerHarness, failure: str) -> None:
+    result = docker_harness.run(env_name="cachyos", verification_failure=failure)
+    assert result.returncode != 0
+
+
+def test_cachyos_environment_is_canonical_and_docker_variables_are_cleared(docker_harness: DockerHarness) -> None:
+    runtime = docker_harness.root / "run/user/1000"
+    result = docker_harness.run(
+        env_name="cachyos",
+        incoming_env={
+            "XDG_RUNTIME_DIR": str(runtime),
+            "XDG_CONFIG_HOME": "/hostile/config",
+            "DOCKER_CONFIG": "/hostile/docker",
+            "DOCKER_HOST": "tcp://hostile:2375",
+            "DOCKER_CONTEXT": "hostile",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    docker_calls = "\n".join(event for event in docker_harness.events() if event.startswith("DOCKER"))
+    assert "DOCKER_HOST=unset" in docker_calls and "DOCKER_CONTEXT=unset" in docker_calls
+    assert f"XDG_CONFIG_HOME={docker_harness.root}/home/.config" in docker_calls
+    assert f"DOCKER_CONFIG={docker_harness.root}/home/.docker" in docker_calls
+
+    conflict = docker_harness.run(env_name="cachyos", incoming_env={"XDG_RUNTIME_DIR": "/wrong"})
+    assert conflict.returncode != 0
+    _barrier(docker_harness.events())

@@ -33,6 +33,7 @@ fi
 """
 
 _SETUP_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: "install_package aws-cli-v2\n",
     OS.MACOS: _SETUP_MACOS,
     OS.DEBIAN: _SETUP_LINUX,
 }

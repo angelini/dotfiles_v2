@@ -36,9 +36,9 @@ from dotgen.components.zed_host_bridge import ZedHostBridge
 from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
-from dotgen.types import OS, PkgMgr
+from dotgen.types import OS, EnvironmentRole, PkgMgr
 
-_SHARED: tuple[Component, ...] = (
+_CORE_CLI: tuple[Component, ...] = (
     BashBase(),
     CoreUtils(),
     FzfBashHistory(),
@@ -67,8 +67,9 @@ _SHARED: tuple[Component, ...] = (
     Gcloud(),
     Aws(),
     Doppler(),
-    Fonts(),
 )
+
+_SHARED: tuple[Component, ...] = _CORE_CLI + (Fonts(),)
 
 _DEBIAN_FULL: tuple[Component, ...] = (Docker(),)
 
@@ -92,7 +93,7 @@ _DOCKER_SKIP = {
     "marksman",
 }
 
-# GitSetup depends on Gh. ZedHostBridge depends on NodeFnm and, on macOS, Zed.
+# GitSetup depends on Gh. ZedHostBridge depends on NodeFnm and, on workstation receivers, Zed.
 _LAST: tuple[Component, ...] = (ZedHostBridge(), GitSetup(), DotfilesDeploy())
 
 ENVIRONMENTS: dict[str, Environment] = {
@@ -100,18 +101,28 @@ ENVIRONMENTS: dict[str, Environment] = {
         "debian",
         OS.DEBIAN,
         PkgMgr.APT,
+        EnvironmentRole.SERVER,
         components=_SHARED + _DEBIAN_FULL + _LAST,
     ),
     "debian-docker": Environment(
         "debian-docker",
         OS.DEBIAN,
         PkgMgr.APT,
+        EnvironmentRole.CONTAINER,
         components=tuple(c for c in _SHARED if c.name not in _DOCKER_SKIP) + tuple(c for c in _LAST if c.name != "zed_host_bridge"),
     ),
     "macos": Environment(
         "macos",
         OS.MACOS,
         PkgMgr.BREW,
+        EnvironmentRole.WORKSTATION,
         components=_SHARED + _MACOS_GUI + _LAST,
+    ),
+    "cachyos": Environment(
+        "cachyos",
+        OS.CACHYOS,
+        PkgMgr.PACMAN,
+        EnvironmentRole.WORKSTATION,
+        components=_CORE_CLI + (Fonts(), Ghostty(), Zed(), Docker(), ZedHostBridge(), GitSetup(), DotfilesDeploy()),
     ),
 }

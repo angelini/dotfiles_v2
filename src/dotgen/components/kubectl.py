@@ -92,6 +92,7 @@ _SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie\n"
 _SETUP_LINUX = _LINUX_HELPERS + "_install_kubectl_linux\n" + "_install_helm_linux\n" + "_install_k9s_linux\n" + "_install_kubectx_linux\n" + "_install_kubens_linux\n" + "_install_kubie_linux\n"
 
 _SETUP_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: _SETUP_LINUX,
     OS.MACOS: _SETUP_MACOS,
     OS.DEBIAN: _SETUP_LINUX,
 }

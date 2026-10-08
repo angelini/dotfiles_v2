@@ -16,11 +16,13 @@ _SETUP_DEBIAN = (
 )
 
 _SETUP_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: "install_package postgresql\n",
     OS.MACOS: _SETUP_MACOS,
     OS.DEBIAN: _SETUP_DEBIAN,
 }
 
 _BASHRC_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: "",
     OS.MACOS: f'export PATH="/opt/homebrew/opt/postgresql@{_PG_VERSION}/bin:$PATH"\n',
     OS.DEBIAN: f'export PATH="/usr/lib/postgresql/{_PG_VERSION}/bin:$PATH"\n',
 }

@@ -6,6 +6,7 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS
 
 _BUILD_DEPS: dict[OS, tuple[str, ...]] = {
+    OS.CACHYOS: ("gcc", "make", "pkgconf", "openssl", "libffi"),
     OS.DEBIAN: ("build-essential", "libssl-dev", "libffi-dev"),
     OS.MACOS: (),
 }

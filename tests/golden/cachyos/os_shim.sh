@@ -1,47 +1,134 @@
-from dataclasses import dataclass
+# os_shim.sh — cachyos
+detect_os() {
+  echo cachyos
+}
 
-from dotgen.types import OS
+deployment_preflight() {
+  local os_release=/etc/os-release line key value id="" id_like=""
+  local id_count=0 id_like_count=0
+  if [ ! -r "$os_release" ] || [ ! -f "$os_release" ]; then
+    error "CachyOS preflight: missing or unreadable $os_release"
+    error "deploy only to a current CachyOS installation (ID=cachyos, ID_LIKE=arch)"
+    return 1
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ""|\#*) continue ;;
+      *=*) ;;
+      *)
+        error "CachyOS preflight: malformed $os_release"
+        error "repair the OS identity file before deploying"
+        return 1
+        ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    if ! [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+      error "CachyOS preflight: malformed key in $os_release"
+      error "repair the OS identity file before deploying"
+      return 1
+    fi
+    case "$key" in
+      ID)
+        id_count=$((id_count + 1))
+        case "$value" in cachyos|'"cachyos"'|"'cachyos'") id=cachyos ;; *) id="$value" ;; esac
+        ;;
+      ID_LIKE)
+        id_like_count=$((id_like_count + 1))
+        case "$value" in arch|'"arch"'|"'arch'") id_like=arch ;; *) id_like="$value" ;; esac
+        ;;
+    esac
+  done < "$os_release"
+  if [ "$id_count" -ne 1 ] || [ "$id_like_count" -ne 1 ] || [ "$id" != cachyos ] || [ "$id_like" != arch ]; then
+    error "CachyOS preflight: expected ID=cachyos and ID_LIKE=arch in $os_release"
+    error "deploy only to the supported CachyOS target; do not bypass this identity check"
+    return 1
+  fi
+  if ! bin_exists pacman; then
+    error "CachyOS preflight: pacman is required"
+    error "repair the base CachyOS package manager before deploying"
+    return 1
+  fi
+  if ! pacman --version >/dev/null 2>&1; then
+    error "CachyOS preflight: pacman is present but not runnable"
+    error "repair the base CachyOS package manager before deploying"
+    return 1
+  fi
+}
 
-SHIM_FUNCTIONS: tuple[str, ...] = (
-    "detect_os",
-    "detect_arch",
-    "bin_exists",
-    "pkg_installed",
-    "install_package",
-    "install_packages",
-    "remove_packages",
-    "install_cask",
-    "add_repo",
-    "deployment_preflight",
-    "update_pkg_index",
-    "service_enable",
-    "service_mask",
-    "bin_version_matches",
-    "sha256_file",
-    "download_bin",
-    "download_bin_sha256",
-    "download_script_sha256",
-    "download_tar_bin",
-    "download_tar_bin_sha256",
-    "link_file",
-    "ensure_dir",
-    "install_config",
-    "install_json_patch",
-    "install_config_dir",
-    "load_secrets",
-    "install_config_template",
-    "install_script",
-    "download_script",
-    "download_tar",
-    "log",
-    "error",
-    "ask",
-    "component_begin",
-    "component_end",
-    "install_npm_global",
-)
+pkg_installed() {
+  pacman -Qq -- "$1" >/dev/null 2>&1
+}
 
-_SHARED = r"""
+install_package() {
+  if pkg_installed "$1"; then
+    return 0
+  fi
+  sudo pacman -S --needed --noconfirm -- "$1"
+}
+
+install_packages() {
+  local p
+  local missing=()
+  for p in "$@"; do
+    if ! pkg_installed "$p"; then
+      missing+=("$p")
+    fi
+  done
+  [ "${#missing[@]}" -eq 0 ] && return 0
+  sudo pacman -S --needed --noconfirm -- "${missing[@]}"
+}
+
+remove_packages() {
+  if [ "$#" -eq 0 ]; then
+    error "remove_packages: require at least one package"
+    return 1
+  fi
+  local p
+  local installed=()
+  for p in "$@"; do
+    if pkg_installed "$p"; then
+      installed+=("$p")
+    fi
+  done
+  [ "${#installed[@]}" -eq 0 ] && return 0
+  sudo pacman -R --noconfirm -- "${installed[@]}"
+}
+
+install_cask() {
+  error "install_cask: macOS only"
+  return 1
+}
+
+add_repo() {
+  error "add_repo: unsupported on CachyOS; configure repositories outside dotgen"
+  return 1
+}
+
+update_pkg_index() {
+  sudo pacman -Syu --noconfirm
+}
+
+service_enable() {
+  sudo systemctl enable --now "$1"
+}
+
+service_mask() {
+  if [ "$#" -eq 0 ]; then
+    error "service_mask: require at least one unit"
+    return 1
+  fi
+  local unit state
+  sudo systemctl mask --now "$@" || return 1
+  for unit in "$@"; do
+    state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+    if [ "$state" != masked ] || systemctl is-active --quiet "$unit"; then
+      error "service_mask: failed to mask and stop $unit"
+      return 1
+    fi
+  done
+}
+
 detect_arch() {
   uname -m
 }
@@ -720,415 +807,3 @@ component_end() {
   rm -f "$_COMP_LOG"
   unset _COMP_LOG
 }
-"""
-
-_SHIM_DEBIAN = (
-    r"""
-detect_os() {
-  echo debian
-}
-
-deployment_preflight() {
-  return 0
-}
-
-pkg_installed() {
-  dpkg -s "$1" >/dev/null 2>&1
-}
-
-install_package() {
-  if pkg_installed "$1"; then
-    return 0
-  fi
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
-}
-
-install_packages() {
-  local p
-  for p in "$@"; do
-    install_package "$p"
-  done
-}
-
-remove_packages() {
-  if [ "$#" -eq 0 ]; then
-    error "remove_packages: require at least one package"
-    return 1
-  fi
-  local p installed=()
-  for p in "$@"; do
-    if pkg_installed "$p"; then
-      installed+=("$p")
-    fi
-  done
-  [ "${#installed[@]}" -eq 0 ] && return 0
-  sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y "${installed[@]}"
-}
-
-install_cask() {
-  error "install_cask: macOS only"
-  return 1
-}
-
-add_repo() {
-  local kind="${1:-}"
-  case "$kind" in
-    apt)
-      local id="${2:-}" src="${3:-}" key="${4:-}"
-      sudo install -d -m 0755 /etc/apt/keyrings
-      if [ -n "$key" ]; then
-        curl -fsSL "$key" | sudo gpg --dearmor --yes -o "/etc/apt/keyrings/$id.gpg"
-      fi
-      if [[ "$src" == http*://* ]]; then
-        curl -fsSL "$src" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
-      else
-        echo "$src" | sed "s|\[signed-by=[^]]*\]|\[signed-by=/etc/apt/keyrings/$id.gpg\]|" | sudo tee "/etc/apt/sources.list.d/$id.list" >/dev/null
-      fi
-      ;;
-    apt-deb822)
-      (
-        if [ "$#" -ne 4 ]; then
-          error "add_repo apt-deb822: require id, source content, and armored key URL"
-          return 1
-        fi
-        local id="$2" source="$3" key_url="$4" key_target source_target legacy_key legacy_source
-        local key_tmp source_tmp gpg_home key_stage="" source_stage="" validation status
-        if ! [[ "$id" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
-          error "add_repo apt-deb822: invalid repository id '$id'"
-          return 1
-        fi
-        key_target="/etc/apt/keyrings/$id.asc"
-        source_target="/etc/apt/sources.list.d/$id.sources"
-        legacy_key="/etc/apt/keyrings/$id.gpg"
-        legacy_source="/etc/apt/sources.list.d/$id.list"
-        while [[ "$source" == *$'\n' ]]; do source="${source%$'\n'}"; done
-        if [ -z "$source" ] || [[ "$source" == *$'\r'* ]]; then
-          error "add_repo apt-deb822: invalid source content; remediate the repository stanza"
-          return 1
-        fi
-        validation="$(printf '%s\n' "$source" | awk -v signed_by="$key_target" '
-          /^[[:space:]]*$/ { fail="blank line"; exit 1 }
-          /^[[:space:]]/ { fail="continuation line"; exit 1 }
-          !/^[A-Za-z][A-Za-z0-9-]*: [^[:space:]].*$/ { fail="malformed field line"; exit 1 }
-          {
-            split($0, pair, ": "); field=pair[1]; value=substr($0, length(field) + 3)
-            if (seen[field]++) { fail="duplicate field " field; exit 1 }
-            values[field]=value
-          }
-          END {
-            if (fail) { print fail > "/dev/stderr"; exit 1 }
-            split("Types URIs Suites Components Architectures Signed-By", required, " ")
-            for (i in required) if (!(required[i] in values)) { print "missing " required[i] > "/dev/stderr"; exit 1 }
-            if (values["Signed-By"] != signed_by) { print "Signed-By must be " signed_by > "/dev/stderr"; exit 1 }
-          }
-        ' 2>&1)" || { error "add_repo apt-deb822: $validation; remediate the repository stanza"; return 1; }
-        for target in "$key_target" "$source_target"; do
-          if [ -e "$target" ] || [ -L "$target" ]; then
-            if [ -L "$target" ] || [ ! -f "$target" ]; then
-              error "add_repo apt-deb822: unsafe target $target; remediate it manually"
-              return 1
-            fi
-          fi
-        done
-        for target in "$legacy_key" "$legacy_source"; do
-          if [ -e "$target" ] || [ -L "$target" ]; then
-            error "add_repo apt-deb822: legacy collision at $target; remediate it manually"
-            return 1
-          fi
-        done
-        key_tmp=""; source_tmp=""; gpg_home=""
-        trap 'status=$?
-set +e
-[ -z "$key_tmp" ] || rm -rf "$key_tmp"
-[ -z "$source_tmp" ] || rm -rf "$source_tmp"
-[ -z "$gpg_home" ] || rm -rf "$gpg_home"
-[ -z "$key_stage" ] || sudo rm -f "$key_stage"
-[ -z "$source_stage" ] || sudo rm -f "$source_stage"
-exit "$status"' EXIT
-        key_tmp="$(mktemp)" || return 1
-        source_tmp="$(mktemp)" || return 1
-        gpg_home="$(mktemp -d)" || return 1
-        chmod 0700 "$gpg_home" || return 1
-        printf '%s\n' "$source" > "$source_tmp"
-        if ! curl -fsSL "$key_url" -o "$key_tmp"; then
-          error "add_repo apt-deb822: failed to download key; remediate the key URL"
-          return 1
-        fi
-        if ! grep -q -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' "$key_tmp" || ! GNUPGHOME="$gpg_home" gpg --batch --show-keys "$key_tmp" >/dev/null; then
-          error "add_repo apt-deb822: invalid armored key; remediate the key URL"
-          return 1
-        fi
-        local key_changed=1 source_changed=1
-        [ -f "$key_target" ] && cmp -s "$key_tmp" "$key_target" && key_changed=0
-        [ -f "$source_target" ] && cmp -s "$source_tmp" "$source_target" && source_changed=0
-        [ "$key_changed" -eq 0 ] && [ "$source_changed" -eq 0 ] && return 0
-        sudo install -d -m 0755 /etc/apt/keyrings /etc/apt/sources.list.d || return 1
-        if [ "$key_changed" -eq 1 ]; then
-          key_stage="$(sudo mktemp "/etc/apt/keyrings/.${id}.asc.XXXXXX")" || return 1
-          sudo install -m 0644 "$key_tmp" "$key_stage" && sudo mv -f "$key_stage" "$key_target" || return 1
-          key_stage=""
-        fi
-        if [ "$source_changed" -eq 1 ]; then
-          source_stage="$(sudo mktemp "/etc/apt/sources.list.d/.${id}.sources.XXXXXX")" || return 1
-          sudo install -m 0644 "$source_tmp" "$source_stage" && sudo mv -f "$source_stage" "$source_target" || return 1
-          source_stage=""
-        fi
-      )
-      ;;
-    *)
-      error "add_repo: unsupported kind '$kind' on debian"
-      return 1
-      ;;
-  esac
-}
-
-update_pkg_index() {
-  sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-}
-
-service_enable() {
-  sudo systemctl enable --now "$1"
-}
-
-service_mask() {
-  if [ "$#" -eq 0 ]; then
-    error "service_mask: require at least one unit"
-    return 1
-  fi
-  local unit state
-  sudo systemctl mask --now "$@" || return 1
-  for unit in "$@"; do
-    state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
-    if [ "$state" != masked ] || systemctl is-active --quiet "$unit"; then
-      error "service_mask: failed to mask and stop $unit"
-      return 1
-    fi
-  done
-}
-"""
-    + _SHARED
-)
-
-_SHIM_MACOS = (
-    r"""
-detect_os() {
-  echo macos
-}
-
-deployment_preflight() {
-  return 0
-}
-
-pkg_installed() {
-  brew list --versions "$1" >/dev/null 2>&1
-}
-
-install_package() {
-  pkg_installed "$1" || brew install "$1"
-}
-
-install_packages() {
-  local p
-  for p in "$@"; do
-    install_package "$p"
-  done
-}
-
-remove_packages() {
-  error "remove_packages: debian only"
-  return 1
-}
-
-install_cask() {
-  if brew list --cask --versions "$1" >/dev/null 2>&1; then
-    return 0
-  fi
-  brew install --cask "$1"
-}
-
-add_repo() {
-  local kind="${1:-}" id="${2:-}" url="${3:-}"
-  case "$kind" in
-    tap)
-      if [ -n "$url" ]; then
-        brew tap "$id" "$url"
-      else
-        brew tap "$id"
-      fi
-      ;;
-    *)
-      error "add_repo: unsupported kind '$kind' on macos"
-      return 1
-      ;;
-  esac
-}
-
-
-update_pkg_index() {
-  if ! bin_exists gh && git config --global --get-all credential.https://github.com.helper 2>/dev/null | grep -Fq "gh auth git-credential"; then
-    HOMEBREW_NO_AUTO_UPDATE=1 brew install gh
-  fi
-  brew update
-}
-
-service_enable() {
-  return 0
-}
-
-service_mask() {
-  error "service_mask: debian only"
-  return 1
-}
-"""
-    + _SHARED
-)
-
-_SHIM_CACHYOS = (
-    r"""
-detect_os() {
-  echo cachyos
-}
-
-deployment_preflight() {
-  local os_release=/etc/os-release line key value id="" id_like=""
-  local id_count=0 id_like_count=0
-  if [ ! -r "$os_release" ] || [ ! -f "$os_release" ]; then
-    error "CachyOS preflight: missing or unreadable $os_release"
-    error "deploy only to a current CachyOS installation (ID=cachyos, ID_LIKE=arch)"
-    return 1
-  fi
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      ""|\#*) continue ;;
-      *=*) ;;
-      *)
-        error "CachyOS preflight: malformed $os_release"
-        error "repair the OS identity file before deploying"
-        return 1
-        ;;
-    esac
-    key="${line%%=*}"
-    value="${line#*=}"
-    if ! [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
-      error "CachyOS preflight: malformed key in $os_release"
-      error "repair the OS identity file before deploying"
-      return 1
-    fi
-    case "$key" in
-      ID)
-        id_count=$((id_count + 1))
-        case "$value" in cachyos|'"cachyos"'|"'cachyos'") id=cachyos ;; *) id="$value" ;; esac
-        ;;
-      ID_LIKE)
-        id_like_count=$((id_like_count + 1))
-        case "$value" in arch|'"arch"'|"'arch'") id_like=arch ;; *) id_like="$value" ;; esac
-        ;;
-    esac
-  done < "$os_release"
-  if [ "$id_count" -ne 1 ] || [ "$id_like_count" -ne 1 ] || [ "$id" != cachyos ] || [ "$id_like" != arch ]; then
-    error "CachyOS preflight: expected ID=cachyos and ID_LIKE=arch in $os_release"
-    error "deploy only to the supported CachyOS target; do not bypass this identity check"
-    return 1
-  fi
-  if ! bin_exists pacman; then
-    error "CachyOS preflight: pacman is required"
-    error "repair the base CachyOS package manager before deploying"
-    return 1
-  fi
-  if ! pacman --version >/dev/null 2>&1; then
-    error "CachyOS preflight: pacman is present but not runnable"
-    error "repair the base CachyOS package manager before deploying"
-    return 1
-  fi
-}
-
-pkg_installed() {
-  pacman -Qq -- "$1" >/dev/null 2>&1
-}
-
-install_package() {
-  if pkg_installed "$1"; then
-    return 0
-  fi
-  sudo pacman -S --needed --noconfirm -- "$1"
-}
-
-install_packages() {
-  local p
-  local missing=()
-  for p in "$@"; do
-    if ! pkg_installed "$p"; then
-      missing+=("$p")
-    fi
-  done
-  [ "${#missing[@]}" -eq 0 ] && return 0
-  sudo pacman -S --needed --noconfirm -- "${missing[@]}"
-}
-
-remove_packages() {
-  if [ "$#" -eq 0 ]; then
-    error "remove_packages: require at least one package"
-    return 1
-  fi
-  local p
-  local installed=()
-  for p in "$@"; do
-    if pkg_installed "$p"; then
-      installed+=("$p")
-    fi
-  done
-  [ "${#installed[@]}" -eq 0 ] && return 0
-  sudo pacman -R --noconfirm -- "${installed[@]}"
-}
-
-install_cask() {
-  error "install_cask: macOS only"
-  return 1
-}
-
-add_repo() {
-  error "add_repo: unsupported on CachyOS; configure repositories outside dotgen"
-  return 1
-}
-
-update_pkg_index() {
-  sudo pacman -Syu --noconfirm
-}
-
-service_enable() {
-  sudo systemctl enable --now "$1"
-}
-
-service_mask() {
-  if [ "$#" -eq 0 ]; then
-    error "service_mask: require at least one unit"
-    return 1
-  fi
-  local unit state
-  sudo systemctl mask --now "$@" || return 1
-  for unit in "$@"; do
-    state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
-    if [ "$state" != masked ] || systemctl is-active --quiet "$unit"; then
-      error "service_mask: failed to mask and stop $unit"
-      return 1
-    fi
-  done
-}
-"""
-    + _SHARED
-)
-
-_SHIMS: dict[OS, str] = {
-    OS.CACHYOS: _SHIM_CACHYOS,
-    OS.DEBIAN: _SHIM_DEBIAN,
-    OS.MACOS: _SHIM_MACOS,
-}
-
-
-@dataclass(frozen=True)
-class OSShim:
-    os: OS
-
-    def render(self) -> str:
-        header = f"# os_shim.sh — {self.os.value}\n"
-        return header + _SHIMS[self.os].lstrip("\n")

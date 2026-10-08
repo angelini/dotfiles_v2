@@ -4,7 +4,7 @@ from typing import Any
 
 from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
-from dotgen.types import OS
+from dotgen.types import OS, EnvironmentRole
 
 _SETTINGS: dict[str, Any] = {
     "cli_default_open_behavior": "new_window",
@@ -107,22 +107,39 @@ _SETTINGS: dict[str, Any] = {
     },
 }
 
-_KEYMAP: list[dict[str, Any]] = [
-    {
-        "context": "Workspace",
-        "bindings": {"cmd-w": "editor::ToggleFocus"},
-    },
-    {"unbind": {"alt-cmd-i": "dev::ToggleInspector"}},
-]
-
-_SETTINGS_JSON = json.dumps(_SETTINGS, indent=2) + "\n"
-_KEYMAP_JSON = json.dumps(_KEYMAP, indent=2) + "\n"
-
-_SETUP_BY_OS: dict[OS, str] = {
-    OS.MACOS: "install_cask zed\n",
+_KEYMAP_BY_OS: dict[OS, list[dict[str, Any]]] = {
+    OS.CACHYOS: [
+        {
+            "context": "Workspace",
+            "bindings": {"super-w": "editor::ToggleFocus"},
+        },
+        {"unbind": {"alt-super-i": "dev::ToggleInspector"}},
+    ],
+    OS.MACOS: [
+        {
+            "context": "Workspace",
+            "bindings": {"cmd-w": "editor::ToggleFocus"},
+        },
+        {"unbind": {"alt-cmd-i": "dev::ToggleInspector"}},
+    ],
 }
 
-_SETUP_TAIL = 'install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\ninstall_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'
+_SETTINGS_JSON = json.dumps(_SETTINGS, indent=2) + "\n"
+_KEYMAP_JSON_BY_OS = {os: json.dumps(keymap, indent=2) + "\n" for os, keymap in _KEYMAP_BY_OS.items()}
+
+_SETUP_BY_OS: dict[OS, str] = {
+    OS.CACHYOS: (
+        "install_package zed\n"
+        'if ! bin_exists zeditor; then error "Zed package installed without zeditor CLI"; exit 1; fi\n'
+        'install_config "$DIR/config/zed/settings.json" "${XDG_CONFIG_HOME:-$HOME/.config}/zed/settings.json"\n'
+        'install_config "$DIR/config/zed/keymap.json" "${XDG_CONFIG_HOME:-$HOME/.config}/zed/keymap.json"\n'
+    ),
+    OS.MACOS: (
+        "install_cask zed\n"
+        'install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\n'
+        'install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -130,14 +147,13 @@ class Zed:
     name: str = "zed"
 
     def applies_to(self, env: Environment) -> bool:
-        return env.os in _SETUP_BY_OS
+        return env.role is EnvironmentRole.WORKSTATION and env.os in _SETUP_BY_OS
 
     def render(self, env: Environment) -> Fragment:
-        body = _SETUP_BY_OS[env.os] + _SETUP_TAIL
         return Fragment(
-            setup=body,
+            setup=_SETUP_BY_OS[env.os],
             configs=(
                 ConfigFile(dest="zed/settings.json", content=_SETTINGS_JSON),
-                ConfigFile(dest="zed/keymap.json", content=_KEYMAP_JSON),
+                ConfigFile(dest="zed/keymap.json", content=_KEYMAP_JSON_BY_OS[env.os]),
             ),
         )

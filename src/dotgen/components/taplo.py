@@ -7,14 +7,17 @@ from dotgen.types import OS
 _VERSION = "0.10.0"
 _RELEASE_BASE = f"https://github.com/tamasfe/taplo/releases/download/{_VERSION}"
 _ASSET_OS: dict[OS, str] = {
+    OS.CACHYOS: "linux",
     OS.DEBIAN: "linux",
     OS.MACOS: "darwin",
 }
+_SHA256_LINUX = {
+    "x86_64": "dad2faf6377d2daa4f4fabf459fe7ccfb98a5448f0d4bca8270ca9acb0409bfe",
+    "aarch64": "82df9d765856d0d94d2147cc0912016e4a2bfb96cbe947347b7cc04c7f4431ba",
+}
 _SHA256: dict[OS, dict[str, str]] = {
-    OS.DEBIAN: {
-        "x86_64": "dad2faf6377d2daa4f4fabf459fe7ccfb98a5448f0d4bca8270ca9acb0409bfe",
-        "aarch64": "82df9d765856d0d94d2147cc0912016e4a2bfb96cbe947347b7cc04c7f4431ba",
-    },
+    OS.CACHYOS: _SHA256_LINUX,
+    OS.DEBIAN: _SHA256_LINUX,
     OS.MACOS: {
         "x86_64": "9fd7a2872ea154df61a2c7e9ca69fc19ac08e29f2e2dc2f866e299bdc789c1a1",
         "aarch64": "13cd257c1cadb003b40daf82b3fb1451e012e2463b760bdd33df07a07970c604",
@@ -69,7 +72,7 @@ class Taplo:
     name: str = "taplo"
 
     def applies_to(self, env: Environment) -> bool:
-        return env.name in {"debian", "macos"}
+        return env.name != "debian-docker" and env.os in _ASSET_OS
 
     def render(self, env: Environment) -> Fragment:
         return Fragment(setup=_setup(env.os))

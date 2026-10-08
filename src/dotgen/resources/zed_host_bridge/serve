@@ -16,4 +16,6 @@ if [ ! -x "$node_bin" ] || [ ! -f "$bridge" ]; then
   printf 'zed-host-bridge: managed runtime or receiver is missing\n' >&2
   exit 1
 fi
+export ZED_HOST_BRIDGE_CONFIG="${ZED_HOST_BRIDGE_CONFIG:-$HOME/.config/dotgen/zed-host-bridge.json}"
+export ZED_HOST_BRIDGE_SOCKET="${ZED_HOST_BRIDGE_SOCKET:-$HOME/Library/Caches/dotgen/zed-host-bridge.sock}"
 exec "$node_bin" "$bridge" serve

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -49,6 +50,7 @@ from dotgen.environment import Environment
 from dotgen.fragment import ConfigFile, Fragment
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import _vendor_dir  # pyright: ignore[reportPrivateUsage]
+from dotgen.types import OS, EnvironmentRole, PkgMgr
 from dotgen.vendor import BUILD_ARTIFACTS, GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
 
 
@@ -86,8 +88,7 @@ def test_component_render_returns_fragment(env: Environment, cls: type[Component
 
 @pytest.mark.parametrize("cls", [Rust, Taplo, Marksman, Terraform, Zig, NodeFnm, GoLang, Gcloud, Aws, Doppler, Fonts, Zed, OrbStack, PiAgent])
 def test_addon_component_renders_for_supported_oses(cls: type[Component]) -> None:
-    for env_name in ("macos", "debian", "debian-docker"):
-        env = ENVIRONMENTS[env_name]
+    for env in ENVIRONMENTS.values():
         comp = cls()
         if comp.applies_to(env):
             assert isinstance(comp.render(env), Fragment)
@@ -386,11 +387,15 @@ def test_git_setup_ignores_local_agent_state() -> None:
 def test_fonts_per_os_packages() -> None:
     macos = Fonts().render(ENVIRONMENTS["macos"]).setup
     debian = Fonts().render(ENVIRONMENTS["debian"]).setup
+    cachyos = Fonts().render(ENVIRONMENTS["cachyos"]).setup
     assert 'if [ ! -f "$HOME/Library/Fonts/Ubuntu-Regular.ttf" ]' in macos
     assert 'if [ ! -f "$HOME/Library/Fonts/UbuntuMonoNerdFont-Regular.ttf" ]' in macos
     assert "font-ubuntu" in macos and "font-ubuntu-mono-nerd-font" in macos
     assert "fontconfig" in debian
+    assert cachyos == "install_packages fontconfig ttf-ubuntu-font-family ttf-ubuntu-mono-nerd\n"
+    assert "curl" not in cachyos and "fc-cache" not in cachyos
     assert Fonts().applies_to(ENVIRONMENTS["debian"])
+    assert Fonts().applies_to(ENVIRONMENTS["cachyos"])
 
 
 def test_git_signing_uploads_via_gh() -> None:
@@ -417,9 +422,15 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
     herdr = Herdr()
     assert herdr.applies_to(ENVIRONMENTS["debian"])
     assert herdr.applies_to(ENVIRONMENTS["macos"])
+    assert herdr.applies_to(ENVIRONMENTS["cachyos"])
     assert not herdr.applies_to(ENVIRONMENTS["debian-docker"])
 
     expected_assets = {
+        "cachyos": (
+            "herdr-linux-${arch}",
+            "976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4",
+            "f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d",
+        ),
         "debian": (
             "herdr-linux-${arch}",
             "976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4",
@@ -467,6 +478,8 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
 
     macos = herdr.render(ENVIRONMENTS["macos"])
     macos_configs = {config.dest: config for config in macos.configs}
+    cachyos = herdr.render(ENVIRONMENTS["cachyos"])
+    cachyos_configs = {config.dest: config for config in cachyos.configs}
     assert set(macos_configs) == {
         "herdr/herd-local",
         "herdr/herd-remote",
@@ -480,16 +493,21 @@ def test_herdr_is_pinned_managed_and_excludes_docker() -> None:
     assert 'name = "rose-pine-dawn"' in macos_configs["herdr/remote.toml"].content
     assert "[remote]\nmanage_ssh_config = true" in macos_configs["herdr/remote.toml"].content
     assert "herdr/config.toml" not in macos_configs and "herdr/herd-agent" not in macos_configs
+    assert cachyos_configs == macos_configs
+    assert "herdr/config.toml" not in cachyos_configs
     for source, destination in (
         ("local.toml", "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"),
         ("remote.toml", "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"),
     ):
         assert f'install_config "$DIR/config/herdr/{source}" "{destination}"' in macos.setup
+        assert f'install_config "$DIR/config/herdr/{source}" "{destination}"' in cachyos.setup
     for launcher in ("herd-local", "herd-remote"):
-        assert f'install -m 0755 "$DIR/config/herdr/{launcher}" "$HOME/.local/bin/{launcher}"' in macos.setup
+        install = f'install -m 0755 "$DIR/config/herdr/{launcher}" "$HOME/.local/bin/{launcher}"'
+        assert install in macos.setup
+        assert install in cachyos.setup
     assert "supacode" not in macos.setup
 
-    for env_name in ("debian", "macos"):
+    for env_name in ("cachyos", "debian", "macos"):
         assert [component.name for component in ENVIRONMENTS[env_name].components].count("herdr") == 1
     assert "herdr" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
 
@@ -610,6 +628,7 @@ DIR={shlex.quote(str(tmp_path / "bundle"))}
     assert not plugin_install.exists()
 
 
+@pytest.mark.parametrize("env_name", ["macos", "cachyos"])
 @pytest.mark.parametrize(
     ("launcher", "args", "expected_args", "config_name"),
     [
@@ -618,8 +637,8 @@ DIR={shlex.quote(str(tmp_path / "bundle"))}
         ("herd-remote", ["workbox"], ["--remote", "workbox"], "remote.toml"),
     ],
 )
-def test_herdr_launchers_execute_managed_binary(tmp_path: Path, launcher: str, args: list[str], expected_args: list[str], config_name: str) -> None:
-    config = next(c for c in Herdr().render(ENVIRONMENTS["macos"]).configs if c.dest == f"herdr/{launcher}")
+def test_herdr_launchers_execute_managed_binary(env_name: str, tmp_path: Path, launcher: str, args: list[str], expected_args: list[str], config_name: str) -> None:
+    config = next(c for c in Herdr().render(ENVIRONMENTS[env_name]).configs if c.dest == f"herdr/{launcher}")
     home = tmp_path / "home"
     bin_dir = home / ".local/bin"
     bin_dir.mkdir(parents=True)
@@ -647,6 +666,7 @@ def test_herdr_launchers_execute_managed_binary(tmp_path: Path, launcher: str, a
     assert config_file.read_text().strip() == str(xdg_config / "herdr" / config_name)
 
 
+@pytest.mark.parametrize("env_name", ["macos", "cachyos"])
 @pytest.mark.parametrize(
     ("launcher", "args", "usage"),
     [
@@ -659,8 +679,8 @@ def test_herdr_launchers_execute_managed_binary(tmp_path: Path, launcher: str, a
         ("herd-remote", ["one", "two"], "usage: herd-remote <ssh-config-host>"),
     ],
 )
-def test_herdr_launchers_reject_invalid_arguments(tmp_path: Path, launcher: str, args: list[str], usage: str) -> None:
-    config = next(c for c in Herdr().render(ENVIRONMENTS["macos"]).configs if c.dest == f"herdr/{launcher}")
+def test_herdr_launchers_reject_invalid_arguments(env_name: str, tmp_path: Path, launcher: str, args: list[str], usage: str) -> None:
+    config = next(c for c in Herdr().render(ENVIRONMENTS[env_name]).configs if c.dest == f"herdr/{launcher}")
     script = tmp_path / launcher
     script.write_text(config.content)
     script.chmod(config.mode)
@@ -671,10 +691,11 @@ def test_herdr_launchers_reject_invalid_arguments(tmp_path: Path, launcher: str,
     assert usage in result.stderr
 
 
+@pytest.mark.parametrize("env_name", ["macos", "cachyos"])
 @pytest.mark.parametrize("launcher", ["herd-local", "herd-remote"])
 @pytest.mark.parametrize("binary_kind", ["missing", "directory", "non-executable"])
-def test_herdr_launchers_reject_invalid_managed_binary(tmp_path: Path, launcher: str, binary_kind: str) -> None:
-    config = next(c for c in Herdr().render(ENVIRONMENTS["macos"]).configs if c.dest == f"herdr/{launcher}")
+def test_herdr_launchers_reject_invalid_managed_binary(env_name: str, tmp_path: Path, launcher: str, binary_kind: str) -> None:
+    config = next(c for c in Herdr().render(ENVIRONMENTS[env_name]).configs if c.dest == f"herdr/{launcher}")
     home = tmp_path / "home"
     binary = home / ".local/bin/herdr"
     binary.parent.mkdir(parents=True)
@@ -852,6 +873,112 @@ def test_environment_component_distribution() -> None:
     assert "node_fnm" in {c.name for c in ENVIRONMENTS["debian-docker"].components}
 
 
+def test_cachyos_core_profile_is_explicit_ordered_and_renderable() -> None:
+    cachyos = ENVIRONMENTS["cachyos"]
+    expected = [
+        "bash_base",
+        "core_utils",
+        "fzf_bash_history",
+        "herdr",
+        "helix",
+        "marksman",
+        "starship",
+        "shellcheck",
+        "zoxide",
+        "kubectl",
+        "uv",
+        "python_tools",
+        "claude_code",
+        "gh",
+        "git_signing",
+        "rust",
+        "taplo",
+        "terraform",
+        "zig",
+        "node_fnm",
+        "npm_config",
+        "steps",
+        "pi_agent",
+        "postgres",
+        "go_lang",
+        "gcloud",
+        "aws",
+        "doppler",
+        "fonts",
+        "ghostty",
+        "zed",
+        "docker",
+        "zed_host_bridge",
+        "git_setup",
+        "dotfiles_deploy",
+    ]
+
+    assert cachyos.os is OS.CACHYOS
+    assert cachyos.pkg_mgr is PkgMgr.PACMAN
+    assert cachyos.role is EnvironmentRole.WORKSTATION
+    assert [component.name for component in cachyos.components] == expected
+    assert len(expected) == len(set(expected))
+    assert {"fonts", "ghostty", "zed"}.issubset(expected)
+    assert {"docker", "zed_host_bridge"}.issubset(expected)
+    assert "orbstack" not in expected
+    for component in cachyos.components:
+        assert component.applies_to(cachyos), component.name
+        assert isinstance(component.render(cachyos), Fragment), component.name
+
+
+def test_cachyos_component_sources_and_linux_assets() -> None:
+    cachyos = ENVIRONMENTS["cachyos"]
+    core_setup = CoreUtils().render(cachyos).setup
+    assert " fd " in core_setup
+    assert " shelly" in core_setup
+    assert "fd-find" not in core_setup
+    assert Gh().render(cachyos).setup.startswith("install_package github-cli\n")
+    gcloud = Gcloud().render(cachyos)
+    assert "google-cloud-cli_587.0.0.orig_${asset_arch}.tar.gz" in gcloud.setup
+    assert "asset_arch=aarch64" in gcloud.setup
+    assert "6b566621ce59a900d520a30d505b9cef1c2bdd72826103175727ac6db1702101" in gcloud.setup
+    assert ".dotgen-archive-sha256" in gcloud.setup
+    assert "remove_packages google-cloud-cli" in gcloud.setup
+    assert "$HOME/.local/share/google-cloud-sdk/path.bash.inc" in gcloud.bashrc
+    doppler = Doppler().render(cachyos).setup
+    assert "doppler_3.76.5_linux_${doppler_arch}.tar.gz" in doppler
+    assert "1b2f412d984920d665daf233ab6c15b364df9339b5c5b5224d5e8ee4e0a70154" in doppler
+    assert "remove_packages doppler-cli-bin" in doppler
+    assert Aws().render(cachyos).setup.startswith("install_package aws-cli-v2\n")
+    assert Postgres().render(cachyos).setup == "install_package postgresql\n"
+    assert Terraform().render(cachyos).setup.startswith("install_package terraform\n")
+    assert "install_package xz" in Helix().render(cachyos).setup
+    assert "install_package xz" in Zig().render(cachyos).setup
+
+    for component in (Marksman(), Taplo(), Zig(), Herdr()):
+        cachyos_setup = component.render(cachyos).setup
+        debian_setup = component.render(ENVIRONMENTS["debian"]).setup
+        for digest in re.findall(r"\b[0-9a-f]{64}\b", cachyos_setup):
+            assert digest in debian_setup
+        assert "linux" in cachyos_setup.lower()
+
+
+def test_cachyos_pi_is_linux_only_and_herdr_is_workstation_profile() -> None:
+    cachyos = ENVIRONMENTS["cachyos"]
+    pi = PiAgent().render(cachyos)
+    assert pi.setup.startswith("install_package bubblewrap\n")
+    assert '"$HOME/.local/bin/herdr" integration install pi' in pi.setup
+    assert "pi-macos.sb" not in pi.setup
+    assert "pi/sandbox/pi-macos.sb" not in {config.dest for config in pi.configs}
+    sandbox = next(config.content for config in pi.configs if config.dest == "pi/sandbox/pi-sandbox.sh")
+    assert "docker.sock" not in sandbox
+
+    herdr = Herdr().render(cachyos)
+    assert {config.dest for config in herdr.configs} == {
+        "herdr/herd-local",
+        "herdr/herd-remote",
+        "herdr/local.toml",
+        "herdr/remote.toml",
+    }
+    assert "herd-local" in herdr.setup
+    assert "herd-remote" in herdr.setup
+
+
 def test_doppler_is_full_only_and_renders_per_os() -> None:
     doppler = Doppler()
     assert doppler.applies_to(ENVIRONMENTS["debian"])
@@ -876,15 +1003,30 @@ def test_doppler_is_full_only_and_renders_per_os() -> None:
     assert "install_package dopplerhq/cli/doppler" in macos
 
 
-def test_docker_is_full_debian_only_and_ordered_before_final_deployers() -> None:
-    assert Docker().applies_to(ENVIRONMENTS["debian"])
-    assert not Docker().applies_to(ENVIRONMENTS["debian-docker"])
-    assert not Docker().applies_to(ENVIRONMENTS["macos"])
-    for name in ("debian-docker", "macos"):
-        assert "docker" not in [component.name for component in ENVIRONMENTS[name].components]
-    names = [component.name for component in ENVIRONMENTS["debian"].components]
-    assert names.count("docker") == 1
-    assert names[-4:] == ["docker", "zed_host_bridge", "git_setup", "dotfiles_deploy"]
+def test_container_provider_is_explicit_and_ordered_before_final_deployers() -> None:
+    docker = Docker()
+    assert docker.applies_to(ENVIRONMENTS["debian"])
+    assert docker.applies_to(ENVIRONMENTS["cachyos"])
+    assert not docker.applies_to(ENVIRONMENTS["debian-docker"])
+    assert not docker.applies_to(ENVIRONMENTS["macos"])
+    assert "docker" not in [component.name for component in ENVIRONMENTS["debian-docker"].components]
+
+    providers = {"debian": "docker", "cachyos": "docker", "macos": "orbstack"}
+    for env_name, provider in providers.items():
+        names = [component.name for component in ENVIRONMENTS[env_name].components]
+        assert names.count(provider) == 1
+        assert len({"docker", "orbstack"} & set(names)) == 1
+        assert names.index(provider) < names.index("git_setup") < names.index("dotfiles_deploy")
+    assert [component.name for component in ENVIRONMENTS["debian"].components][-4:] == ["docker", "zed_host_bridge", "git_setup", "dotfiles_deploy"]
+    assert [component.name for component in ENVIRONMENTS["cachyos"].components][-4:] == [
+        "docker",
+        "zed_host_bridge",
+        "git_setup",
+        "dotfiles_deploy",
+    ]
+
+    with pytest.raises(ValueError, match="unsupported"):
+        docker.render(ENVIRONMENTS["macos"])
 
 
 def test_docker_render_contract() -> None:
@@ -923,6 +1065,32 @@ def test_docker_render_contract() -> None:
         assert forbidden not in setup
     sandbox = next(c for c in PiAgent().render(ENVIRONMENTS["debian"]).configs if c.dest == "pi/sandbox/pi-sandbox.sh").content
     assert "docker.sock" not in sandbox
+    assert '--bind "$runtime_dir"' not in sandbox
+    assert "DOCKER_HOST" not in sandbox and "DOCKER_CONTEXT" not in sandbox
+
+    cachyos_fragment = Docker().render(ENVIRONMENTS["cachyos"])
+    cachyos = cachyos_fragment.setup
+    for token in (
+        "install_packages docker docker-compose docker-buildx rootlesskit slirp4netns fuse-overlayfs shadow iptables",
+        "download_script_sha256 dockerd-rootless.sh",
+        "remove_packages docker-rootless-extras",
+        "service_mask docker.service docker.socket",
+        "dockerd-rootless.sh",
+        "systemctl --user enable --now docker.service",
+        "context create rootless",
+        "unix://$runtime/docker.sock",
+        "ExecStartPost=/usr/bin/chmod 0600 %t/docker.sock",
+        "docker compose version",
+        "docker buildx version",
+        "{{.Driver}}",
+    ):
+        assert token in cachyos
+    for forbidden in ("add_repo", "install_aur_package", "apt-get", "brew ", "--force", "usermod", "groupadd", "tcp://", "/var/lib/docker", "/var/lib/containerd"):
+        assert forbidden not in cachyos
+    service = next(config for config in cachyos_fragment.configs if config.dest == "docker/docker.service")
+    assert "ExecStart=%h/bin/dockerd-rootless.sh" in service.content
+    assert service.content.index("StartLimitIntervalSec=60s") < service.content.index("[Service]")
+    assert "WantedBy=default.target" in service.content
 
 
 def test_npm_config_is_ordered_between_node_and_pi_in_every_environment() -> None:
@@ -932,11 +1100,15 @@ def test_npm_config_is_ordered_between_node_and_pi_in_every_environment() -> Non
             assert names.index("node_fnm") < names.index("npm_config") < names.index("pi_agent")
 
 
-def test_ghostty_macos_only_and_emits_config() -> None:
-    assert Ghostty().applies_to(ENVIRONMENTS["macos"])
-    assert not Ghostty().applies_to(ENVIRONMENTS["debian"])
-    frag = Ghostty().render(ENVIRONMENTS["macos"])
+def test_ghostty_supported_workstations_emit_shared_config_and_os_install() -> None:
+    ghostty = Ghostty()
+    assert ghostty.applies_to(ENVIRONMENTS["macos"])
+    assert ghostty.applies_to(ENVIRONMENTS["cachyos"])
+    assert not ghostty.applies_to(ENVIRONMENTS["debian"])
+    frag = ghostty.render(ENVIRONMENTS["macos"])
+    cachyos = ghostty.render(ENVIRONMENTS["cachyos"])
     cfg = next(c for c in frag.configs if c.dest == "ghostty/config").content
+    assert next(c for c in cachyos.configs if c.dest == "ghostty/config").content == cfg
     assert "theme = Tomorrow" in cfg
     assert "background-opacity = 1" in cfg
     assert "background-blur = false" in cfg
@@ -946,6 +1118,67 @@ def test_ghostty_macos_only_and_emits_config() -> None:
     assert "keybind = shift+enter=text:\\x0a" in cfg
     assert "install_cask ghostty" in frag.setup
     assert "Library/Application Support/com.mitchellh.ghostty" in frag.setup
+    assert cachyos.setup.startswith("install_package ghostty\n")
+    assert "bin_exists ghostty" in cachyos.setup
+    assert '${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config' in cachyos.setup
+    assert "install_cask" not in cachyos.setup and "Library/" not in cachyos.setup
+
+
+def test_workstation_components_use_role_and_concrete_os() -> None:
+    cachyos_workstation = Environment("custom-cachyos", OS.CACHYOS, PkgMgr.PACMAN, EnvironmentRole.WORKSTATION)
+    cachyos_server = Environment("custom-cachyos-server", OS.CACHYOS, PkgMgr.PACMAN, EnvironmentRole.SERVER)
+    debian_workstation = Environment("custom-debian-workstation", OS.DEBIAN, PkgMgr.APT, EnvironmentRole.WORKSTATION)
+    cachyos_container = Environment("custom-cachyos-container", OS.CACHYOS, PkgMgr.PACMAN, EnvironmentRole.CONTAINER)
+
+    for component in (Ghostty(), Zed()):
+        assert component.applies_to(cachyos_workstation)
+        assert not component.applies_to(cachyos_server)
+        assert not component.applies_to(debian_workstation)
+
+    herdr = Herdr()
+    assert {config.dest for config in herdr.render(cachyos_workstation).configs} == {
+        "herdr/herd-local",
+        "herdr/herd-remote",
+        "herdr/local.toml",
+        "herdr/remote.toml",
+    }
+    assert {config.dest for config in herdr.render(cachyos_server).configs} == {"herdr/config.toml"}
+    assert not herdr.applies_to(cachyos_container)
+
+
+@pytest.mark.parametrize(
+    ("component", "message"),
+    [
+        (Ghostty(), "Ghostty package installed without ghostty CLI"),
+        (Zed(), "Zed package installed without zeditor CLI"),
+    ],
+)
+def test_cachyos_gui_components_fail_before_config_when_cli_is_missing(tmp_path: Path, component: Component, message: str) -> None:
+    config_touched = tmp_path / "config-touched"
+    setup = component.render(ENVIRONMENTS["cachyos"]).setup
+    script = tmp_path / f"{component.name}.sh"
+    script.write_text(
+        f"""set -euo pipefail
+install_package() {{ :; }}
+bin_exists() {{ return 1; }}
+error() {{ printf '%s\\n' "$*" >&2; }}
+install_config() {{ : > "$CONFIG_TOUCHED"; }}
+DIR={shlex.quote(str(tmp_path / "bundle"))}
+{setup}
+"""
+    )
+
+    result = subprocess.run(
+        ["bash", str(script)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"HOME": str(tmp_path / "home"), "CONFIG_TOUCHED": str(config_touched), "PATH": "/usr/bin:/bin"},
+    )
+
+    assert result.returncode == 1
+    assert message in result.stderr
+    assert not config_touched.exists()
 
 
 def test_gh_emits_config_in_every_env() -> None:
@@ -964,19 +1197,39 @@ def test_gh_per_os_install() -> None:
         assert "gh extension install github/gh-stack" in setup
 
 
-def test_zed_macos_only_and_emits_configs() -> None:
+def test_zed_supported_workstations_emit_valid_os_keymaps_and_shared_settings() -> None:
+    zed = Zed()
     debian_names = {c.name for c in ENVIRONMENTS["debian"].components}
     assert "zed" not in debian_names
-    frag = Zed().render(ENVIRONMENTS["macos"])
-    dests = sorted(c.dest for c in frag.configs)
-    assert dests == ["zed/keymap.json", "zed/settings.json"]
-    settings = next(c for c in frag.configs if c.dest == "zed/settings.json").content
-    assert '"cli_default_open_behavior": "new_window"' in settings
-    assert '"diff_view_style": "unified"' in settings
-    assert '"buffer_font_family": ".ZedMono"' in settings
-    assert '"**/deploy/helm/templates/**/*.yaml"' in settings
-    macos = Zed().render(ENVIRONMENTS["macos"]).setup
-    assert "install_cask zed" in macos
+    assert zed.applies_to(ENVIRONMENTS["macos"])
+    assert zed.applies_to(ENVIRONMENTS["cachyos"])
+
+    rendered = {name: zed.render(ENVIRONMENTS[name]) for name in ("macos", "cachyos")}
+    for fragment in rendered.values():
+        assert sorted(c.dest for c in fragment.configs) == ["zed/keymap.json", "zed/settings.json"]
+        for config in fragment.configs:
+            json.loads(config.content)
+
+    macos_settings = next(c for c in rendered["macos"].configs if c.dest == "zed/settings.json").content
+    cachyos_settings = next(c for c in rendered["cachyos"].configs if c.dest == "zed/settings.json").content
+    assert cachyos_settings == macos_settings
+    assert '"cli_default_open_behavior": "new_window"' in macos_settings
+    assert '"diff_view_style": "unified"' in macos_settings
+    assert '"buffer_font_family": ".ZedMono"' in macos_settings
+    assert '"**/deploy/helm/templates/**/*.yaml"' in macos_settings
+
+    macos_keymap = json.loads(next(c for c in rendered["macos"].configs if c.dest == "zed/keymap.json").content)
+    cachyos_keymap = json.loads(next(c for c in rendered["cachyos"].configs if c.dest == "zed/keymap.json").content)
+    assert macos_keymap[0]["bindings"] == {"cmd-w": "editor::ToggleFocus"}
+    assert cachyos_keymap[0]["bindings"] == {"super-w": "editor::ToggleFocus"}
+    assert "cmd-" not in json.dumps(cachyos_keymap)
+
+    assert "install_cask zed" in rendered["macos"].setup
+    cachyos_setup = rendered["cachyos"].setup
+    assert cachyos_setup.startswith("install_package zed\n")
+    assert "bin_exists zeditor" in cachyos_setup
+    assert '${XDG_CONFIG_HOME:-$HOME/.config}/zed/settings.json' in cachyos_setup
+    assert "install_cask" not in cachyos_setup
 
 
 def test_orbstack_macos_only_and_installs_cask() -> None:
@@ -1159,7 +1412,7 @@ def test_pi_agent_setup() -> None:
     assert agent_vendor.include_globs == (
         "AGENTS.md",
         "APPEND_SYSTEM.md",
-        "agents/claude-pipeline/*.md",
+        "agents/**",
     )
     assert angelini_vendor.source == _pi_angelini_root()
     assert angelini_vendor.dest == "pi-angelini"
@@ -1449,7 +1702,7 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     assert pi_vendor.include_globs == (
         "AGENTS.md",
         "APPEND_SYSTEM.md",
-        "agents/claude-pipeline/*.md",
+        "agents/**",
     )
     assert set(_vendored(claude_vendor, tmp_path / "claude")) == {
         "CLAUDE.md",
@@ -1462,7 +1715,7 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     assert set(_vendored(pi_vendor, tmp_path / "pi")) == {
         "AGENTS.md",
         "APPEND_SYSTEM.md",
-        "agents/claude-pipeline/reviewer.md",
+        "agents/reviewer.md",
     }
     assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
     assert "extensions/context7/cache/generated.json" not in _vendored(pi_vendor, tmp_path / "pi-again")

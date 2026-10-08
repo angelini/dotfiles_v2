@@ -38,13 +38,7 @@ update_pkg_index
 component_begin "core_utils"
 if (
   set -e
-  install_packages git git-delta just jq yq fzf ripgrep fd-find eza bat tree vim htop btop cloc gnupg2 bash-completion bsdmainutils protobuf-compiler
-  if bin_exists fdfind && ! bin_exists fd; then
-    link_file "$(command -v fdfind)" "$HOME/bin/fd"
-  fi
-  if bin_exists batcat && ! bin_exists bat; then
-    link_file "$(command -v batcat)" "$HOME/bin/bat"
-  fi
+  install_packages git curl git-delta just jq yq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf shelly
 ); then
   component_end "core_utils" 0
 else
@@ -115,7 +109,10 @@ if (
       error "failed to publish Herdr remote binary: $remote_bin"
       return 1
     fi
-    install_config "$DIR/config/herdr/config.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
+    install_config "$DIR/config/herdr/local.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/local.toml"
+    install_config "$DIR/config/herdr/remote.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/remote.toml"
+    install -m 0755 "$DIR/config/herdr/herd-local" "$HOME/.local/bin/herd-local"
+    install -m 0755 "$DIR/config/herdr/herd-remote" "$HOME/.local/bin/herd-remote"
     plugin_json="$("$remote_bin" plugin list --plugin "herdr.collie" --json)"
     if ! jq -e '
       .result.plugins[]
@@ -147,7 +144,7 @@ if (
       aarch64|arm64) tarch=aarch64 ;;
       *) error "unsupported arch for helix: $(detect_arch)"; return 1 ;;
     esac
-    install_package xz-utils
+    install_package xz
     tmp="$(mktemp -d)"
     dir="helix-25.07.1-${tarch}-linux"
     curl -fsSL "https://github.com/helix-editor/helix/releases/download/25.07.1/${dir}.tar.xz" \
@@ -306,7 +303,7 @@ fi
 component_begin "python_tools"
 if (
   set -e
-  install_packages build-essential libssl-dev libffi-dev
+  install_packages gcc make pkgconf openssl libffi
   uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
   if [ ! -x "$uv_bin" ]; then
     error "python_tools: uv not found"
@@ -361,9 +358,7 @@ fi
 component_begin "gh"
 if (
   set -e
-  add_repo apt githubcli "deb [signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
-  update_pkg_index
-  install_package gh
+  install_package github-cli
   install_config "$DIR/config/gh/config.yml" "$HOME/.config/gh/config.yml"
   gh extension install github/gh-stack
 ); then
@@ -463,9 +458,6 @@ fi
 component_begin "terraform"
 if (
   set -e
-  install_packages ca-certificates curl gnupg
-  add_repo apt hashicorp "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com trixie main" "https://apt.releases.hashicorp.com/gpg"
-  update_pkg_index
   install_package terraform
   _install_terragrunt_linux() {
     local arch checksum
@@ -493,7 +485,7 @@ fi
 component_begin "zig"
 if (
   set -e
-  install_package xz-utils
+  install_package xz
   _install_zig() (
     local arch checksum zig_dir parent stage archive actual
     case "$(detect_arch)" in
@@ -613,7 +605,6 @@ if (
   ensure_dir "$HOME/.local/bin"
   install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"
   install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600
-  install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
   install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
@@ -636,10 +627,7 @@ fi
 component_begin "postgres"
 if (
   set -e
-  codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-  add_repo apt pgdg "deb [signed-by=/etc/apt/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
-  update_pkg_index
-  install_package postgresql-18
+  install_package postgresql
 ); then
   component_end "postgres" 0
 else
@@ -650,7 +638,7 @@ fi
 component_begin "go_lang"
 if (
   set -e
-  install_packages curl git make bison gcc libc6-dev
+  install_packages curl git make bison gcc glibc
   GO_VERSION="1.25.5"
   GO_DIR="$HOME/.local/share/go"
   if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
@@ -675,11 +663,49 @@ fi
 component_begin "gcloud"
 if (
   set -e
-  add_repo apt google-cloud-sdk \
-    "deb [signed-by=/etc/apt/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-    "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
-  update_pkg_index
-  install_package google-cloud-cli
+  _install_gcloud_cachyos() (
+    local asset_arch checksum root marker parent archive="" stage="" extracted actual
+    case "$(detect_arch)" in
+      x86_64) asset_arch=amd64; checksum=6b566621ce59a900d520a30d505b9cef1c2bdd72826103175727ac6db1702101 ;;
+      aarch64|arm64) asset_arch=aarch64; checksum=c7808b357c1781ed1f0fa0876316ebb901aa86727fb17e2ede229de8b94d95b0 ;;
+      *) error "unsupported arch for Google Cloud CLI: $(detect_arch)"; exit 1 ;;
+    esac
+    root="$HOME/.local/share/google-cloud-sdk"
+    marker="$root/.dotgen-archive-sha256"
+    parent="${root%/*}"
+    if [ -e "$root" ] || [ -L "$root" ]; then
+      if [ ! -d "$root" ] || [ -L "$root" ]; then
+        error "unsafe Google Cloud CLI destination: $root"
+        exit 1
+      fi
+    fi
+    if [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(cat "$marker")" = "$checksum" ] &&     bin_version_matches "$root/bin/gcloud" "587.0.0" version; then
+      exit 0
+    fi
+    ensure_dir "$parent"
+    archive="$(mktemp)"
+    stage="$(mktemp -d "$parent/.google-cloud-sdk.XXXXXX")"
+    trap 'rm -f -- "$archive"; [ -z "$stage" ] || rm -rf -- "$stage"' EXIT
+    curl -fsSL     "https://dl.google.com/dl/cloudsdk/release/downloads/for_packagers/linux/google-cloud-cli_587.0.0.orig_${asset_arch}.tar.gz"     -o "$archive"
+    actual="$(sha256_file "$archive")"
+    if [ "$actual" != "$checksum" ]; then
+      error "Google Cloud CLI archive checksum mismatch"
+      exit 1
+    fi
+    tar -xzf "$archive" -C "$stage"
+    extracted="$stage/google-cloud-sdk"
+    if ! bin_version_matches "$extracted/bin/gcloud" "587.0.0" version; then
+      error "Google Cloud CLI archive version mismatch"
+      exit 1
+    fi
+    printf '%s
+  ' "$checksum" > "$extracted/.dotgen-archive-sha256"
+    chmod 0644 "$extracted/.dotgen-archive-sha256"
+    rm -rf -- "$root"
+    mv -- "$extracted" "$root"
+  )
+  _install_gcloud_cachyos
+  remove_packages google-cloud-cli
 ); then
   component_end "gcloud" 0
 else
@@ -690,24 +716,7 @@ fi
 component_begin "aws"
 if (
   set -e
-  install_package unzip
-  _install_awscli_linux() {
-    local arch zip_arch tmp
-    arch="$(detect_arch)"
-    case "$arch" in
-      x86_64) zip_arch=x86_64 ;;
-      aarch64|arm64) zip_arch=aarch64 ;;
-      *) error "unsupported arch for awscli: $arch"; return 1 ;;
-    esac
-    tmp="$(mktemp -d)"
-    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${zip_arch}.zip" -o "$tmp/awscli.zip"
-    unzip -q "$tmp/awscli.zip" -d "$tmp"
-    sudo "$tmp/aws/install" --update
-    rm -rf "$tmp"
-  }
-  if ! bin_exists aws; then
-    _install_awscli_linux
-  fi
+  install_package aws-cli-v2
   install_config "$DIR/config/aws/config" "$HOME/.aws/config"
 ); then
   component_end "aws" 0
@@ -719,10 +728,14 @@ fi
 component_begin "doppler"
 if (
   set -e
-  install_packages apt-transport-https ca-certificates curl gnupg
-  add_repo apt doppler-cli "deb [signed-by=/etc/apt/keyrings/doppler-cli.gpg] https://packages.doppler.com/public/cli/deb/debian any-version main" "https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key"
-  update_pkg_index
-  install_package doppler
+  case "$(detect_arch)" in
+    x86_64) doppler_arch=amd64; doppler_checksum=1b2f412d984920d665daf233ab6c15b364df9339b5c5b5224d5e8ee4e0a70154 ;;
+    aarch64|arm64) doppler_arch=arm64; doppler_checksum=567f051c4c334b79a37ee44c9373671c451dd8a4945ed49288a8f3fd0b73ec89 ;;
+    *) error "unsupported arch for Doppler: $(detect_arch)"; exit 1 ;;
+  esac
+  download_tar_bin_sha256 doppler   "https://github.com/DopplerHQ/cli/releases/download/3.76.5/doppler_3.76.5_linux_${doppler_arch}.tar.gz"   "$doppler_checksum" doppler "v3.76.5" --version
+  unset doppler_arch doppler_checksum
+  remove_packages doppler-cli-bin
 ); then
   component_end "doppler" 0
 else
@@ -733,24 +746,38 @@ fi
 component_begin "fonts"
 if (
   set -e
-  install_packages fontconfig xz-utils
-  _install_nerd_fonts() {
-    local tmp url
-    tmp="$(mktemp -d)"
-    url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/UbuntuMono.tar.xz"
-    curl -fsSL "$url" -o "$tmp/fonts.tar.xz"
-    mkdir -p "$HOME/.local/share/fonts"
-    tar -xf "$tmp/fonts.tar.xz" -C "$HOME/.local/share/fonts"
-    fc-cache -f
-    rm -rf "$tmp"
-  }
-  if [ ! -d "$HOME/.local/share/fonts/UbuntuMono" ]; then
-    _install_nerd_fonts
-  fi
+  install_packages fontconfig ttf-ubuntu-font-family ttf-ubuntu-mono-nerd
 ); then
   component_end "fonts" 0
 else
   _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
+fi
+
+# --- ghostty ---
+component_begin "ghostty"
+if (
+  set -e
+  install_package ghostty
+  if ! bin_exists ghostty; then error "Ghostty package installed without ghostty CLI"; exit 1; fi
+  install_config "$DIR/config/ghostty/config" "${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config"
+); then
+  component_end "ghostty" 0
+else
+  _rc=$?; component_end "ghostty" "$_rc"; exit "$_rc"
+fi
+
+# --- zed ---
+component_begin "zed"
+if (
+  set -e
+  install_package zed
+  if ! bin_exists zeditor; then error "Zed package installed without zeditor CLI"; exit 1; fi
+  install_config "$DIR/config/zed/settings.json" "${XDG_CONFIG_HOME:-$HOME/.config}/zed/settings.json"
+  install_config "$DIR/config/zed/keymap.json" "${XDG_CONFIG_HOME:-$HOME/.config}/zed/keymap.json"
+); then
+  component_end "zed" 0
+else
+  _rc=$?; component_end "zed" "$_rc"; exit "$_rc"
 fi
 
 # --- docker ---
@@ -805,49 +832,49 @@ if (
     fi
   }
 
-  _docker_load_iptables_module() {
-    local iptables_command version module=nf_tables candidate
-    iptables_command="$(command -v iptables 2>/dev/null || true)"
-    if [ -z "$iptables_command" ]; then
-      for candidate in /usr/sbin/iptables /sbin/iptables; do
-        if [ -x "$candidate" ]; then iptables_command="$candidate"; break; fi
-      done
+  _docker_check_rootful_preflight() {
+    local unit root_socket_state
+    for unit in docker.service docker.socket; do
+      if systemctl is-active --quiet "$unit"; then
+        _docker_fail "$unit is active; stop rootful Docker before deployment"
+        return 1
+      fi
+    done
+    if [ -e /var/run/docker.sock ] || [ -L /var/run/docker.sock ]; then
+      root_socket_state=stale/unknown
+      if bin_exists ss && ss -xl 2>/dev/null | grep -F /var/run/docker.sock >/dev/null; then root_socket_state=live; fi
+      _docker_fail "rootful Docker socket is $root_socket_state; ask an administrator to stop/remove /var/run/docker.sock"
     fi
-    [ -n "$iptables_command" ] || {
-      _docker_fail "iptables is missing after Docker installation; remediate the Docker packages"; return 1
-    }
-    version="$("$iptables_command" --version 2>/dev/null)" || {
-      _docker_fail "could not determine the iptables backend; remediate iptables"; return 1
-    }
-    case "$version" in *legacy*) module=ip_tables ;; esac
-    sudo modprobe "$module" || {
-      _docker_fail "failed to load the $module kernel module required by rootless Docker"; return 1
-    }
   }
 
-  _docker_wait_user_manager() {
-    local user="$1" uid="$2" runtime="$3" i
-    for ((i = 0; i < 30; i++)); do
-      if [ -d "$runtime" ] && [ -S "$runtime/bus" ] && systemctl --user show-environment >/dev/null 2>&1; then
-        return 0
-      fi
-      sleep 1
-    done
+  _docker_ensure_iptables_module() {
+    local module=nf_tables version
+    version="$(iptables --version 2>/dev/null)" || { _docker_fail "could not determine the iptables backend; remediate iptables"; return 1; }
+    case "$version" in *legacy*) module=ip_tables ;; esac
+    if grep -qw "$module" /proc/modules 2>/dev/null || grep -qw "$module" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null; then
+      return 0
+    fi
+    sudo modprobe "$module" || { _docker_fail "failed to load the $module kernel module required by rootless Docker"; return 1; }
+  }
+
+  _docker_user_manager_diagnostics() {
+    local user="$1" uid="$2"
     loginctl user-status "$user" >&2 || true
     sudo systemctl status "user@$uid.service" --no-pager >&2 || true
-    _docker_fail "timed out waiting for user systemd manager; log in again or ask an administrator to inspect user@$uid.service"
   }
 
-  _setup_rootless_docker() {
+  _setup_rootless_docker_cachyos() {
     local incoming_runtime="${XDG_RUNTIME_DIR:-}" arch user uid gid passwd_record passwd_name passwd_uid passwd_gid passwd_home
-    local marker_unit="$HOME/.config/systemd/user/docker.service" marker_context="$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json" marker_state
-    local docker_source root_socket_state runtime mode_text mode_value owner endpoint socket_path
+    local runtime runtime_owner mode_text mode_value marker_unit="$HOME/.config/systemd/user/docker.service.d/10-dotgen-socket-mode.conf"
+    local marker_context="$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json"
+    local service_unit="$HOME/.config/systemd/user/docker.service"
+    local unit_state marker_state endpoint socket_path socket_owner socket_mode driver tool
 
-    if ! ( . /etc/os-release && [ "$ID" = debian ] && [ "$VERSION_ID" = 13 ] && [ "$VERSION_CODENAME" = trixie ] ); then
-      _docker_fail "rootless Docker requires Debian 13 Trixie; remediate the operating system"; return 1
+    if ! ( . /etc/os-release && [ "$ID" = cachyos ] && [[ " ${ID_LIKE:-} " = *" arch "* ]] ); then
+      _docker_fail "rootless Docker requires CachyOS with ID_LIKE=arch; remediate the operating system"; return 1
     fi
-    arch="$(dpkg --print-architecture)"
-    case "$arch" in amd64|arm64) ;; *) _docker_fail "unsupported Debian architecture $arch; use amd64 or arm64"; return 1 ;; esac
+    arch="$(uname -m)"
+    [ "$arch" = x86_64 ] || { _docker_fail "unsupported CachyOS architecture $arch; use x86_64"; return 1; }
     [ "$(ps -p 1 -o comm= 2>/dev/null | tr -d '[:space:]')" = systemd ] || { _docker_fail "PID 1 must be systemd; boot a systemd host"; return 1; }
     [ -d /run/systemd/system ] || { _docker_fail "systemd runtime is unavailable; boot a systemd host"; return 1; }
     case "$(systemctl show --property=SystemState --value)" in running|degraded) ;; *) _docker_fail "system manager is not running; remediate systemd"; return 1 ;; esac
@@ -864,68 +891,98 @@ if (
     fi
     [ "$(id -u "$user")" = "$uid" ] && [ "$(id -g "$user")" = "$gid" ] || { _docker_fail "account identity lookup mismatch"; return 1; }
 
-    install_package uidmap || return 1
-    for tool in newuidmap newgidmap getsubids; do bin_exists "$tool" || { _docker_fail "$tool is missing after uidmap installation; remediate uidmap"; return 1; }; done
-    _docker_validate_subids /etc/subuid "$user" "$uid" "$uid" uid || return 1
-    _docker_validate_subids /etc/subgid "$user" "$gid" "$gid" gid || return 1
-
-    if [ -e "$marker_unit" ] && [ -e "$marker_context" ]; then marker_state=both
-    elif [ -e "$marker_unit" ] || [ -e "$marker_context" ]; then
-      _docker_fail "partial rootless Docker state exists; manually repair or remove exactly the user unit or context before rerun"; return 1
-    else marker_state=none; fi
-
-    service_mask docker.service docker.socket || return 1
-    if [ -e /var/run/docker.sock ] || [ -L /var/run/docker.sock ]; then
-      root_socket_state=stale/unknown
-      if bin_exists ss && ss -xl 2>/dev/null | grep -F /var/run/docker.sock >/dev/null; then root_socket_state=live; fi
-      _docker_fail "rootful Docker socket is $root_socket_state; ask an administrator to stop/remove /var/run/docker.sock"; return 1
-    fi
-    printf -v docker_source '%s\n' \
-      'Types: deb' \
-      'URIs: https://download.docker.com/linux/debian' \
-      'Suites: trixie' \
-      'Components: stable' \
-      "Architectures: $arch" \
-      'Signed-By: /etc/apt/keyrings/docker.asc'
-    add_repo apt-deb822 docker "$docker_source" "https://download.docker.com/linux/debian/gpg" || return 1
-    remove_packages docker.io docker-compose docker-doc podman-docker containerd runc || return 1
-    update_pkg_index || return 1
-    install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras || return 1
-    install_package kmod || return 1
-    service_mask docker.service docker.socket || return 1
-    _docker_verify_rootful || return 1
-    _docker_load_iptables_module || return 1
-
-    sudo loginctl enable-linger "$user" || return 1
     runtime="$(loginctl show-user "$user" --property=RuntimePath --value)"
     [ "$runtime" = "/run/user/$uid" ] || { _docker_fail "unexpected RuntimePath $runtime; remediate logind"; return 1; }
     [ -z "$incoming_runtime" ] || [ "$incoming_runtime" = "$runtime" ] || { _docker_fail "incoming XDG_RUNTIME_DIR conflicts with logind runtime path"; return 1; }
+    [ -d "$runtime" ] && [ ! -L "$runtime" ] || { _docker_fail "canonical runtime directory is missing or unsafe"; return 1; }
+    runtime_owner="$(stat -c %u "$runtime")"; mode_text="$(stat -c %a "$runtime")"
+    [[ "$mode_text" =~ ^[0-7]+$ ]] || { _docker_fail "invalid runtime directory mode"; return 1; }
+    mode_value=$((8#$mode_text))
+    [ "$runtime_owner" = "$uid" ] && [ $((mode_value & 077)) -eq 0 ] || { _docker_fail "runtime directory ownership or permissions are unsafe"; return 1; }
+    [ -S "$runtime/bus" ] && systemctl --user show-environment >/dev/null 2>&1 || {
+      _docker_user_manager_diagnostics "$user" "$uid"
+      _docker_fail "user systemd manager is unreachable; log in again or inspect user@$uid.service"; return 1
+    }
+
+    _docker_validate_subids /etc/subuid "$user" "$uid" "$uid" uid || return 1
+    _docker_validate_subids /etc/subgid "$user" "$gid" "$gid" gid || return 1
+
+    unit_state="$(systemctl --user is-enabled docker.service 2>/dev/null || true)"
+    if [ -e "$marker_unit" ] && [ -e "$marker_context" ] && [ "$unit_state" = enabled ]; then marker_state=both
+    elif [ -e "$marker_unit" ] || [ -e "$marker_context" ] || [ "$unit_state" = enabled ]; then
+      _docker_fail "partial rootless Docker state exists; manually reconcile the user service marker, enablement, and rootless context"; return 1
+    else marker_state=none; fi
+    if [ -e "$marker_unit" ]; then
+      if [ -L "$marker_unit" ] || [ ! -f "$marker_unit" ] || [ "$(stat -c %u "$marker_unit")" != "$uid" ] || [ "$(stat -c %a "$marker_unit")" != 600 ] ||
+        [ "$(cat "$marker_unit")" != $'[Service]\nExecStartPost=/usr/bin/chmod 0600 %t/docker.sock' ]; then
+        _docker_fail "rootless Docker service marker is unsafe or unmanaged; remediate it manually"; return 1
+      fi
+    fi
+    if [ -e "$marker_context" ] && { [ -L "$marker_context" ] || [ ! -f "$marker_context" ]; }; then
+      _docker_fail "rootless Docker context marker is unsafe; remediate it manually"; return 1
+    fi
+    socket_path="$runtime/docker.sock"
+    if [ -e "$socket_path" ] || [ -L "$socket_path" ]; then
+      [ "$marker_state" = both ] || { _docker_fail "unexpected rootless Docker socket exists without complete managed state"; return 1; }
+      [ -S "$socket_path" ] && [ ! -L "$socket_path" ] || { _docker_fail "rootless Docker socket path is not a socket"; return 1; }
+      [ "$(stat -c %u "$socket_path")" = "$uid" ] || { _docker_fail "rootless Docker socket is owned by another user"; return 1; }
+    fi
+    _docker_check_rootful_preflight || return 1
+
+    service_mask docker.service docker.socket || return 1
+    install_packages docker docker-compose docker-buildx rootlesskit slirp4netns fuse-overlayfs shadow iptables || return 1
+    download_script_sha256 dockerd-rootless.sh \
+      "https://raw.githubusercontent.com/moby/moby/docker-v29.8.2/contrib/dockerd-rootless.sh" \
+      "200203633806081a401e60aefdf68a8fa73fc7dc80aa854c52a69d47710a3488" || return 1
+    if [ -L "$service_unit" ] || { [ -e "$service_unit" ] && [ ! -f "$service_unit" ]; }; then
+      _docker_fail "rootless Docker user service destination is unsafe"; return 1
+    fi
+    install -d -m 0700 "$HOME/.config/systemd/user" || return 1
+    install -m 0600 "$DIR/config/docker/docker.service" "$service_unit" || return 1
+    remove_packages docker-rootless-extras || return 1
+    service_mask docker.service docker.socket || return 1
+    _docker_verify_rootful || return 1
+    for tool in docker dockerd dockerd-rootless.sh rootlesskit slirp4netns fuse-overlayfs newuidmap newgidmap getsubids iptables; do
+      bin_exists "$tool" || { _docker_fail "$tool is missing after Docker installation; remediate the selected packages"; return 1; }
+    done
+    _docker_ensure_iptables_module || return 1
+
+    sudo loginctl enable-linger "$user" || return 1
     export XDG_RUNTIME_DIR="$runtime"
-    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
     export XDG_CONFIG_HOME="$HOME/.config"
     export DOCKER_CONFIG="$HOME/.docker"
     unset DOCKER_HOST DOCKER_CONTEXT
-    if ! systemctl is-active --quiet "user@$uid.service"; then sudo systemctl start "user@$uid.service" || return 1; fi
-    _docker_wait_user_manager "$user" "$uid" "$runtime" || return 1
-    owner="$(stat -c %u "$runtime")"; mode_text="$(stat -c %a "$runtime")"
-    [[ "$mode_text" =~ ^[0-7]+$ ]] || { _docker_fail "invalid runtime directory mode"; return 1; }
-    mode_value=$((8#$mode_text))
-    [ "$owner" = "$uid" ] && [ $((mode_value & 077)) -eq 0 ] || { _docker_fail "runtime directory ownership or permissions are unsafe"; return 1; }
+
     if [ "$marker_state" = none ]; then
-      env -u DOCKER_HOST -u DOCKER_CONTEXT dockerd-rootless-setuptool.sh install || return 1
+      install -d -m 0700 "$HOME/.config/systemd/user/docker.service.d" || return 1
+      printf '%s\n' '[Service]' 'ExecStartPost=/usr/bin/chmod 0600 %t/docker.sock' > "$marker_unit" || return 1
+      chmod 0600 "$marker_unit" || return 1
+      systemctl --user daemon-reload || return 1
+      env -u DOCKER_HOST -u DOCKER_CONTEXT docker --context=default context create rootless \
+        --docker "host=unix://$runtime/docker.sock" --description "Rootless mode" >/dev/null || return 1
+    else
+      systemctl --user daemon-reload || return 1
     fi
     systemctl --user enable --now docker.service || return 1
-    env -u DOCKER_HOST -u DOCKER_CONTEXT docker context use rootless || return 1
+    env -u DOCKER_HOST -u DOCKER_CONTEXT docker --context=default context use rootless >/dev/null || return 1
+    [ "$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker context show)" = rootless ] || { _docker_fail "Docker did not select the rootless context"; return 1; }
     endpoint="$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker context inspect rootless --format '{{.Endpoints.docker.Host}}')"
-    [ "$endpoint" = "unix:///run/user/$uid/docker.sock" ] || { _docker_fail "rootless context endpoint is not canonical"; return 1; }
-    socket_path="/run/user/$uid/docker.sock"
-    [ -S "$socket_path" ] && [ "$(stat -c %u "$socket_path")" = "$uid" ] || { _docker_fail "rootless Docker socket is missing or owned by another user"; return 1; }
+    [ "$endpoint" = "unix://$runtime/docker.sock" ] || { _docker_fail "rootless context endpoint is not canonical"; return 1; }
+    [ -S "$socket_path" ] && [ ! -L "$socket_path" ] || { _docker_fail "rootless Docker socket is missing or unsafe"; return 1; }
+    socket_owner="$(stat -c %u "$socket_path")"; socket_mode="$(stat -c %a "$socket_path")"
+    [ "$socket_owner" = "$uid" ] && [ "$socket_mode" = 600 ] || { _docker_fail "rootless Docker socket must be deployment-user-owned with mode 0600"; return 1; }
+    systemctl --user is-active --quiet docker.service || { _docker_fail "rootless docker.service is inactive"; return 1; }
     env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{json .SecurityOptions}}' | grep -q rootless || { _docker_fail "Docker security options do not report rootless"; return 1; }
     [ "$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{.CgroupVersion}}')" = 2 ] || { _docker_fail "Docker does not report cgroup v2"; return 1; }
+    driver="$(env -u DOCKER_HOST -u DOCKER_CONTEXT docker info --format '{{.Driver}}')"
+    case "$driver" in overlay2|fuse-overlayfs) ;; *) _docker_fail "unsupported rootless Docker storage driver $driver"; return 1 ;; esac
+    env -u DOCKER_HOST -u DOCKER_CONTEXT docker compose version >/dev/null || { _docker_fail "Docker Compose plugin verification failed"; return 1; }
+    env -u DOCKER_HOST -u DOCKER_CONTEXT docker buildx version >/dev/null || { _docker_fail "Docker Buildx plugin verification failed"; return 1; }
     _docker_verify_rootful
   }
 
-  _setup_rootless_docker
+  _setup_rootless_docker_cachyos
 ); then
   component_end "docker" 0
 else
@@ -936,6 +993,13 @@ fi
 component_begin "zed_host_bridge"
 if (
   set -e
+  \
+  load_secrets
+  zed_bridge_ssh_host=${ZED_HOST_BRIDGE_SSH_HOST:-}
+  if [ "${#zed_bridge_ssh_host}" -gt 255 ] || ! [[ "$zed_bridge_ssh_host" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+    error "ZED_HOST_BRIDGE_SSH_HOST must be an exact SSH alias containing only ASCII letters, digits, dots, and hyphens"
+    exit 1
+  fi
   \
   _zed_bridge_assert_dir() {
     local directory=$1 parent
@@ -990,39 +1054,177 @@ if (
   _zed_bridge_safe_dir "$HOME/.local/libexec/dotgen" 0700
   _zed_bridge_install_file "$DIR/config/zed-host-bridge/bridge.mjs" "$HOME/.local/libexec/dotgen/zed-host-bridge.mjs" 0644
   \
-  _zed_bridge_assert_dir "$HOME/bin"
-  _zed_bridge_install_file "$DIR/config/zed-host-bridge/zed" "$HOME/bin/zed" 0755
-  _zed_bridge_assert_dir "$HOME/.cache"
-  _zed_bridge_safe_dir "$HOME/.cache/dotgen" 0700
+  _zed_bridge_install_file "$DIR/config/zed-host-bridge/serve-linux" "$HOME/.local/libexec/dotgen/zed-host-bridge-serve-linux" 0755
+  config_root="$(printenv XDG_CONFIG_HOME 2>/dev/null || true)"
+  cache_root="$(printenv XDG_CACHE_HOME 2>/dev/null || true)"
+  config_root="${config_root:-$HOME/.config}"
+  cache_root="${cache_root:-$HOME/.cache}"
+  _zed_bridge_assert_dir "$config_root"
+  _zed_bridge_safe_dir "$config_root/dotgen" 0700
+  receiver_config="$config_root/dotgen/zed-host-bridge.json"
+  if [ -L "$receiver_config" ] || { [ -e "$receiver_config" ] && { [ ! -f "$receiver_config" ] || [ ! -O "$receiver_config" ]; }; }; then
+    error "unsafe Zed host bridge destination: $receiver_config"
+    exit 1
+  fi
+  install_config_template "$DIR/config/zed-host-bridge/config.json.template" "$receiver_config" 'ZED_HOST_BRIDGE_SSH_HOST' 0600
 
-  sshd_config_dir=/etc/ssh/sshd_config.d
-  sshd_config="$sshd_config_dir/00-dotgen-zed-host-bridge.conf"
-  sshd_backup=
-  sshd_had_config=0
-  if sudo test -L "$sshd_config" || { sudo test -e "$sshd_config" && ! sudo test -f "$sshd_config"; }; then
-    error "unsafe Zed host bridge sshd destination: $sshd_config"
+  _zed_bridge_assert_dir "$cache_root"
+  _zed_bridge_safe_dir "$cache_root/dotgen" 0700
+  bridge_socket="$cache_root/dotgen/zed-host-bridge.sock"
+  systemd_root="$config_root/systemd"
+  unit_dir="$systemd_root/user"
+  _zed_bridge_assert_dir "$systemd_root"
+  _zed_bridge_assert_dir "$unit_dir"
+  unit_name=dev.dotgen.zed-host-bridge.service
+  unit_path="$unit_dir/$unit_name"
+  _zed_bridge_install_file "$DIR/config/zed-host-bridge/$unit_name" "$unit_path" 0644
+  \
+  _zed_bridge_safe_dir "$HOME/.ssh" 0700
+  _zed_bridge_safe_dir "$HOME/.ssh/config.d" 0700
+  ssh_include="$HOME/.ssh/config.d/dotgen-zed-host-bridge.conf"
+  if [ -L "$ssh_include" ] || { [ -e "$ssh_include" ] && { [ ! -f "$ssh_include" ] || [ ! -O "$ssh_include" ]; }; }; then
+    error "unsafe Zed host bridge SSH include destination: $ssh_include"
     exit 1
   fi
-  if sudo test -f "$sshd_config"; then
-    sshd_backup="$(mktemp)"
-    sudo cp -- "$sshd_config" "$sshd_backup"
-    sshd_had_config=1
+  install_config_template "$DIR/config/zed-host-bridge/ssh-linux.conf.template" "$ssh_include" 'ZED_HOST_BRIDGE_SSH_HOST' 0600
+  chmod 0600 "$ssh_include"
+
+  ssh_main="$HOME/.ssh/config"
+  managed_include='Include ~/.ssh/config.d/dotgen-zed-host-bridge.conf'
+  if [ -L "$ssh_main" ] || { [ -e "$ssh_main" ] && { [ ! -f "$ssh_main" ] || [ ! -O "$ssh_main" ]; }; }; then
+    error "unsafe SSH config destination: $ssh_main"
+    exit 1
   fi
-  sudo install -d -m 0755 "$sshd_config_dir"
-  if ! sudo install -m 0644 "$DIR/config/zed-host-bridge/sshd.conf" "$sshd_config" || ! sudo sshd -t || ! sudo systemctl reload ssh; then
-    if [ "$sshd_had_config" -eq 1 ]; then
-      sudo cp -- "$sshd_backup" "$sshd_config"
+  ssh_main_staging="$(mktemp "$HOME/.ssh/.dotgen-ssh-config.XXXXXX")"
+  managed_node="$HOME/.local/share/fnm/aliases/default/bin/node"
+  if [ ! -x "$managed_node" ]; then
+    rm -f -- "$ssh_main_staging"
+    error "managed Node runtime is missing: $managed_node"
+    exit 1
+  fi
+  "$managed_node" -e '
+  const fs = require("node:fs");
+  const [src, dst, line] = process.argv.slice(1);
+  const data = fs.existsSync(src) ? fs.readFileSync(src) : Buffer.alloc(0);
+  const target = Buffer.from(line);
+  const kept = [];
+  let start = 0;
+  for (let i = 0; i < data.length; i += 1) {
+    if (data[i] === 10) {
+      const body = data.subarray(start, i);
+      if (!(body.length === target.length && body.equals(target))) kept.push(data.subarray(start, i + 1));
+      start = i + 1;
+    }
+  }
+  if (start < data.length) {
+    const body = data.subarray(start);
+    if (!(body.length === target.length && body.equals(target))) kept.push(body);
+  }
+  fs.writeFileSync(dst, Buffer.concat([target, Buffer.from("\n"), ...kept]), { mode: 0o600 });
+  ' "$ssh_main" "$ssh_main_staging" "$managed_include"
+  chmod 0600 "$ssh_main_staging"
+  if [ -L "$ssh_main" ] || { [ -e "$ssh_main" ] && { [ ! -f "$ssh_main" ] || [ ! -O "$ssh_main" ]; }; }; then
+    rm -f -- "$ssh_main_staging"
+    error "unsafe SSH config destination: $ssh_main"
+    exit 1
+  fi
+  mv -f -- "$ssh_main_staging" "$ssh_main"
+
+  ssh_effective="$(ssh -G "$zed_bridge_ssh_host" 2>/dev/null)" || {
+    error "invalid SSH configuration for Zed host bridge alias: $zed_bridge_ssh_host"
+    exit 1
+  }
+  grep -Fqx 'exitonforwardfailure yes' <<< "$ssh_effective" || { error "Zed host bridge ExitOnForwardFailure setting is not effective"; exit 1; }
+  ssh_remote_user="$(awk '$1 == "user" { print $2; exit }' <<< "$ssh_effective")"
+  if [ -z "$ssh_remote_user" ]; then
+    error "Zed host bridge SSH user is not effective"
+    exit 1
+  fi
+  expected_forward="remoteforward /home/$ssh_remote_user/.cache/dotgen/zed-host-bridge.sock $HOME/.cache/dotgen/zed-host-bridge.sock"
+  grep -Fqx "$expected_forward" <<< "$ssh_effective" || {
+    error "Zed host bridge RemoteForward setting is not effective"
+    exit 1
+  }
+
+
+  _zed_bridge_service_failure() {
+    error "$1"
+    systemctl --user status "$unit_name" --no-pager >&2 || true
+    journalctl --user-unit="$unit_name" -n 50 --no-pager >&2 || true
+  }
+
+  if [ -e "$bridge_socket" ] || [ -L "$bridge_socket" ]; then
+    if [ -L "$bridge_socket" ] || [ ! -S "$bridge_socket" ]; then
+      error "unsafe Zed host bridge socket collision: $bridge_socket"
+      exit 1
+    fi
+    if [ ! -O "$bridge_socket" ]; then
+      error "Zed host bridge socket is not owned by the current user: $bridge_socket"
+      exit 1
+    fi
+    if [ "$(stat -c '%a' "$bridge_socket")" != 600 ]; then
+      error "Zed host bridge socket does not have mode 0600: $bridge_socket"
+      exit 1
+    fi
+    if systemctl --user is-active --quiet "$unit_name"; then
+      log "preserving live Zed host bridge socket until service restart"
     else
-      sudo rm -f -- "$sshd_config"
+      log "leaving safe stale Zed host bridge socket for receiver replacement"
     fi
-    if sudo sshd -t; then
-      sudo systemctl reload ssh || true
-    fi
-    [ -z "$sshd_backup" ] || sudo rm -f -- "$sshd_backup"
-    error "failed to install Zed host bridge sshd configuration"
+  fi
+
+  if ! systemctl --user daemon-reload; then
+    _zed_bridge_service_failure "failed to reload the systemd user manager"
     exit 1
   fi
-  [ -z "$sshd_backup" ] || sudo rm -f -- "$sshd_backup"
+  if ! systemctl --user enable "$unit_name"; then
+    _zed_bridge_service_failure "failed to enable the Zed host bridge user service"
+    exit 1
+  fi
+
+  graphical_import=()
+  _zed_bridge_env_nonempty() {
+    [ -n "$(printenv "$1" 2>/dev/null || true)" ]
+  }
+  if { _zed_bridge_env_nonempty WAYLAND_DISPLAY || _zed_bridge_env_nonempty DISPLAY; } && _zed_bridge_env_nonempty DBUS_SESSION_BUS_ADDRESS; then
+    for variable in WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS; do
+      if [ -n "${!variable:-}" ]; then
+        graphical_import+=("$variable")
+      fi
+    done
+    if ! systemctl --user import-environment "${graphical_import[@]}"; then
+      _zed_bridge_service_failure "failed to import the graphical session environment"
+      exit 1
+    fi
+  fi
+  manager_environment="$(systemctl --user show-environment)" || {
+    _zed_bridge_service_failure "failed to inspect the systemd user-manager environment"
+    exit 1
+  }
+  if grep -Eq '^(WAYLAND_DISPLAY|DISPLAY)=.+' <<< "$manager_environment" && grep -Eq '^DBUS_SESSION_BUS_ADDRESS=.+' <<< "$manager_environment"; then
+    if ! systemctl --user restart "$unit_name" || ! systemctl --user is-active --quiet "$unit_name"; then
+      _zed_bridge_service_failure "failed to start the Zed host bridge user service"
+      exit 1
+    fi
+    socket_ready=0
+    for ((socket_attempt=0; socket_attempt<50; socket_attempt++)); do
+      if [ -S "$bridge_socket" ]; then
+        socket_ready=1
+        break
+      fi
+      sleep 0.2
+    done
+    if [ "$socket_ready" -ne 1 ]; then
+      _zed_bridge_service_failure "Zed host bridge user service started without creating its socket"
+      exit 1
+    fi
+    if [ ! -O "$bridge_socket" ] || [ "$(stat -c '%a' "$bridge_socket")" != 600 ]; then
+      _zed_bridge_service_failure "Zed host bridge user service created an unsafe socket"
+      exit 1
+    fi
+  else
+    log "Zed host bridge user service installed; activation deferred until a graphical login"
+  fi
 ); then
   component_end "zed_host_bridge" 0
 else

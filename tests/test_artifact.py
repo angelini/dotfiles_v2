@@ -15,7 +15,7 @@ from dotgen.artifact import ArtifactBuildError, FakeArtifactBuilder, ProductionA
 from dotgen.environment import Environment
 from dotgen.fragment import Fragment, GeneratedBinary
 from dotgen.render import build_env
-from dotgen.types import OS, PkgMgr
+from dotgen.types import OS, EnvironmentRole, PkgMgr
 
 
 def _archive(*, unsafe_name: str | None = None, link: bool = False, missing_name: str | None = None) -> bytes:
@@ -97,7 +97,7 @@ class SyntheticArtifactComponent:
 
 def test_build_env_fake_builder_integrates_synthetic_artifacts(tmp_path: Path) -> None:
     builder = FakeArtifactBuilder()
-    env = Environment("synthetic", OS.DEBIAN, PkgMgr.APT, components=(SyntheticArtifactComponent(),))
+    env = Environment("synthetic", OS.DEBIAN, PkgMgr.APT, EnvironmentRole.SERVER, components=(SyntheticArtifactComponent(),))
 
     build_env(env, tmp_path, artifact_builder=builder)
 

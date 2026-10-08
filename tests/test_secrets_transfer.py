@@ -24,7 +24,7 @@ from dotgen.secrets_transfer import (
     standard_secrets_path,
     validate_target,
 )
-from dotgen.types import OS, PkgMgr
+from dotgen.types import OS, EnvironmentRole, PkgMgr
 
 
 @dataclass(frozen=True)
@@ -69,6 +69,7 @@ def test_required_secrets_uses_applicable_merged_components() -> None:
         "synthetic",
         OS.DEBIAN,
         PkgMgr.APT,
+        EnvironmentRole.SERVER,
         components=(
             SecretComponent("first", frozenset({"GIT_USER_NAME"})),
             SecretComponent("direct_runtime", frozenset({"EXA_API_KEY"})),
