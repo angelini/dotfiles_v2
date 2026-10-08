@@ -1130,6 +1130,7 @@ def test_pi_agent_setup() -> None:
     assert "openai-codex/gpt-5.6-terra" in settings.content
     assert "lastChangelogVersion" not in settings.content
     assert "npm:@plannotator/pi-extension" not in settings.content
+    assert "npm:pi-mcp-adapter" not in settings.content
     assert "npm:pi-simplify" not in settings.content
     assert "npm:@dreki-gg/pi-context7" in settings.content
     assert "npm:@spences10/pi-lsp" in settings.content

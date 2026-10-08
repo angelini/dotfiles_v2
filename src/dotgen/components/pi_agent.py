@@ -37,7 +37,6 @@ _PI_GLOBAL_PACKAGES = (
 
 _PI_EXTENSION_PACKAGES = (
     "@spences10/pi-lsp",
-    "pi-mcp-adapter",
     "pi-subagents",
     "pi-edit-hooks",
     "@dreki-gg/pi-context7",

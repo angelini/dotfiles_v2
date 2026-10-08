@@ -10,7 +10,6 @@
   ],
   "packages": [
     "npm:@spences10/pi-lsp",
-    "npm:pi-mcp-adapter",
     "npm:pi-subagents",
     "npm:pi-edit-hooks",
     "npm:@dreki-gg/pi-context7",
