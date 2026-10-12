@@ -7,7 +7,9 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 ExecStart=%h/.local/libexec/dotgen/zed-host-bridge-serve-linux
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=%t/dotgen-zed-host-bridge
+RuntimeDirectory=dotgen-zed-host-bridge
+RuntimeDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s
 UMask=0077

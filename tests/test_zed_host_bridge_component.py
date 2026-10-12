@@ -451,7 +451,11 @@ def test_linux_receiver_resources_are_hardened_and_scoped() -> None:
     assert parser["Unit"]["After"] == "graphical-session.target"
     assert parser["Unit"]["PartOf"] == "graphical-session.target"
     assert parser["Service"]["ExecStart"] == "%h/.local/libexec/dotgen/zed-host-bridge-serve-linux"
-    assert parser["Service"]["Environment"] == "PATH=/usr/local/bin:/usr/bin:/bin"
+    assert parser["Service"]["Environment"] == (
+        "PATH=/usr/local/bin:/usr/bin:/bin TMPDIR=%t/dotgen-zed-host-bridge"
+    )
+    assert parser["Service"]["RuntimeDirectory"] == "dotgen-zed-host-bridge"
+    assert parser["Service"]["RuntimeDirectoryMode"] == "0700"
     assert parser["Service"]["Restart"] == "on-failure"
     assert parser["Service"]["RestartSec"] == "5s"
     assert parser["Service"]["UMask"] == "0077"
