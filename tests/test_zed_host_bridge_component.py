@@ -456,6 +456,7 @@ def test_linux_receiver_resources_are_hardened_and_scoped() -> None:
     assert parser["Service"]["RestartSec"] == "5s"
     assert parser["Service"]["UMask"] == "0077"
     assert parser["Service"]["NoNewPrivileges"] == "true"
+    assert "PrivateTmp" not in parser["Service"]
     assert parser["Install"]["WantedBy"] == "graphical-session.target"
     assert "Docker" not in unit_text
     assert "docker" not in fragment.setup.lower()
