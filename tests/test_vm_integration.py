@@ -111,7 +111,7 @@ cat > "$repo/pi" <<'SH'
 [ ! -e "$XDG_RUNTIME_DIR/docker.sock" ]
 SH
 chmod +x "$repo/pi"
-(cd "$repo" && PATH="$PWD:$PATH" pi-sandbox)
+(cd "$repo" && PI_SANDBOX_EXECUTABLE="$repo/pi" pi-sandbox)
 rm -rf "$repo"
 """,
         login=True,
@@ -238,7 +238,7 @@ SH
 chmod +x "$HOME/repos/sandbox-smoke/pi"
 cd "$HOME/repos/sandbox-smoke"
 [ "$(./pi)" = secret ]
-if PATH="$PWD:$PATH" pi-sandbox >/tmp/pi-sandbox-secret.out 2>/tmp/pi-sandbox-secret.err; then
+if PI_SANDBOX_EXECUTABLE="$PWD/pi" pi-sandbox >/tmp/pi-sandbox-secret.out 2>/tmp/pi-sandbox-secret.err; then
   echo "pi-sandbox unexpectedly read ~/.ssh/sandbox-secret"
   cat /tmp/pi-sandbox-secret.out
   exit 1
@@ -275,7 +275,7 @@ git commit -q -m 'Sandbox signing smoke test'
 git cat-file commit HEAD | grep -Fq 'gpgsig -----BEGIN SSH SIGNATURE-----'
 SH
 chmod +x "$repo/pi"
-(cd "$repo" && PATH="$repo:$PATH" pi-sandbox)
+(cd "$repo" && PI_SANDBOX_EXECUTABLE="$repo/pi" pi-sandbox)
 [ -r "$HOME/.ssh/id_signing" ]
 [ -r "$HOME/.ssh/id_signing.pub" ]
 """,
@@ -356,7 +356,7 @@ trap 'kill "$server_pid" 2>/dev/null || true; rm -f -- "$socket"' EXIT
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -S "$socket" ] && break; sleep 0.1; done
 [ -S "$socket" ]
 cd "$HOME/repos/zed-sandbox-smoke"
-PATH="$PWD:$PATH" pi-sandbox
+PI_SANDBOX_EXECUTABLE="$PWD/pi" pi-sandbox
 wait "$server_pid"
 grep -Fq '"relativePath":"zed-sandbox-smoke"' "$request_log"
 """,
@@ -392,7 +392,14 @@ else
   [ ! -e "$HOME/.pi-sandbox-cache" ]
 fi
 printf 'const value: number = 42;\nexport default value;\n' > "$PWD/jiti-cache-probe.ts"
-jiti_entry="$(npm root -g)/@earendil-works/pi-coding-agent/node_modules/jiti/lib/jiti-static.mjs"
+pi_version="$(cat "$HOME/.pi/agent/install/current-version")"
+pi_package="$HOME/.pi/agent/install/releases/$pi_version/node_modules/@earendil-works/pi-coding-agent"
+jiti_entry="$(PI_PACKAGE="$pi_package" node <<'JS_RESOLVE'
+const { createRequire } = require("node:module");
+const fromPi = createRequire(`${process.env.PI_PACKAGE}/package.json`);
+process.stdout.write(fromPi.resolve("jiti/lib/jiti-static.mjs"));
+JS_RESOLVE
+)"
 JITI_ENTRY="$jiti_entry" PROBE="$PWD/jiti-cache-probe.ts" node --input-type=module <<'JS'
 const { createJiti } = await import(process.env.JITI_ENTRY);
 const jiti = createJiti(import.meta.url, { moduleCache: false, tryNative: false });
@@ -441,14 +448,14 @@ cd "$HOME/repos/sandbox-smoke"
 if [ "$(uname -s)" != Darwin ]; then
   mkdir -p "$HOME/.pi-sandbox-cache"
   ln -s "$HOME/.ssh" "$HOME/.pi-sandbox-cache/jiti"
-  if PATH="$PWD:$PATH" pi-sandbox > /tmp/pi-sandbox-jiti-symlink.out 2>&1; then
+  if PI_SANDBOX_EXECUTABLE="$PWD/pi" pi-sandbox > /tmp/pi-sandbox-jiti-symlink.out 2>&1; then
     echo "pi-sandbox accepted a symlinked Jiti cache" >&2
     exit 1
   fi
   grep -q 'refusing symlinked Jiti cache directory' /tmp/pi-sandbox-jiti-symlink.out
   rm -f "$HOME/.pi-sandbox-cache/jiti" /tmp/pi-sandbox-jiti-symlink.out
 fi
-PATH="$PWD:$PATH" pi-sandbox
+PI_SANDBOX_EXECUTABLE="$PWD/pi" pi-sandbox
 if [ "$(uname -s)" = Darwin ]; then
   jiti_cache="${TMPDIR:-/tmp}/jiti"
 else
@@ -462,7 +469,7 @@ else
   jiti_cache_mtime="$(stat -c %Y "$jiti_cache_file")"
 fi
 sleep 1
-PATH="$PWD:$PATH" pi-sandbox
+PI_SANDBOX_EXECUTABLE="$PWD/pi" pi-sandbox
 if [ "$(uname -s)" = Darwin ]; then
   [ "$(stat -f %m "$jiti_cache_file")" = "$jiti_cache_mtime" ]
 else
@@ -523,7 +530,7 @@ if printf 'unexpected write\n' > "$clipboard_dir/dotgen-sandbox-write" 2>/dev/nu
 fi
 SH
 chmod +x "$repo/pi"
-(cd "$repo" && PATH="$repo:$PATH" pi-sandbox)
+(cd "$repo" && PI_SANDBOX_EXECUTABLE="$repo/pi" pi-sandbox)
 [ ! -e "$clipboard_dir/dotgen-sandbox-write" ]
 """,
         login=True,
@@ -553,7 +560,7 @@ for hidden in "$HOME/.bash_history" "$db"; do
 done
 SH
 chmod +x "$repo/pi"
-(cd "$repo" && PATH="$PWD:$PATH" pi-sandbox)
+(cd "$repo" && PI_SANDBOX_EXECUTABLE="$repo/pi" pi-sandbox)
 """,
         login=True,
     )

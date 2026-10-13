@@ -599,22 +599,53 @@ component_begin "pi_agent"
 if (
   set -e
   install_package bubblewrap
-  install_npm_global @earendil-works/pi-coding-agent @earendil-works/pi-server @earendil-works/pi-client
+  install_npm_global @earendil-works/pi-server @earendil-works/pi-client
+  pi_installer_url=https://pi.dev/install.sh
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"
   ensure_dir "$HOME/.local/bin"
+
+  legacy_pi_launcher="$HOME/.local/bin/pi"
+  legacy_pi_signature="pi_bin=\"\$node_bin/pi\""
+  if [ -f "$legacy_pi_launcher" ] && [ ! -L "$legacy_pi_launcher" ] \
+    && grep -Fq "$legacy_pi_signature" "$legacy_pi_launcher" \
+    && grep -Fq "fnm default node installation not found" "$legacy_pi_launcher"; then
+    rm -f -- "$legacy_pi_launcher"
+  fi
+
+  pi_installer="$(mktemp)"
+  trap 'rm -f -- "$pi_installer"' EXIT
+  curl -fsSL "$pi_installer_url" -o "$pi_installer"
+  node -e '
+  const { spawnSync } = require("node:child_process");
+  const env = { ...process.env, PATH: process.env.HOME + "/.local/bin:" + process.env.PATH };
+  const result = spawnSync("/bin/sh", [process.argv[1]], {
+    detached: true,
+    env,
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  if (result.error) {
+    console.error(result.error.message);
+    process.exit(1);
+  }
+  if (result.signal) {
+    console.error("Pi installer terminated by " + result.signal);
+    process.exit(1);
+  }
+  process.exit(result.status ?? 1);
+  ' "$pi_installer"
+  rm -f -- "$pi_installer"
+  trap - EXIT
+  [ -x "$HOME/.local/bin/pi" ] || { error "managed Pi installer did not create ~/.local/bin/pi"; exit 1; }
+  [ -f "$HOME/.pi/agent/install/managed-install.json" ] || { error "managed Pi installer did not create its installation marker"; exit 1; }
+
   install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"
   install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600
-  install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"
   install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
   install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
 
-  pi-unsafe() {
-    "$HOME/.local/bin/pi" "$@"
-  }
-  pi-unsafe update
-  pi-unsafe update --extensions
+  "$HOME/.local/bin/pi" update --extensions
 
   "$HOME/.local/bin/herdr" integration install pi
 ); then

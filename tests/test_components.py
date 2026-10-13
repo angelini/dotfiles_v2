@@ -34,7 +34,14 @@ from dotgen.components.marksman import Marksman
 from dotgen.components.node_fnm import NodeFnm
 from dotgen.components.npm_config import NpmConfig
 from dotgen.components.orbstack import OrbStack
-from dotgen.components.pi_agent import _PI_EXTENSION_PACKAGES, _PI_GLOBAL_PACKAGES, SANDBOX_HOME_POLICY, PiAgent, _pi_angelini_root  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.pi_agent import (  # pyright: ignore[reportPrivateUsage]
+    _PI_EXTENSION_PACKAGES,
+    _PI_GLOBAL_PACKAGES,
+    _PI_INSTALLER_URL,
+    SANDBOX_HOME_POLICY,
+    PiAgent,
+    _pi_angelini_root,
+)
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
@@ -1346,28 +1353,35 @@ def test_pi_agent_setup() -> None:
     assert len(npm_lines) == 1
     assert shlex.split(npm_lines[0]) == ["install_npm_global", *_PI_GLOBAL_PACKAGES]
     assert _PI_GLOBAL_PACKAGES == (
-        "@earendil-works/pi-coding-agent",
         "@earendil-works/pi-server",
         "@earendil-works/pi-client",
     )
+    assert "@earendil-works/pi-coding-agent" not in npm_lines[0]
     assert not set(_PI_EXTENSION_PACKAGES) & set(_PI_GLOBAL_PACKAGES)
     assert "npm uninstall" not in frag.setup
     assert "pi-web-access" not in npm_lines[0]
     pi_config_install = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"'
     herdr_integration_install = '"$HOME/.local/bin/herdr" integration install pi'
+    assert f"pi_installer_url={_PI_INSTALLER_URL}" in frag.setup
+    assert 'curl -fsSL "$pi_installer_url" -o "$pi_installer"' in frag.setup
+    assert 'spawnSync("/bin/sh", [process.argv[1]]' in frag.setup
+    assert "detached: true" in frag.setup
+    assert 'legacy_pi_signature="pi_bin=\\"\\$node_bin/pi\\""' in frag.setup
+    assert 'grep -Fq "$legacy_pi_signature"' in frag.setup
+    assert 'managed-install.json" ]' in frag.setup
     assert pi_config_install in frag.setup
     assert herdr_integration_install in frag.setup
-    assert frag.setup.index(pi_config_install) < frag.setup.index(herdr_integration_install)
+    assert frag.setup.index("managed-install.json") < frag.setup.index(pi_config_install) < frag.setup.index(herdr_integration_install)
     assert herdr_integration_install in PiAgent().render(ENVIRONMENTS["debian"]).setup
     assert herdr_integration_install not in PiAgent().render(ENVIRONMENTS["debian-docker"]).setup
     assert 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600' in frag.setup
-    assert 'install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"' in frag.setup
+    assert 'install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"' not in frag.setup
     assert 'install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"' in frag.setup
-    pi_unsafe_function = 'pi-unsafe() {\n  "$HOME/.local/bin/pi" "$@"\n}'
-    assert pi_unsafe_function in frag.setup
-    assert frag.setup.count("pi-unsafe update\n") == 1
-    assert frag.setup.count("pi-unsafe update --extensions\n") == 1
-    assert frag.setup.index(pi_config_install) < frag.setup.index("pi-unsafe update\n") < frag.setup.index("pi-unsafe update --extensions\n")
+    assert "pi-unsafe" not in frag.setup
+    assert '"$HOME/.local/bin/pi" update\n' not in frag.setup
+    extension_update = '"$HOME/.local/bin/pi" update --extensions'
+    assert frag.setup.count(extension_update) == 1
+    assert frag.setup.index(pi_config_install) < frag.setup.index(extension_update)
     assert "GEMINI_API_KEY" not in frag.secrets
     assert "GOOGLE_CLOUD_PROJECT" in frag.secrets
     assert "GOOGLE_CLOUD_LOCATION" in frag.secrets
@@ -1401,7 +1415,6 @@ def test_pi_agent_setup() -> None:
         "managed-settings/pi.json",
         "pi/agent/models.json",
         "pi/agent/web-search.json",
-        "pi/launcher/pi.sh",
         "pi/sandbox/pi-sandbox.sh",
         "pi/sandbox/pi-macos.sb",
     }
@@ -1420,6 +1433,57 @@ def test_pi_agent_setup() -> None:
     assert angelini_vendor.exclude_globs == ("package-lock.json", "pi-system-audit-plan.md", "*.test.ts")
 
 
+def test_pi_agent_setup_migrates_legacy_launcher_noninteractively(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    bin_dir = home / ".local" / "bin"
+    bin_dir.mkdir(parents=True)
+    legacy_launcher = bin_dir / "pi"
+    legacy_launcher.write_text(
+        '#!/usr/bin/env bash\nnode_bin="$HOME/.local/share/fnm/aliases/default/bin"\npi_bin="$node_bin/pi"\n'
+        "echo 'fnm default node installation not found'\n"
+    )
+    legacy_launcher.chmod(0o755)
+
+    fake_installer = tmp_path / "install-pi.sh"
+    fake_installer.write_text(
+        "#!/bin/sh\n"
+        'test ! -e "$HOME/.local/bin/pi"\n'
+        'mkdir -p "$HOME/.local/bin" "$HOME/.pi/agent/install"\n'
+        'printf \'{"kind":"pi-managed-install"}\\n\' > "$HOME/.pi/agent/install/managed-install.json"\n'
+        'cat > "$HOME/.local/bin/pi" <<\'PI\'\n'
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "$*" >> "$HOME/pi-calls"\n'
+        "PI\n"
+        'chmod 0755 "$HOME/.local/bin/pi"\n'
+    )
+
+    setup = PiAgent().render(ENVIRONMENTS["debian-docker"]).setup
+    script = tmp_path / "setup.sh"
+    script.write_text(
+        "set -euo pipefail\n"
+        'DIR="$1"\n'
+        'FAKE_PI_INSTALLER="$2"\n'
+        "install_package() { :; }\n"
+        'install_npm_global() { printf \'%s\\n\' "$*" > "$HOME/npm-packages"; }\n'
+        'ensure_dir() { mkdir -p "$1"; }\n'
+        "install_config_dir() { :; }\n"
+        "install_json_patch() { :; }\n"
+        "install_config() { :; }\n"
+        "install() { :; }\n"
+        'curl() { cp "$FAKE_PI_INSTALLER" "${@: -1}"; }\n'
+        'error() { printf \'%s\\n\' "$*" >&2; }\n'
+        f"{setup}\n"
+    )
+
+    subprocess.run(["bash", str(script), str(tmp_path), str(fake_installer)], check=True, env={**os.environ, "HOME": str(home)})
+
+    assert legacy_launcher.is_file()
+    assert (home / ".pi/agent/install/managed-install.json").is_file()
+    assert (home / "npm-packages").read_text().split() == list(_PI_GLOBAL_PACKAGES)
+    assert "@earendil-works/pi-coding-agent" not in (home / "npm-packages").read_text()
+    assert (home / "pi-calls").read_text() == "update --extensions\n"
+
+
 def test_history_paths_remain_hidden_from_pi() -> None:
     assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
     assert ".bash_history" in SANDBOX_HOME_POLICY.hidden_files
@@ -1427,17 +1491,18 @@ def test_history_paths_remain_hidden_from_pi() -> None:
 
 def test_pi_agent_sandbox_aliases() -> None:
     frag = PiAgent().render(ENVIRONMENTS["macos"])
+    assert 'if [ "${1-}" = update ]' in frag.alias
+    assert 'pi-unsafe "$@"' in frag.alias
     assert 'pi-sandbox "$@"' in frag.alias
-    assert 'command pi "$@"' in frag.alias
+    assert '"$HOME/.local/bin/pi" "$@"' in frag.alias
 
 
-def test_pi_agent_launcher_uses_fnm_default() -> None:
+def test_pi_agent_uses_upstream_managed_launcher() -> None:
     frag = PiAgent().render(ENVIRONMENTS["debian"])
-    launcher = next(cf for cf in frag.configs if cf.dest == "pi/launcher/pi.sh")
-    assert launcher.mode == 0o755
-    assert 'node_bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"' in launcher.content
-    assert 'export PATH="$node_bin:$PATH"' in launcher.content
-    assert 'exec "$pi_bin" "$@"' in launcher.content
+    assert not [cf for cf in frag.configs if cf.dest == "pi/launcher/pi.sh"]
+    assert _PI_INSTALLER_URL in frag.setup
+    assert "node -e" in frag.setup
+    assert 'PATH: process.env.HOME + "/.local/bin:" + process.env.PATH' in frag.setup
 
 
 def test_pi_agent_bubblewrap_linux_only() -> None:
@@ -1551,8 +1616,9 @@ def test_pi_agent_sandbox_configs() -> None:
     assert '(literal "/var")' in profile.content
     assert 'bin="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin"' in script.content
     assert 'node_bin="$(_fnm_default_bin)"' in script.content
-    assert script.content.index('PATH="$node_bin:$PATH"') < script.content.index('pi_bin="$(command -v pi)"')
-    assert 'pi_bin="$(command -v pi)"' in script.content
+    assert 'pi_bin="${PI_SANDBOX_EXECUTABLE:-$HOME/.local/bin/pi}"' in script.content
+    assert script.content.index('pi_bin="${PI_SANDBOX_EXECUTABLE') < script.content.index('PATH="$node_bin:$PATH"')
+    assert 'pi_bin="$(command -v pi)"' not in script.content
     assert '"$pi_bin" "$@"' in script.content
     assert "GEMINI_API_KEY" not in script.content
     assert "GCP_PROJECT_ID" not in script.content

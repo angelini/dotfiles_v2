@@ -12,16 +12,6 @@ from dotgen.vendor import GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
 
 _WEB_SEARCH_JSON = json.dumps({"provider": "exa"}, indent=2) + "\n"
 
-_RESOURCE_ROOT = Path(__file__).resolve().parents[1] / "resources" / "pi_agent"
-
-
-def _resource_text(relative_path: str) -> str:
-    return (_RESOURCE_ROOT / relative_path).read_text()
-
-
-_PI_LAUNCHER_SH = _resource_text("pi.sh")
-
-
 def _pi_angelini_root() -> Path:
     configured = os.environ.get("DOTGEN_PI_ANGELINI_ROOT")
     if configured:
@@ -30,10 +20,11 @@ def _pi_angelini_root() -> Path:
 
 
 _PI_GLOBAL_PACKAGES = (
-    "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-server",
     "@earendil-works/pi-client",
 )
+
+_PI_INSTALLER_URL = "https://pi.dev/install.sh"
 
 _PI_EXTENSION_PACKAGES = (
     "@spences10/pi-lsp",
@@ -243,13 +234,11 @@ main() {
     *) _die "run pi-sandbox from within $repos" ;;
   esac
 
-  # fnm's use-on-cd repoints this shell's node version for the rest of its life, and npm
-  # globals are per-version, so pin the sandbox to the version the pi packages were installed for
+  # Keep Pi's Node runtime stable when fnm's use-on-cd changes the active version.
   node_bin="$(_fnm_default_bin)" || _die "fnm default node installation not found"
+  pi_bin="${PI_SANDBOX_EXECUTABLE:-$HOME/.local/bin/pi}"
+  [ -x "$pi_bin" ] || _die "managed pi binary is not executable: $pi_bin"
   PATH="$node_bin:$PATH"
-
-  pi_bin="$(command -v pi)" || _die "pi binary not found in $node_bin"
-  [ -x "$pi_bin" ] || _die "pi binary is not executable: $pi_bin"
   transformers_cache="$memory_dir/transformers-cache"
   transformers_cache_target="$HOME/.pi/agent/npm/node_modules/@xenova/transformers/.cache"
   mkdir -p \
@@ -450,34 +439,71 @@ _PI_MACOS_SB = (
 
 _ALIAS = """\
 pi() {
-  pi-sandbox "$@"
+  if [ "${1-}" = update ]; then
+    pi-unsafe "$@"
+  else
+    pi-sandbox "$@"
+  fi
 }
 
 pi-unsafe() {
-  command pi "$@"
+  "$HOME/.local/bin/pi" "$@"
 }
 """
 
 _SETUP_BASE = (
     "install_npm_global "
     + shlex.join(_PI_GLOBAL_PACKAGES)
+    + "\n"
+    + "pi_installer_url="
+    + shlex.quote(_PI_INSTALLER_URL)
     + r"""
 ensure_dir "$HOME/.pi/agent"
 ensure_dir "$HOME/.config/pi/sandbox"
 ensure_dir "$HOME/.local/bin"
+
+legacy_pi_launcher="$HOME/.local/bin/pi"
+legacy_pi_signature="pi_bin=\"\$node_bin/pi\""
+if [ -f "$legacy_pi_launcher" ] && [ ! -L "$legacy_pi_launcher" ] \
+  && grep -Fq "$legacy_pi_signature" "$legacy_pi_launcher" \
+  && grep -Fq "fnm default node installation not found" "$legacy_pi_launcher"; then
+  rm -f -- "$legacy_pi_launcher"
+fi
+
+pi_installer="$(mktemp)"
+trap 'rm -f -- "$pi_installer"' EXIT
+curl -fsSL "$pi_installer_url" -o "$pi_installer"
+node -e '
+const { spawnSync } = require("node:child_process");
+const env = { ...process.env, PATH: process.env.HOME + "/.local/bin:" + process.env.PATH };
+const result = spawnSync("/bin/sh", [process.argv[1]], {
+  detached: true,
+  env,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+if (result.error) {
+  console.error(result.error.message);
+  process.exit(1);
+}
+if (result.signal) {
+  console.error("Pi installer terminated by " + result.signal);
+  process.exit(1);
+}
+process.exit(result.status ?? 1);
+' "$pi_installer"
+rm -f -- "$pi_installer"
+trap - EXIT
+[ -x "$HOME/.local/bin/pi" ] || { error "managed Pi installer did not create ~/.local/bin/pi"; exit 1; }
+[ -f "$HOME/.pi/agent/install/managed-install.json" ] || { error "managed Pi installer did not create its installation marker"; exit 1; }
+
 install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"
 install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600
 install_config "$DIR/config/pi/sandbox/pi-macos.sb" "$HOME/.config/pi/sandbox/pi-macos.sb"
-install -m 0755 "$DIR/config/pi/launcher/pi.sh" "$HOME/.local/bin/pi"
 install -m 0755 "$DIR/config/pi/sandbox/pi-sandbox.sh" "$HOME/.local/bin/pi-sandbox"
 
 install_config_dir "$DIR/config/pi-angelini" "$HOME/repos/pi-angelini"
 
-pi-unsafe() {
-  "$HOME/.local/bin/pi" "$@"
-}
-pi-unsafe update
-pi-unsafe update --extensions
+"$HOME/.local/bin/pi" update --extensions
 """
 )
 
@@ -510,7 +536,6 @@ class PiAgent:
             ConfigFile(dest="managed-settings/pi.json", content=managed_settings("pi"), mode=0o600),
             ConfigFile(dest="pi/agent/models.json", content=pi_models(), mode=0o600),
             ConfigFile(dest="pi/agent/web-search.json", content=_WEB_SEARCH_JSON),
-            ConfigFile(dest="pi/launcher/pi.sh", content=_PI_LAUNCHER_SH, mode=0o755),
             ConfigFile(dest="pi/sandbox/pi-sandbox.sh", content=_PI_SANDBOX_SH, mode=0o755),
         ]
         if env.os is not OS.CACHYOS:

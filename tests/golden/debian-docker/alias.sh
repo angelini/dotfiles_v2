@@ -46,11 +46,15 @@ k8s_all_resources_in_ns() {
 
 # --- pi_agent ---
 pi() {
-  pi-sandbox "$@"
+  if [ "${1-}" = update ]; then
+    pi-unsafe "$@"
+  else
+    pi-sandbox "$@"
+  fi
 }
 
 pi-unsafe() {
-  command pi "$@"
+  "$HOME/.local/bin/pi" "$@"
 }
 
 # --- dotfiles_deploy ---
