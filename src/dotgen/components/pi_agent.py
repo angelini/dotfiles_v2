@@ -12,6 +12,7 @@ from dotgen.vendor import GIT_ARTIFACTS, NODE_ARTIFACTS, PY_ARTIFACTS, VendorDir
 
 _WEB_SEARCH_JSON = json.dumps({"provider": "exa"}, indent=2) + "\n"
 
+
 def _pi_angelini_root() -> Path:
     configured = os.environ.get("DOTGEN_PI_ANGELINI_ROOT")
     if configured:
@@ -74,7 +75,6 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
         ".gitconfig",
         ".gitignore_global",
         ".config/git/config",
-        ".config/gcloud/application_default_credentials.json",
         ".config/pi/sandbox/pi-macos.sb",
     ),
     hidden_dirs=(
@@ -83,6 +83,7 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
         ".aws",
         ".azure",
         ".config/dotgen",
+        ".config/gcloud",
         ".kube",
         ".claude",
         ".local/share/stinkpot",
@@ -276,8 +277,7 @@ _run_macos() {
     "GIT_CONFIG_COUNT=1" \
     "GIT_CONFIG_KEY_0=user.signingKey" \
     "GIT_CONFIG_VALUE_0=key::$_SIGNING_PUBLIC_KEY" \
-    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" \
-    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
+    "GEMINI_API_KEY=${GEMINI_API_KEY:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     "HERDR_ENV=${HERDR_ENV:-}" \
@@ -314,8 +314,7 @@ _run_linux() {
     "GIT_CONFIG_COUNT=1" \
     "GIT_CONFIG_KEY_0=user.signingKey" \
     "GIT_CONFIG_VALUE_0=key::$_SIGNING_PUBLIC_KEY" \
-    "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" \
-    "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" \
+    "GEMINI_API_KEY=${GEMINI_API_KEY:-}" \
     "EXA_API_KEY=${EXA_API_KEY:-}" \
     "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" \
     "HERDR_ENV=${HERDR_ENV:-}" \
@@ -561,5 +560,5 @@ class PiAgent:
                     exclude_globs=("package-lock.json", "pi-system-audit-plan.md", "*.test.ts"),
                 ),
             ),
-            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GOOGLE_CLOUD_LOCATION", "GOOGLE_CLOUD_PROJECT"}),
+            secrets=frozenset({"CONTEXT7_API_KEY", "EXA_API_KEY", "GEMINI_API_KEY"}),
         )

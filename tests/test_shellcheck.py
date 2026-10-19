@@ -18,6 +18,7 @@ def built_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def test_shellcheck_clean(built_root: Path) -> None:
     if not shutil.which("shellcheck"):
         pytest.skip("shellcheck not installed")
+    preflight = Path(__file__).parents[1] / "docs/cachyos/live-preflight.sh"
     files = (
         sorted(built_root.glob("*/*.sh"))
         + sorted(built_root.glob("*/.bashrc"))
@@ -29,8 +30,8 @@ def test_shellcheck_clean(built_root: Path) -> None:
             built_root / "macos/config/herdr/herd-remote",
             built_root / "cachyos/config/herdr/herd-local",
             built_root / "cachyos/config/herdr/herd-remote",
-            Path(__file__).parents[1] / "docs/cachyos/live-preflight.sh",
         ]
+        + ([preflight] if preflight.exists() else [])
     )
     cmd = [
         "shellcheck",

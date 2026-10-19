@@ -3,7 +3,6 @@
 0600  bd4763be9f7fbdd4b833627d94f35498c03d80a66663ff33834fab7104743895  zed-host-bridge/ssh-linux.conf.template
 0600  c4d45e53eca749a23a9d2a4ce748eccdb9ddab45e1eab466dd4910ad14773cf6  zed-host-bridge/config.json.template
 0600  d18088735ac3b98dc79e0af36a22d44d1b595420b958ade5875612cd1c4fb9b1  pi/agent/models.json
-0600  e1c50aad27cb7e9dcd1168fa8157559f53336f50627a36a2b8326bc5a4c74127  npm/npmrc
 0600  e58074c2653ea247f1aeae7b7e57442fd3da04b8bad520314e65713468f42675  managed-settings/pi.json
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
 0644  73970998ae9ddea4c3d7e082ef5a786dd36291ba46c140b0611d452b776a729f  zed-host-bridge/dev.dotgen.zed-host-bridge.service
@@ -20,9 +19,9 @@
 0644  e6647d66535888e62df57184eca3fca06ca703f2c565db467cf05430a307daf1  zed/settings.json
 0644  f1b87054faa5bf83a8bcb623e4849988d2adb187eeff4e7f729f88dbffd041f6  herdr/remote.toml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
+0755  5279205d988a3d025ae290db7dbd4be06723e3cd798007dee2ee5f62f00d642e  pi/sandbox/pi-sandbox.sh
 0755  7abe019bfa104be4254ef48597824db70d46a4d31b5e9a5de8357786cb8940ec  zed-host-bridge/serve-linux
 0755  c082009a049f536f1373e91284c50db769ba5518ae65285e2c96dba4eca90e70  herdr/herd-remote
-0755  c28370a938223d46850fdf9562bfe39cb10273f3254fc45c76b8e469ef2f9076  pi/sandbox/pi-sandbox.sh
 0755  c9346e8234fb65bc846f9806afb5eab8bf641f26a27fa7c4881efa3961adbdd1  herdr/herd-local
 dir  claude
 dir  pi-angelini

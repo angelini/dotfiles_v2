@@ -119,7 +119,7 @@ chmod 600 ~/.config/dotgen/secrets.env
 $EDITOR ~/.config/dotgen/secrets.env
 ```
 
-Populate manual files using single-line `KEY="value"` entries. Git name and email are required; API keys are needed for their corresponding services. Google Vertex model access uses gcloud ADC plus `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` in this file. Deployment aborts if the file is absent or a required template value is empty.
+Populate manual files using single-line `KEY="value"` entries. Git name and email are required; API keys are needed for their corresponding services. Deployment aborts if the file is absent or a required template value is empty.
 
 On Debian, extract the bundle if needed, run it, then start a new login shell:
 
@@ -183,7 +183,7 @@ uv run python -m dotgen send-secrets cachyos <user>@<host> --from-file
 just deploy cachyos <user>@<host>
 ```
 
-`send-secrets --from-file` defaults to `${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env` on the build host. `--from-file PATH` and `--from-env` work as documented in the Debian procedure. The generated template is `dist/cachyos/config/dotgen/secrets.env.template`; the target file is `~/.config/dotgen/secrets.env`, under a mode-`0700` `~/.config/dotgen` directory and with mode `0600`. It declares `CONTEXT7_API_KEY`, `EXA_API_KEY`, `GIT_USER_EMAIL`, `GIT_USER_NAME`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_PROJECT`, `NPM_TOKEN`, and `ZED_HOST_BRIDGE_SSH_HOST`. The bridge value must be the exact OpenSSH alias used by `herd-remote` and may contain only ASCII letters, digits, dots, and hyphens.
+`send-secrets --from-file` defaults to `${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env` on the build host. `--from-file PATH` and `--from-env` work as documented in the Debian procedure. The generated template is `dist/cachyos/config/dotgen/secrets.env.template`; the target file is `~/.config/dotgen/secrets.env`, under a mode-`0700` `~/.config/dotgen` directory and with mode `0600`. It declares `CONTEXT7_API_KEY`, `EXA_API_KEY`, `GEMINI_API_KEY`, `GIT_USER_EMAIL`, `GIT_USER_NAME`, and `ZED_HOST_BRIDGE_SSH_HOST`. The bridge value must be the exact OpenSSH alias used by `herd-remote` and may contain only ASCII letters, digits, dots, and hyphens.
 
 Never put real values in the bundle, Git, logs, or the live-validation record. For manual transfer, either populate the generated template or securely pull an existing secrets file over SSH. This CachyOS-side command stages the file in the owner-only target directory and publishes it atomically:
 

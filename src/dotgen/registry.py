@@ -19,7 +19,6 @@ from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.marksman import Marksman
 from dotgen.components.node_fnm import NodeFnm
-from dotgen.components.npm_config import NpmConfig
 from dotgen.components.orbstack import OrbStack
 from dotgen.components.pi_agent import PiAgent
 from dotgen.components.postgres import Postgres
@@ -59,7 +58,6 @@ _CORE_CLI: tuple[Component, ...] = (
     Terraform(),
     Zig(),
     NodeFnm(),
-    NpmConfig(),
     Steps(),
     PiAgent(),
     Postgres(),

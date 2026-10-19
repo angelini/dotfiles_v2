@@ -32,7 +32,6 @@ from dotgen.components.herdr import Herdr
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.marksman import Marksman
 from dotgen.components.node_fnm import NodeFnm
-from dotgen.components.npm_config import NpmConfig
 from dotgen.components.orbstack import OrbStack
 from dotgen.components.pi_agent import (  # pyright: ignore[reportPrivateUsage]
     _PI_EXTENSION_PACKAGES,
@@ -54,7 +53,7 @@ from dotgen.components.zed import Zed
 from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
 from dotgen.environment import Environment
-from dotgen.fragment import ConfigFile, Fragment
+from dotgen.fragment import Fragment
 from dotgen.registry import ENVIRONMENTS
 from dotgen.render import _vendor_dir  # pyright: ignore[reportPrivateUsage]
 from dotgen.types import OS, EnvironmentRole, PkgMgr
@@ -84,7 +83,6 @@ def env(request: pytest.FixtureRequest) -> Environment:
         Steps,
         Gh,
         GitSigning,
-        NpmConfig,
         PiAgent,
     ],
 )
@@ -365,17 +363,6 @@ def test_git_setup_uses_delta_pager() -> None:
     assert "pager = delta" in gitconfig
     assert "diffFilter = delta --color-only" in gitconfig
     assert "light = true" in gitconfig
-
-
-def test_npm_config_is_secure_and_exact_in_every_environment() -> None:
-    expected = "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}\n@qawolf:registry=https://npm.pkg.github.com\n"
-    for env in ENVIRONMENTS.values():
-        component = NpmConfig()
-        assert component.applies_to(env)
-        frag = component.render(env)
-        assert frag.configs == (ConfigFile(dest="npm/npmrc", content=expected, mode=0o600),)
-        assert frag.setup == 'install_config_template "$DIR/config/npm/npmrc" "$HOME/.npmrc" \'NPM_TOKEN\' 0600\n'
-        assert frag.secrets == frozenset({"NPM_TOKEN"})
 
 
 def test_git_setup_signs_with_ssh_key() -> None:
@@ -866,7 +853,6 @@ def test_environment_component_distribution() -> None:
         "rust",
         "terraform",
         "node_fnm",
-        "npm_config",
         "go_lang",
         "gcloud",
         "aws",
@@ -903,7 +889,6 @@ def test_cachyos_core_profile_is_explicit_ordered_and_renderable() -> None:
         "terraform",
         "zig",
         "node_fnm",
-        "npm_config",
         "steps",
         "pi_agent",
         "postgres",
@@ -1100,13 +1085,6 @@ def test_docker_render_contract() -> None:
     assert "WantedBy=default.target" in service.content
 
 
-def test_npm_config_is_ordered_between_node_and_pi_in_every_environment() -> None:
-    for env in ENVIRONMENTS.values():
-        names = [component.name for component in env.components]
-        if "pi_agent" in names:
-            assert names.index("node_fnm") < names.index("npm_config") < names.index("pi_agent")
-
-
 def test_ghostty_supported_workstations_emit_shared_config_and_os_install() -> None:
     ghostty = Ghostty()
     assert ghostty.applies_to(ENVIRONMENTS["macos"])
@@ -1127,7 +1105,7 @@ def test_ghostty_supported_workstations_emit_shared_config_and_os_install() -> N
     assert "Library/Application Support/com.mitchellh.ghostty" in frag.setup
     assert cachyos.setup.startswith("install_package ghostty\n")
     assert "bin_exists ghostty" in cachyos.setup
-    assert '${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config' in cachyos.setup
+    assert "${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config" in cachyos.setup
     assert "install_cask" not in cachyos.setup and "Library/" not in cachyos.setup
 
 
@@ -1235,7 +1213,7 @@ def test_zed_supported_workstations_emit_valid_os_keymaps_and_shared_settings() 
     cachyos_setup = rendered["cachyos"].setup
     assert cachyos_setup.startswith("install_package zed\n")
     assert "bin_exists zeditor" in cachyos_setup
-    assert '${XDG_CONFIG_HOME:-$HOME/.config}/zed/settings.json' in cachyos_setup
+    assert "${XDG_CONFIG_HOME:-$HOME/.config}/zed/settings.json" in cachyos_setup
     assert "install_cask" not in cachyos_setup
 
 
@@ -1382,9 +1360,9 @@ def test_pi_agent_setup() -> None:
     extension_update = '"$HOME/.local/bin/pi" update --extensions'
     assert frag.setup.count(extension_update) == 1
     assert frag.setup.index(pi_config_install) < frag.setup.index(extension_update)
-    assert "GEMINI_API_KEY" not in frag.secrets
-    assert "GOOGLE_CLOUD_PROJECT" in frag.secrets
-    assert "GOOGLE_CLOUD_LOCATION" in frag.secrets
+    assert "GEMINI_API_KEY" in frag.secrets
+    assert "GOOGLE_CLOUD_PROJECT" not in frag.secrets
+    assert "GOOGLE_CLOUD_LOCATION" not in frag.secrets
     assert "EXA_API_KEY" in frag.secrets
     assert "CONTEXT7_API_KEY" in frag.secrets
     settings = next(cf for cf in frag.configs if cf.dest == "managed-settings/pi.json")
@@ -1438,10 +1416,7 @@ def test_pi_agent_setup_migrates_legacy_launcher_noninteractively(tmp_path: Path
     bin_dir = home / ".local" / "bin"
     bin_dir.mkdir(parents=True)
     legacy_launcher = bin_dir / "pi"
-    legacy_launcher.write_text(
-        '#!/usr/bin/env bash\nnode_bin="$HOME/.local/share/fnm/aliases/default/bin"\npi_bin="$node_bin/pi"\n'
-        "echo 'fnm default node installation not found'\n"
-    )
+    legacy_launcher.write_text('#!/usr/bin/env bash\nnode_bin="$HOME/.local/share/fnm/aliases/default/bin"\npi_bin="$node_bin/pi"\necho \'fnm default node installation not found\'\n')
     legacy_launcher.chmod(0o755)
 
     fake_installer = tmp_path / "install-pi.sh"
@@ -1450,7 +1425,7 @@ def test_pi_agent_setup_migrates_legacy_launcher_noninteractively(tmp_path: Path
         'test ! -e "$HOME/.local/bin/pi"\n'
         'mkdir -p "$HOME/.local/bin" "$HOME/.pi/agent/install"\n'
         'printf \'{"kind":"pi-managed-install"}\\n\' > "$HOME/.pi/agent/install/managed-install.json"\n'
-        'cat > "$HOME/.local/bin/pi" <<\'PI\'\n'
+        "cat > \"$HOME/.local/bin/pi\" <<'PI'\n"
         "#!/bin/sh\n"
         'printf \'%s\\n\' "$*" >> "$HOME/pi-calls"\n'
         "PI\n"
@@ -1471,7 +1446,7 @@ def test_pi_agent_setup_migrates_legacy_launcher_noninteractively(tmp_path: Path
         "install_config() { :; }\n"
         "install() { :; }\n"
         'curl() { cp "$FAKE_PI_INSTALLER" "${@: -1}"; }\n'
-        'error() { printf \'%s\\n\' "$*" >&2; }\n'
+        "error() { printf '%s\\n' \"$*\" >&2; }\n"
         f"{setup}\n"
     )
 
@@ -1525,8 +1500,8 @@ def test_pi_agent_sandbox_configs() -> None:
         ".config/dotgen",
         ".kube",
     } <= set(SANDBOX_HOME_POLICY.hidden_dirs)
-    assert ".config/gcloud" not in SANDBOX_HOME_POLICY.hidden_dirs
-    assert ".config/gcloud/application_default_credentials.json" in SANDBOX_HOME_POLICY.readonly_files
+    assert ".config/gcloud" in SANDBOX_HOME_POLICY.hidden_dirs
+    assert ".config/gcloud/application_default_credentials.json" not in SANDBOX_HOME_POLICY.readonly_files
     assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
     assert ".local/share/stinkpot" not in SANDBOX_HOME_POLICY.hidden_files
     assert ".bash_history" in SANDBOX_HOME_POLICY.hidden_files
@@ -1620,10 +1595,10 @@ def test_pi_agent_sandbox_configs() -> None:
     assert script.content.index('pi_bin="${PI_SANDBOX_EXECUTABLE') < script.content.index('PATH="$node_bin:$PATH"')
     assert 'pi_bin="$(command -v pi)"' not in script.content
     assert '"$pi_bin" "$@"' in script.content
-    assert "GEMINI_API_KEY" not in script.content
+    assert "GEMINI_API_KEY=${GEMINI_API_KEY:-}" in script.content
     assert "GCP_PROJECT_ID" not in script.content
-    assert "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}" in script.content
-    assert "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}" in script.content
+    assert "GOOGLE_CLOUD_PROJECT" not in script.content
+    assert "GOOGLE_CLOUD_LOCATION" not in script.content
     assert "EXA_API_KEY=${EXA_API_KEY:-}" in script.content
     assert "CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}" in script.content
     for variable in ("HERDR_ENV", "HERDR_PANE_ID", "HERDR_SOCKET_PATH", "HERDR_BIN_PATH"):
