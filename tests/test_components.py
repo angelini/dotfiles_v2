@@ -783,7 +783,7 @@ def test_claude_code_setup_installs_serena_via_uv_tool() -> None:
     assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
     assert "claude mcp list" not in setup
     assert "jq -e '.mcpServers.serena // empty'" in setup
-    assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
+    assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code --project-from-cwd" in setup
 
 
 def test_uv_precedes_every_consumer() -> None:

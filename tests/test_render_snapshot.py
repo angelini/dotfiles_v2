@@ -197,7 +197,7 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
             assert 'chmod +x "$HOME/.claude/hooks/' not in setup
             assert "install_script claude https://claude.ai/install.sh" in setup
             assert "tool install --from https://github.com/oraios/serena/archive/refs/heads/main.tar.gz serena-agent" in setup
-            assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code" in setup
+            assert "claude mcp add serena -s user -- serena start-mcp-server --context claude-code --project-from-cwd" in setup
             assert setup.count(claude_patch_call) == 1
             assert setup.count(platform_call) == 1
             assert 'install_config "$DIR/config/claude/settings.json"' not in setup

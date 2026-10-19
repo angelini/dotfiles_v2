@@ -24,9 +24,12 @@ _register_serena_mcp() {
     return 0
   fi
   if [ -f "$HOME/.claude.json" ] && jq -e '.mcpServers.serena // empty' "$HOME/.claude.json" >/dev/null 2>&1; then
-    return 0
+    if jq -e '.mcpServers.serena.args // [] | index("--project-from-cwd")' "$HOME/.claude.json" >/dev/null 2>&1; then
+      return 0
+    fi
+    claude mcp remove serena -s user || true
   fi
-  claude mcp add serena -s user -- serena start-mcp-server --context claude-code || true
+  claude mcp add serena -s user -- serena start-mcp-server --context claude-code --project-from-cwd || true
 }
 install_config_dir "$DIR/config/claude" "$HOME/.claude" "claude" "settings.json"
 install_json_patch "$DIR/config/managed-settings/claude.json" "$HOME/.claude/settings.json" 0600
