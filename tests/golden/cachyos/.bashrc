@@ -96,6 +96,9 @@ fi
 if bin_exists kubie; then
   source <(kubie generate-completion)
 fi
+if bin_exists kind; then
+  source <(kind completion bash)
+fi
 
 # --- uv ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"

@@ -279,12 +279,22 @@ if (
     arch="$(_kubie_arch)"
     download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version
   }
+  _install_kind_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d" ;;
+      arm64) checksum="20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2" ;;
+    esac
+    download_bin_sha256 kind "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-${arch}" "$checksum" "v0.33.0" version
+  }
   _install_kubectl_linux
   _install_helm_linux
   _install_k9s_linux
   _install_kubectx_linux
   _install_kubens_linux
   _install_kubie_linux
+  _install_kind_linux
 ); then
   component_end "kubectl" 0
 else

@@ -740,7 +740,10 @@ def test_kubectl_per_os_branching() -> None:
     assert 'download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx" "v0.11.0" --version' in debian
     assert 'download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens" "v0.11.0" --version' in debian
     assert 'download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version' in debian
+    assert 'download_bin_sha256 kind "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-${arch}" "$checksum" "v0.33.0" version' in debian
+    assert "install_packages kubectl helm k9s kubectx kubie kind" in macos
     assert "kubie generate-completion" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
+    assert "kind completion bash" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
     aliases = Kubectl().render(ENVIRONMENTS["macos"]).alias
     assert "alias kca=" not in aliases
     assert "alias kcn='kubectl ns'" in aliases
@@ -933,8 +936,8 @@ def test_cachyos_component_sources_and_linux_assets() -> None:
     assert "remove_packages google-cloud-cli" in gcloud.setup
     assert "$HOME/.local/share/google-cloud-sdk/path.bash.inc" in gcloud.bashrc
     doppler = Doppler().render(cachyos).setup
-    assert "doppler_3.76.5_linux_${doppler_arch}.tar.gz" in doppler
-    assert "1b2f412d984920d665daf233ab6c15b364df9339b5c5b5224d5e8ee4e0a70154" in doppler
+    assert "doppler_3.77.0_linux_${doppler_arch}.tar.gz" in doppler
+    assert "92587cb89c2ff82fc2ddec2b2a9f275ff320994a44e16cd9310b55a429a82084" in doppler
     assert "remove_packages doppler-cli-bin" in doppler
     assert Aws().render(cachyos).setup.startswith("install_package aws-cli-v2\n")
     assert Postgres().render(cachyos).setup == "install_package postgresql\n"

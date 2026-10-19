@@ -9,6 +9,11 @@ _HELM_VERSION = "v3.21.4"
 _K9S_VERSION = "v0.51.0"
 _KUBECTX_VERSION = "v0.11.0"
 _KUBIE_VERSION = "v0.28.0"
+_KIND_VERSION = "v0.33.0"
+_KIND_SHA256 = {
+    "amd64": "aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d",
+    "arm64": "20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2",
+}
 
 _LINUX_HELPERS = (
     r"""_kube_arch() {
@@ -84,12 +89,35 @@ _install_kubie_linux() {
     + f'"https://github.com/sbstp/kubie/releases/download/{_KUBIE_VERSION}/kubie-linux-'
     + r'${arch}" '
     + f'"{_KUBIE_VERSION.removeprefix("v")}" --version'
+    + r"""
+}
+_install_kind_linux() {
+  local arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) checksum="{_KIND_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) checksum="{_KIND_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_bin_sha256 kind """
+    + f'"https://github.com/kubernetes-sigs/kind/releases/download/{_KIND_VERSION}/kind-linux-'
+    + r'${arch}" "$checksum" '
+    + f'"{_KIND_VERSION}" version'
     + "\n}\n"
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie\n"
+_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind\n"
 
-_SETUP_LINUX = _LINUX_HELPERS + "_install_kubectl_linux\n" + "_install_helm_linux\n" + "_install_k9s_linux\n" + "_install_kubectx_linux\n" + "_install_kubens_linux\n" + "_install_kubie_linux\n"
+_SETUP_LINUX = (
+    _LINUX_HELPERS
+    + "_install_kubectl_linux\n"
+    + "_install_helm_linux\n"
+    + "_install_k9s_linux\n"
+    + "_install_kubectx_linux\n"
+    + "_install_kubens_linux\n"
+    + "_install_kubie_linux\n"
+    + "_install_kind_linux\n"
+)
 
 _SETUP_BY_OS: dict[OS, str] = {
     OS.CACHYOS: _SETUP_LINUX,
@@ -107,6 +135,9 @@ if bin_exists helm; then
 fi
 if bin_exists kubie; then
   source <(kubie generate-completion)
+fi
+if bin_exists kind; then
+  source <(kind completion bash)
 fi
 """
 

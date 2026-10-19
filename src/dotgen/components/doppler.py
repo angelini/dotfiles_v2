@@ -6,11 +6,11 @@ from dotgen.types import OS
 
 _DEBIAN_REPO = "deb [signed-by=/etc/apt/keyrings/doppler-cli.gpg] https://packages.doppler.com/public/cli/deb/debian any-version main"
 _DEBIAN_KEY_URL = "https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key"
-_VERSION = "3.76.5"
+_VERSION = "3.77.0"
 _RELEASE_BASE = f"https://github.com/DopplerHQ/cli/releases/download/{_VERSION}"
 _SHA256_LINUX = {
-    "amd64": "1b2f412d984920d665daf233ab6c15b364df9339b5c5b5224d5e8ee4e0a70154",
-    "arm64": "567f051c4c334b79a37ee44c9373671c451dd8a4945ed49288a8f3fd0b73ec89",
+    "amd64": "92587cb89c2ff82fc2ddec2b2a9f275ff320994a44e16cd9310b55a429a82084",
+    "arm64": "3aa603d60bc8502ec67d9a57e917925f357ac2822eead484acda3875fe6a4d95",
 }
 
 _SETUP_DEBIAN = f"""\

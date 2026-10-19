@@ -276,12 +276,22 @@ if (
     arch="$(_kubie_arch)"
     download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version
   }
+  _install_kind_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d" ;;
+      arm64) checksum="20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2" ;;
+    esac
+    download_bin_sha256 kind "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-${arch}" "$checksum" "v0.33.0" version
+  }
   _install_kubectl_linux
   _install_helm_linux
   _install_k9s_linux
   _install_kubectx_linux
   _install_kubens_linux
   _install_kubie_linux
+  _install_kind_linux
 ); then
   component_end "kubectl" 0
 else
@@ -759,11 +769,11 @@ component_begin "doppler"
 if (
   set -e
   case "$(detect_arch)" in
-    x86_64) doppler_arch=amd64; doppler_checksum=1b2f412d984920d665daf233ab6c15b364df9339b5c5b5224d5e8ee4e0a70154 ;;
-    aarch64|arm64) doppler_arch=arm64; doppler_checksum=567f051c4c334b79a37ee44c9373671c451dd8a4945ed49288a8f3fd0b73ec89 ;;
+    x86_64) doppler_arch=amd64; doppler_checksum=92587cb89c2ff82fc2ddec2b2a9f275ff320994a44e16cd9310b55a429a82084 ;;
+    aarch64|arm64) doppler_arch=arm64; doppler_checksum=3aa603d60bc8502ec67d9a57e917925f357ac2822eead484acda3875fe6a4d95 ;;
     *) error "unsupported arch for Doppler: $(detect_arch)"; exit 1 ;;
   esac
-  download_tar_bin_sha256 doppler   "https://github.com/DopplerHQ/cli/releases/download/3.76.5/doppler_3.76.5_linux_${doppler_arch}.tar.gz"   "$doppler_checksum" doppler "v3.76.5" --version
+  download_tar_bin_sha256 doppler   "https://github.com/DopplerHQ/cli/releases/download/3.77.0/doppler_3.77.0_linux_${doppler_arch}.tar.gz"   "$doppler_checksum" doppler "v3.77.0" --version
   unset doppler_arch doppler_checksum
   remove_packages doppler-cli-bin
 ); then
