@@ -25,6 +25,13 @@ if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" vers
   OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
   download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
 fi
+
+GOPATH="${GOPATH:-$HOME/go}"
+
+if ! command -v gopls >/dev/null 2>&1 && [ ! -x "$GOPATH/bin/gopls" ]; then
+  log "installing gopls..."
+  env GOPATH="$GOPATH" "$GO_DIR/bin/go" install golang.org/x/tools/gopls@latest
+fi
 """
 
 _BASHRC = """\

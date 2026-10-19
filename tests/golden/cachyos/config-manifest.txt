@@ -1,9 +1,9 @@
 0600  167a6ee1c8993debd269e587e47259020844fc7d1c1fdcab6e140abaf0017415  managed-settings/claude.json
 0600  567d070b394161cb7f51d551cfcb64d5bdbd03cb8444e7a271823476dc0fd1e6  aws/config
+0600  934ffdd12d91bafbd57788a2ac8eb35ccf7f705d5773efa76ce6dd44d08b8417  managed-settings/pi.json
 0600  bd4763be9f7fbdd4b833627d94f35498c03d80a66663ff33834fab7104743895  zed-host-bridge/ssh-linux.conf.template
 0600  c4d45e53eca749a23a9d2a4ce748eccdb9ddab45e1eab466dd4910ad14773cf6  zed-host-bridge/config.json.template
 0600  d18088735ac3b98dc79e0af36a22d44d1b595420b958ade5875612cd1c4fb9b1  pi/agent/models.json
-0600  e58074c2653ea247f1aeae7b7e57442fd3da04b8bad520314e65713468f42675  managed-settings/pi.json
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
 0644  73970998ae9ddea4c3d7e082ef5a786dd36291ba46c140b0611d452b776a729f  zed-host-bridge/dev.dotgen.zed-host-bridge.service
 0644  76a246010494bbfc06de685273b00f9da01dafdf9085b7fa8c549e33c477ad39  helix/config.toml
