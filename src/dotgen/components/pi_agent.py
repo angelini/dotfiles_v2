@@ -295,13 +295,16 @@ _run_macos() {
 
 _run_linux() {
   local pi_bin="$1" transformers_cache="$2" transformers_cache_target="$3"
-  local herdr_clipboard_images
+  local herdr_clipboard_images resolv_conf resolv_conf_dir
   local jiti_cache="$HOME/.pi-sandbox-cache/jiti" runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
   shift 3
   herdr_clipboard_images="/tmp/herdr-clipboard-images-$(id -u)"
   command -v bwrap >/dev/null 2>&1 || _die "bwrap is required"
   herdr_clipboard_images="$(_prepare_herdr_clipboard_images "$herdr_clipboard_images")"
   jiti_cache="$(_prepare_jiti_cache "$jiti_cache")"
+  resolv_conf="$(readlink -f /etc/resolv.conf)" || _die "cannot resolve /etc/resolv.conf"
+  [ -f "$resolv_conf" ] && [ -r "$resolv_conf" ] || _die "resolved /etc/resolv.conf is not a readable file: $resolv_conf"
+  resolv_conf_dir="${resolv_conf%/*}"
   env -i \
     "HOME=$HOME" \
     "PATH=${PATH:-/usr/bin:/bin}" \
@@ -335,6 +338,7 @@ _run_linux() {
     --dir /run \
     --dir /run/user \
     --dir "$runtime_dir" \
+    --dir "$resolv_conf_dir" \
     --dir "$HOME" \
 __BWRAP_HOME_POLICY__
     --bind "$transformers_cache" "$transformers_cache_target" \
@@ -344,6 +348,7 @@ __BWRAP_HOME_POLICY__
     --ro-bind-try /lib /lib \
     --ro-bind-try /lib64 /lib64 \
     --ro-bind /etc /etc \
+    --ro-bind "$resolv_conf" "$resolv_conf" \
     --setenv HOME "$HOME" \
     --setenv XDG_RUNTIME_DIR "$runtime_dir" \
     --chdir "$PWD" \

@@ -1560,6 +1560,11 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "refusing symlinked Herdr clipboard image directory" in script.content
     assert 'owner="$(stat -c %u "$path")"' in script.content
     assert '--ro-bind "$herdr_clipboard_images" "$herdr_clipboard_images"' in script.content
+    assert 'resolv_conf="$(readlink -f /etc/resolv.conf)"' in script.content
+    assert 'resolv_conf_dir="${resolv_conf%/*}"' in script.content
+    assert '--dir "$resolv_conf_dir"' in script.content
+    assert '--ro-bind "$resolv_conf" "$resolv_conf"' in script.content
+    assert script.content.index('--ro-bind /etc /etc') < script.content.index('--ro-bind "$resolv_conf" "$resolv_conf"')
     assert 'chmod 0700 "$cache_parent"' in script.content
     assert 'chmod 0700 "$cache"' in script.content
     clipboard_bind = '--ro-bind "$herdr_clipboard_images" "$herdr_clipboard_images"'

@@ -314,6 +314,31 @@ def test_pi_launches_through_sandbox(vm: tuple[str, VmHandle]) -> None:
     handle.assert_cmd('cd "$HOME/repos" && pi --version', login=True)
 
 
+def test_pi_sandbox_mounts_resolv_conf(vm: tuple[str, VmHandle]) -> None:
+    env_name, handle = vm
+    if env_name != "debian":
+        pytest.skip("the resolver bind is specific to the Linux bubblewrap sandbox")
+    handle.assert_cmd(
+        r"""
+set -euo pipefail
+repo="$HOME/repos/resolver-sandbox-smoke"
+mkdir -p "$repo"
+cat > "$repo/pi" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+resolved="$(readlink -f /etc/resolv.conf)"
+[ -n "$resolved" ]
+[ -f "$resolved" ]
+[ -r /etc/resolv.conf ]
+SH
+chmod +x "$repo/pi"
+(cd "$repo" && PI_SANDBOX_EXECUTABLE="$repo/pi" pi-sandbox)
+rm -rf -- "$repo"
+""",
+        login=True,
+    )
+
+
 def test_zed_bridge_socket_is_visible_inside_pi_sandbox(vm: tuple[str, VmHandle]) -> None:
     env_name, handle = vm
     if env_name != "debian":

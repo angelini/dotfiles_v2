@@ -20,8 +20,8 @@
 0644  f1b87054faa5bf83a8bcb623e4849988d2adb187eeff4e7f729f88dbffd041f6  herdr/remote.toml
 0644  fb4073fcb963918878535610fe7d0067e2d3388f4e666f8c409f0f9b32766633  gh/config.yml
 0755  215cb1ac50deaa0f3042d4566d28606b355273765d7fd4428f5f5d789cbe012f  zed-host-bridge/serve
-0755  5279205d988a3d025ae290db7dbd4be06723e3cd798007dee2ee5f62f00d642e  pi/sandbox/pi-sandbox.sh
 0755  c082009a049f536f1373e91284c50db769ba5518ae65285e2c96dba4eca90e70  herdr/herd-remote
+0755  c663a512a66fc5edea2eb0c355d9405a909ca1e6693bbdfee46c95ac2318214a  pi/sandbox/pi-sandbox.sh
 0755  c9346e8234fb65bc846f9806afb5eab8bf641f26a27fa7c4881efa3961adbdd1  herdr/herd-local
 dir  claude
 dir  pi-angelini
