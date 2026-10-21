@@ -2,7 +2,6 @@
 # --- bash_base ---
 alias klear='clear && printf "\033[3J"'
 alias rgc='rg -C 30'
-alias ip='curl -s ifconfig.me'
 
 # git
 alias gs='git status'
