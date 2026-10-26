@@ -9,4 +9,3 @@ __pycache__/
 .claude/settings.local.json
 .serena/
 !tests/fixtures/vendor_src/build/agent-config/claude/CLAUDE.md
-!tests/fixtures/vendor_src/build/agent-config/repositories/platform/CLAUDE.md
