@@ -45,7 +45,6 @@ CLAUDE.md
 .node-version
 .nvmrc
 node_modules/
-.pi/APPEND_SYSTEM.md
 .pi/settings.json
 .pi-lens/
 .pi-subagents/

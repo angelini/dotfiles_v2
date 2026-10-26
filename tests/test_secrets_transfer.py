@@ -106,15 +106,15 @@ def test_environment_selection_ignores_unrelated_values() -> None:
 @pytest.mark.parametrize("value", ["", "FAKE\nSENSITIVE", "FAKE\rSENSITIVE", "FAKE\x00SENSITIVE"])
 def test_environment_selection_rejects_invalid_required_values_without_disclosure(value: str) -> None:
     with pytest.raises(SecretsTransferError) as caught:
-        select_environment_values({"GITHUB_TOKEN"}, {"GITHUB_TOKEN": value})
+        select_environment_values({"TEST_TOKEN"}, {"TEST_TOKEN": value})
 
     if value:
         assert value not in str(caught.value)
 
 
 def test_environment_selection_reports_missing_key() -> None:
-    with pytest.raises(SecretsTransferError, match="GITHUB_TOKEN"):
-        select_environment_values({"GITHUB_TOKEN"}, {})
+    with pytest.raises(SecretsTransferError, match="TEST_TOKEN"):
+        select_environment_values({"TEST_TOKEN"}, {})
 
 
 def test_file_parser_supports_exact_escapes_and_literal_shell_syntax(tmp_path: Path) -> None:
@@ -222,12 +222,12 @@ def test_serialization_is_deterministic_and_round_trips_without_execution(tmp_pa
 
 def test_send_payload_uses_stdin_only(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_value = "FAKE-SSH-SENTINEL-$()-`cmd`"
-    payload = serialize_payload({"GITHUB_TOKEN": fake_value})
+    payload = serialize_payload({"TEST_TOKEN": fake_value})
     seen_argv: list[str] = []
     seen_input = b""
     seen_environment: dict[str, str] = {}
     seen_check = True
-    monkeypatch.setenv("GITHUB_TOKEN", fake_value)
+    monkeypatch.setenv("TEST_TOKEN", fake_value)
 
     def fake_run(argv: list[str], *, input: bytes, env: dict[str, str], check: bool) -> subprocess.CompletedProcess[bytes]:
         nonlocal seen_input, seen_environment, seen_check
@@ -239,11 +239,11 @@ def test_send_payload_uses_stdin_only(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("dotgen.secrets_transfer.subprocess.run", fake_run)
 
-    send_payload("user@example.invalid", payload, secret_keys={"GITHUB_TOKEN"})
+    send_payload("user@example.invalid", payload, secret_keys={"TEST_TOKEN"})
 
     assert all(fake_value not in argument for argument in seen_argv)
     assert seen_input is payload
-    assert "GITHUB_TOKEN" not in seen_environment
+    assert "TEST_TOKEN" not in seen_environment
     assert not seen_check
     assert seen_argv[:3] == ["ssh", "--", "user@example.invalid"]
 

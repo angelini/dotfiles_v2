@@ -307,6 +307,8 @@ The Pi component installs the CLI through Pi's managed installer, which keeps lo
 
 Managed Pi config retains the standalone history reviewer, researcher, and session auditor while the Steps package owns its pipeline resources. Runtime state and secrets remain intentionally unmanaged: auth files, MCP OAuth tokens, package caches, sessions, memory DBs, Context7 caches, and usage databases are not copied.
 
+The sandbox mounts `~/.doppler` read-only so repository helpers can authenticate the Doppler CLI. This gives sandboxed commands the same secret-reading access as the host's current Doppler login. Limrun's operational helpers use it to obtain the read-only debug kubeconfig and service credentials from `agent-access/prd`, then cache them in the sandbox's temporary directory. The host `~/.kube` directory remains hidden, so the sandbox does not inherit unrelated or full-admin Kubernetes contexts.
+
 ## Herdr launchers
 
 On macOS and CachyOS workstations, `herd-local [session-name]` starts or attaches to a local named session. With no argument it uses the persistent `local` session; supplied names select another persistent session. Local sessions use the Catppuccin Latte theme.

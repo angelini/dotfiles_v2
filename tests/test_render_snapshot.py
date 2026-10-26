@@ -145,7 +145,6 @@ def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
         assert "  managed-settings/pi.json" in manifest
         assert "  pi/agent/settings.json" not in manifest
         assert (config / "pi" / "agent" / "AGENTS.md").is_file()
-        assert (config / "pi" / "agent" / "APPEND_SYSTEM.md").is_file()
         for agent in ("history-reviewer", "researcher", "session-auditor"):
             profile = config / "pi" / "agent" / "agents" / f"{agent}.md"
             assert profile.is_file()

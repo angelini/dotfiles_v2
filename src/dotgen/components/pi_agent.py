@@ -63,6 +63,7 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
         "go",
     ),
     readonly_dirs=(
+        ".doppler",
         "bin",
         ".cargo/bin",
         ".local/bin",
@@ -74,6 +75,7 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
     readonly_files=(
         ".gitconfig",
         ".gitignore_global",
+        ".config/gh/hosts.yml",
         ".config/git/config",
         ".config/pi/sandbox/pi-macos.sb",
     ),
@@ -90,7 +92,6 @@ SANDBOX_HOME_POLICY = _SandboxHomePolicy(
     ),
     hidden_files=(
         ".docker/config.json",
-        ".config/gh/hosts.yml",
         ".config/git/credentials",
         ".config/helm/registry/config.json",
         ".config/helm/repositories.yaml",
@@ -554,8 +555,8 @@ class PiAgent:
                     dest="pi/agent",
                     include_globs=(
                         "AGENTS.md",
-                        "APPEND_SYSTEM.md",
                         "agents/**",
+                        "skills/branch-and-pr/**",
                     ),
                 ),
                 VendorDir(

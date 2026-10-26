@@ -374,7 +374,7 @@ def test_git_setup_signs_with_ssh_key() -> None:
 
 def test_git_setup_ignores_local_agent_state() -> None:
     cfg = next(c for c in GitSetup().render(ENVIRONMENTS["macos"]).configs if c.dest == "git/gitignore_global").content
-    for pattern in (".pi/APPEND_SYSTEM.md", ".pi/settings.json", ".pi-lens/", ".pi-subagents/", "**/.claude/settings.local.json"):
+    for pattern in (".pi/settings.json", ".pi-lens/", ".pi-subagents/", "**/.claude/settings.local.json"):
         assert pattern in cfg
 
 
@@ -1374,8 +1374,8 @@ def test_pi_agent_setup() -> None:
     assert configured_extensions == _PI_EXTENSION_PACKAGES
     assert '"defaultModel": "gpt-5.6-sol"' in settings.content
     assert '"defaultThinkingLevel": "high"' in settings.content
-    assert "openai-codex/gpt-5.6-luna" in settings.content
-    assert "openai-codex/gpt-5.6-terra" in settings.content
+    assert "openai/gpt-5.6-luna" in settings.content
+    assert "openai/gpt-5.6-terra" in settings.content
     assert "lastChangelogVersion" not in settings.content
     assert "npm:@plannotator/pi-extension" not in settings.content
     assert "npm:pi-simplify" not in settings.content
@@ -1402,11 +1402,11 @@ def test_pi_agent_setup() -> None:
     agent_vendor, angelini_vendor = frag.vendors
     assert agent_vendor.source == _agent_config_root() / "pi" / "agent"
     assert agent_vendor.dest == "pi/agent"
-    assert agent_vendor.include_globs == (
+    assert agent_vendor.include_globs[:2] == (
         "AGENTS.md",
-        "APPEND_SYSTEM.md",
         "agents/**",
     )
+    assert "skills/**" not in agent_vendor.include_globs
     assert angelini_vendor.source == _pi_angelini_root()
     assert angelini_vendor.dest == "pi-angelini"
     assert angelini_vendor.exclude_dirs == GIT_ARTIFACTS | NODE_ARTIFACTS | PY_ARTIFACTS | frozenset({".pi-lens", ".pi-subagents", ".serena", "dist"})
@@ -1494,6 +1494,8 @@ def test_pi_agent_sandbox_configs() -> None:
     models = next(cf for cf in frag.configs if cf.dest == "pi/agent/models.json")
     assert script.mode == 0o755
     assert script.content.count('"DOTGEN_PI_SANDBOX=1"') == 2
+    assert ".doppler" in SANDBOX_HOME_POLICY.readonly_dirs
+    assert ".doppler" not in SANDBOX_HOME_POLICY.hidden_dirs
     assert {
         ".ssh",
         ".gnupg",
@@ -1504,6 +1506,8 @@ def test_pi_agent_sandbox_configs() -> None:
     } <= set(SANDBOX_HOME_POLICY.hidden_dirs)
     assert ".config/gcloud" in SANDBOX_HOME_POLICY.hidden_dirs
     assert ".config/gcloud/application_default_credentials.json" not in SANDBOX_HOME_POLICY.readonly_files
+    assert ".config/gh/hosts.yml" in SANDBOX_HOME_POLICY.readonly_files
+    assert ".config/gh/hosts.yml" not in SANDBOX_HOME_POLICY.hidden_files
     assert ".local/share/stinkpot" in SANDBOX_HOME_POLICY.hidden_dirs
     assert ".local/share/stinkpot" not in SANDBOX_HOME_POLICY.hidden_files
     assert ".bash_history" in SANDBOX_HOME_POLICY.hidden_files
@@ -1511,7 +1515,6 @@ def test_pi_agent_sandbox_configs() -> None:
     assert ".pi-lens" in SANDBOX_HOME_POLICY.writable_dirs
     assert {
         ".docker/config.json",
-        ".config/gh/hosts.yml",
         ".config/git/credentials",
         ".config/helm/registry/config.json",
         ".config/helm/repositories.yaml",
@@ -1747,11 +1750,11 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     assert platform_vendor.include_globs == ("CLAUDE.md",)
     assert pi_vendor.source == _AGENT_CONFIG_SRC / "pi" / "agent"
     assert pi_vendor.dest == "pi/agent"
-    assert pi_vendor.include_globs == (
+    assert pi_vendor.include_globs[:2] == (
         "AGENTS.md",
-        "APPEND_SYSTEM.md",
         "agents/**",
     )
+    assert "skills/**" not in pi_vendor.include_globs
     assert set(_vendored(claude_vendor, tmp_path / "claude")) == {
         "CLAUDE.md",
         "agents/reviewer.md",
@@ -1762,7 +1765,6 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     assert set(_vendored(platform_vendor, tmp_path / "platform")) == {"CLAUDE.md"}
     assert set(_vendored(pi_vendor, tmp_path / "pi")) == {
         "AGENTS.md",
-        "APPEND_SYSTEM.md",
         "agents/reviewer.md",
     }
     assert "README.md" not in _vendored(claude_vendor, tmp_path / "claude-again")
