@@ -23,6 +23,8 @@ def _pi_angelini_root() -> Path:
 _PI_GLOBAL_PACKAGES = (
     "@earendil-works/pi-server",
     "@earendil-works/pi-client",
+    "typescript",
+    "typescript-language-server",
 )
 
 _PI_INSTALLER_URL = "https://pi.dev/install.sh"

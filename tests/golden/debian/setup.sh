@@ -609,7 +609,7 @@ component_begin "pi_agent"
 if (
   set -e
   install_package bubblewrap
-  install_npm_global @earendil-works/pi-server @earendil-works/pi-client
+  install_npm_global @earendil-works/pi-server @earendil-works/pi-client typescript typescript-language-server
   pi_installer_url=https://pi.dev/install.sh
   ensure_dir "$HOME/.pi/agent"
   ensure_dir "$HOME/.config/pi/sandbox"

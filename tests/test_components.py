@@ -1336,6 +1336,8 @@ def test_pi_agent_setup() -> None:
     assert _PI_GLOBAL_PACKAGES == (
         "@earendil-works/pi-server",
         "@earendil-works/pi-client",
+        "typescript",
+        "typescript-language-server",
     )
     assert "@earendil-works/pi-coding-agent" not in npm_lines[0]
     assert not set(_PI_EXTENSION_PACKAGES) & set(_PI_GLOBAL_PACKAGES)
