@@ -38,7 +38,17 @@ update_pkg_index
 component_begin "core_utils"
 if (
   set -e
-  install_packages git curl git-delta just jq yq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf shelly
+  install_packages git curl git-delta just jq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf shelly
+  _install_yq() {
+    local arch checksum
+    case "$(detect_arch)" in
+      x86_64) arch=amd64; checksum=8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f ;;
+      aarch64|arm64) arch=arm64; checksum=189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b ;;
+      *) error "unsupported arch for yq: $(detect_arch)"; return 1 ;;
+    esac
+    download_bin_sha256 yq "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_${arch}" "$checksum" "v4.54.1" --version
+  }
+  _install_yq
 ); then
   component_end "core_utils" 0
 else

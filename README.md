@@ -171,7 +171,7 @@ Stop and remediate any active rootful service, root-owned socket, overlapping su
 
 ### Package and artifact policy
 
-CachyOS repository packages use explicit `pacman -S --needed --noconfirm` operations, and deployment performs a full `pacman -Syu --noconfirm` rather than a database-only refresh. Dotgen does not install or update AUR packages unattended. Google Cloud CLI, Doppler, and the rootless Docker launcher use versioned upstream artifacts with pinned SHA-256 digests; Shelly remains available for interactive use. The complete source, version, and verification-command matrix is in [`docs/cachyos/package-sources.md`](docs/cachyos/package-sources.md).
+CachyOS repository packages use explicit `pacman -S --needed --noconfirm` operations, and deployment performs a full `pacman -Syu --noconfirm` rather than a database-only refresh. Dotgen does not install or update AUR packages unattended. Yq, Google Cloud CLI, Doppler, and the rootless Docker launcher use versioned upstream artifacts with pinned SHA-256 digests; Shelly remains available for interactive use. The complete source, version, and verification-command matrix is in [`docs/cachyos/package-sources.md`](docs/cachyos/package-sources.md).
 
 ### Build, secrets, transfer, and activation
 

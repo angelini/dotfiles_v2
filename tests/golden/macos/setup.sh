@@ -59,7 +59,17 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages git git-delta just jq yq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf
+  install_packages git git-delta just jq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf
+  _install_yq() {
+    local arch checksum
+    case "$(detect_arch)" in
+      x86_64) arch=amd64; checksum=3a812fce205a4d67014fb71b7fa297092210e580df3d8f52dddc2cf3a599c22b ;;
+      aarch64|arm64) arch=arm64; checksum=fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844 ;;
+      *) error "unsupported arch for yq: $(detect_arch)"; return 1 ;;
+    esac
+    download_bin_sha256 yq "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_darwin_${arch}" "$checksum" "v4.54.1" --version
+  }
+  _install_yq
 ); then
   component_end "core_utils" 0
 else

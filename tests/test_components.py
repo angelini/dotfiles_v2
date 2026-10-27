@@ -325,6 +325,23 @@ def test_core_utils_include_modern_cli_tools() -> None:
         assert " bat " in setup
 
 
+def test_core_utils_install_yq_from_pinned_upstream_release() -> None:
+    expected = {
+        "cachyos": ("yq_linux_${arch}", "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f", "189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b"),
+        "debian": ("yq_linux_${arch}", "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f", "189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b"),
+        "debian-docker": ("yq_linux_${arch}", "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f", "189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b"),
+        "macos": ("yq_darwin_${arch}", "3a812fce205a4d67014fb71b7fa297092210e580df3d8f52dddc2cf3a599c22b", "fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844"),
+    }
+    for env_name, (asset, amd64_sha256, arm64_sha256) in expected.items():
+        setup = CoreUtils().render(ENVIRONMENTS[env_name]).setup
+        package_tokens = shlex.split(setup.splitlines()[0])
+        assert "yq" not in package_tokens
+        assert f"https://github.com/mikefarah/yq/releases/download/v4.54.1/{asset}" in setup
+        assert amd64_sha256 in setup
+        assert arm64_sha256 in setup
+        assert '"v4.54.1" --version' in setup
+
+
 def test_core_utils_install_protoc_package() -> None:
     debian = CoreUtils().render(ENVIRONMENTS["debian"]).setup
     macos = CoreUtils().render(ENVIRONMENTS["macos"]).setup
