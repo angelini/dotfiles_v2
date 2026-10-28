@@ -1268,6 +1268,9 @@ def test_node_fnm_activates_latest_lts_during_setup() -> None:
     assert "exit 1" in frag.setup
     assert 'eval "$("$fnm_bin" env --shell bash)"' in frag.setup
     assert '"$fnm_bin" install --lts --use' in frag.setup
+    assert "install_npm_global corepack" in frag.setup
+    assert "corepack enable yarn" in frag.setup
+    assert "corepack install --global yarn@stable" in frag.setup
     assert 'eval "$(fnm env --use-on-cd --shell bash)"' in frag.bashrc
 
 

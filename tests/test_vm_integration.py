@@ -282,9 +282,9 @@ chmod +x "$repo/pi"
     )
 
 
-def test_node_and_npm_installed(vm: tuple[str, VmHandle]) -> None:
+def test_javascript_toolchain_installed(vm: tuple[str, VmHandle]) -> None:
     _, handle = vm
-    handle.assert_cmd("command -v node && command -v npm", login=True)
+    handle.assert_cmd("command -v node && command -v npm && command -v yarn && yarn --version", login=True)
 
 
 def test_zed_host_bridge_is_installed_only_in_full_environments(vm: tuple[str, VmHandle]) -> None:
