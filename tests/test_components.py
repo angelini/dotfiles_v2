@@ -1261,13 +1261,14 @@ def test_install_script_used_for_curl_installers() -> None:
         assert "curl " not in body, f"{name} still has raw curl invocation"
 
 
-def test_node_fnm_activates_latest_lts_during_setup() -> None:
+def test_node_fnm_activates_and_defaults_latest_lts_during_setup() -> None:
     frag = NodeFnm().render(ENVIRONMENTS["debian"])
     assert 'fnm_bin="$(command -v fnm 2>/dev/null || true)"' in frag.setup
     assert 'fnm_bin="$HOME/.local/share/fnm/fnm"' in frag.setup
     assert "exit 1" in frag.setup
     assert 'eval "$("$fnm_bin" env --shell bash)"' in frag.setup
     assert '"$fnm_bin" install --lts --use' in frag.setup
+    assert '"$fnm_bin" default lts-latest' in frag.setup
     assert "install_npm_global corepack" in frag.setup
     assert "corepack enable yarn" in frag.setup
     assert "corepack install --global yarn@stable" in frag.setup

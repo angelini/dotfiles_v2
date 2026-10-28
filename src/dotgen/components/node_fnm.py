@@ -16,6 +16,7 @@ if [ ! -x "$fnm_bin" ]; then
 fi
 eval "$("$fnm_bin" env --shell bash)"
 "$fnm_bin" install --lts --use
+"$fnm_bin" default lts-latest
 if ! bin_exists corepack; then
   install_npm_global corepack
 fi
