@@ -750,6 +750,7 @@ def test_kubectl_per_os_branching() -> None:
     assert "_install_k9s_linux" in debian
     assert "_install_kubectx_linux" in debian
     assert "_install_kubens_linux" in debian
+    assert "_install_k0sctl_linux" in debian
     assert 'download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client' in debian
     assert 'download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template \'{{.Version}}\'' in debian
     assert 'download_tar_bin k9s "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_${arch}.tar.gz" "k9s" "v0.51.0" version --short' in debian
@@ -757,8 +758,11 @@ def test_kubectl_per_os_branching() -> None:
     assert 'download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx" "v0.11.0" --version' in debian
     assert 'download_tar_bin kubens "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubens_v0.11.0_linux_${arch}.tar.gz" "kubens" "v0.11.0" --version' in debian
     assert 'download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version' in debian
+    assert 'download_bin_sha256 k0sctl "https://github.com/k0sproject/k0sctl/releases/download/v0.33.1/k0sctl-linux-${arch}" "$checksum" "v0.33.1" version' in debian
+    assert "bd5cd9125c93d8d30c33f7b2f3693fed0d74140a248d433dad74f2b7015295b5" in debian
+    assert "3632072361f3e83dde9b34f83eea49673d3bfe84763cf361edc3aec7209231a6" in debian
     assert 'download_bin_sha256 kind "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-${arch}" "$checksum" "v0.33.0" version' in debian
-    assert "install_packages kubectl helm k9s kubectx kubie kind" in macos
+    assert "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl" in macos
     assert "kubie generate-completion" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
     assert "kind completion bash" in Kubectl().render(ENVIRONMENTS["debian"]).bashrc
     aliases = Kubectl().render(ENVIRONMENTS["macos"]).alias

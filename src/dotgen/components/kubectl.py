@@ -14,6 +14,11 @@ _KIND_SHA256 = {
     "amd64": "aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d",
     "arm64": "20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2",
 }
+_K0SCTL_VERSION = "v0.33.1"
+_K0SCTL_SHA256 = {
+    "amd64": "bd5cd9125c93d8d30c33f7b2f3693fed0d74140a248d433dad74f2b7015295b5",
+    "arm64": "3632072361f3e83dde9b34f83eea49673d3bfe84763cf361edc3aec7209231a6",
+}
 
 _LINUX_HELPERS = (
     r"""_kube_arch() {
@@ -91,6 +96,20 @@ _install_kubie_linux() {
     + f'"{_KUBIE_VERSION.removeprefix("v")}" --version'
     + r"""
 }
+_install_k0sctl_linux() {
+  local arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) checksum="{_K0SCTL_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) checksum="{_K0SCTL_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_bin_sha256 k0sctl """
+    + f'"https://github.com/k0sproject/k0sctl/releases/download/{_K0SCTL_VERSION}/k0sctl-linux-'
+    + r'${arch}" "$checksum" '
+    + f'"{_K0SCTL_VERSION}" version'
+    + r"""
+}
 _install_kind_linux() {
   local arch checksum
   arch="$(_kube_arch)"
@@ -106,7 +125,7 @@ _install_kind_linux() {
     + "\n}\n"
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind\n"
+_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl\n"
 
 _SETUP_LINUX = (
     _LINUX_HELPERS
@@ -116,6 +135,7 @@ _SETUP_LINUX = (
     + "_install_kubectx_linux\n"
     + "_install_kubens_linux\n"
     + "_install_kubie_linux\n"
+    + "_install_k0sctl_linux\n"
     + "_install_kind_linux\n"
 )
 

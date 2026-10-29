@@ -289,6 +289,15 @@ if (
     arch="$(_kubie_arch)"
     download_bin kubie "https://github.com/sbstp/kubie/releases/download/v0.28.0/kubie-linux-${arch}" "0.28.0" --version
   }
+  _install_k0sctl_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="bd5cd9125c93d8d30c33f7b2f3693fed0d74140a248d433dad74f2b7015295b5" ;;
+      arm64) checksum="3632072361f3e83dde9b34f83eea49673d3bfe84763cf361edc3aec7209231a6" ;;
+    esac
+    download_bin_sha256 k0sctl "https://github.com/k0sproject/k0sctl/releases/download/v0.33.1/k0sctl-linux-${arch}" "$checksum" "v0.33.1" version
+  }
   _install_kind_linux() {
     local arch checksum
     arch="$(_kube_arch)"
@@ -304,6 +313,7 @@ if (
   _install_kubectx_linux
   _install_kubens_linux
   _install_kubie_linux
+  _install_k0sctl_linux
   _install_kind_linux
 ); then
   component_end "kubectl" 0
