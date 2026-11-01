@@ -1716,7 +1716,7 @@ def test_agent_config_root_override_and_default(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", "/fixture/agent-config")
     assert _agent_config_root() == Path("/fixture/agent-config")
     monkeypatch.delenv("DOTGEN_AGENT_CONFIG_ROOT")
-    assert _agent_config_root() == Path(agent_config_module.__file__).resolve().parents[4] / "agent-config"
+    assert _agent_config_root() == Path(agent_config_module.__file__).resolve().parents[4] / "agent_config"
 
 
 def test_managed_settings_uses_override_and_canonicalizes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
