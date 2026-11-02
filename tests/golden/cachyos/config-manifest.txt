@@ -1,9 +1,9 @@
+0600  10418492d1c9f8d57e1d14b7cd73d78a9a3ac1f4f4af1352e878da726a5e2c7f  pi/agent/models.json
+0600  4ee60512574e763e67c93de19a8df087c4ad0860de25b10a44e5b41ac7c356e9  managed-settings/pi.json
 0600  567d070b394161cb7f51d551cfcb64d5bdbd03cb8444e7a271823476dc0fd1e6  aws/config
-0600  9c81591f67be0252b961c90373fe168a5925617ad03988cbe1be77cfbe156905  managed-settings/pi.json
+0600  5dc176ef57dfd03396debb07f5473ad6c38a119a18162ce7fbc6f599a796d128  managed-settings/claude.json
 0600  bd4763be9f7fbdd4b833627d94f35498c03d80a66663ff33834fab7104743895  zed-host-bridge/ssh-linux.conf.template
 0600  c4d45e53eca749a23a9d2a4ce748eccdb9ddab45e1eab466dd4910ad14773cf6  zed-host-bridge/config.json.template
-0600  cf6cdbfb0d5f1660e4915404e9de70be1e9ebcb25baab482d498c66881a2ba37  managed-settings/claude.json
-0600  d18088735ac3b98dc79e0af36a22d44d1b595420b958ade5875612cd1c4fb9b1  pi/agent/models.json
 0644  0d854aca5ea625743eb3aa2c2938e21e75237d547b678f6b45894749a60f69af  pi/agent/web-search.json
 0644  16c04d8d98a997ec80fae4f73f990633b34d014209e7d901276419195ff895c9  git/gitignore_global
 0644  73970998ae9ddea4c3d7e082ef5a786dd36291ba46c140b0611d452b776a729f  zed-host-bridge/dev.dotgen.zed-host-bridge.service

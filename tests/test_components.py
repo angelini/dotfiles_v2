@@ -1398,10 +1398,10 @@ def test_pi_agent_setup() -> None:
     assert settings.mode == 0o600
     configured_extensions = tuple(source.removeprefix("npm:") for source in json.loads(settings.content)["packages"] if source.startswith("npm:"))
     assert configured_extensions == _PI_EXTENSION_PACKAGES
-    assert '"defaultModel": "gpt-5.6-sol"' in settings.content
+    assert '"defaultModel": "gpt-6.1-sol"' in settings.content
     assert '"defaultThinkingLevel": "high"' in settings.content
-    assert "openai/gpt-5.6-luna" in settings.content
-    assert "openai/gpt-5.6-terra" in settings.content
+    assert "openai/gpt-6.1-sol" in settings.content
+    assert "openai/gpt-6.1-terra" in settings.content
     assert "lastChangelogVersion" not in settings.content
     assert "npm:@plannotator/pi-extension" not in settings.content
     assert "npm:pi-simplify" not in settings.content
@@ -1642,10 +1642,10 @@ def test_pi_agent_sandbox_configs() -> None:
     assert "__SANDBOX_" not in script.content
     assert "__MACOS_" not in profile.content
     parsed_models = json.loads(models.content)
-    vertex = parsed_models["providers"]["google-vertex"]
-    assert vertex["api"] == "google-vertex"
-    assert "apiKey" not in vertex
-    assert vertex["models"][0]["id"] == "gemini-3.8-flash"
+    google = parsed_models["providers"]["my-google"]
+    assert google["api"] == "google-generative-ai"
+    assert google["apiKey"] == "$GEMINI_API_KEY"
+    assert google["models"][0]["id"] == "gemini-3.8-flash"
 
 
 _VENDOR_SRC = Path(__file__).parent / "fixtures" / "vendor_src"
@@ -1808,8 +1808,9 @@ def test_agent_config_components_share_disjoint_filtered_namespaces(monkeypatch:
     pi_settings = next(config for config in pi.configs if config.dest == "managed-settings/pi.json")
     assert pi_settings.mode == 0o600
     managed_pi = json.loads(pi_settings.content)
-    assert managed_pi["defaultModel"] == "gpt-5.6-sol"
+    assert managed_pi["defaultModel"] == "gpt-6.1-sol"
     assert managed_pi["defaultThinkingLevel"] == "high"
+    assert "openai/gpt-6.1-terra" in managed_pi["enabledModels"]
     assert managed_pi["theme"] == "light"
     angelini = next(vendor for vendor in pi.vendors if vendor.dest == "pi-angelini")
     assert angelini.source == _pi_angelini_root()

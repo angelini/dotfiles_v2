@@ -323,8 +323,9 @@ install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "pi
 
     assert first.returncode == 0, first.stderr
     merged = json.loads(settings.read_text())
-    assert merged["defaultModel"] == "gpt-5.6-sol"
+    assert merged["defaultModel"] == "gpt-6.1-sol"
     assert merged["defaultThinkingLevel"] == "high"
+    assert "openai/gpt-6.1-terra" in merged["enabledModels"]
     assert merged["packages"][-1] == "~/.local/share/steps"
     assert merged["theme"] == "light"
     assert merged["lastChangelogVersion"] == "0.82.1"

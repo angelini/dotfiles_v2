@@ -1,12 +1,11 @@
 {
   "collapseChangelog": true,
-  "defaultModel": "gpt-5.6-sol",
-  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6.1-sol",
+  "defaultProvider": "openai",
   "defaultThinkingLevel": "high",
   "enabledModels": [
-    "openai-codex/gpt-5.6-sol",
-    "openai-codex/gpt-5.6-luna",
-    "openai-codex/gpt-5.6-terra"
+    "openai/gpt-6.1-sol",
+    "openai/gpt-6.1-terra"
   ],
   "packages": [
     "npm:@spences10/pi-lsp",
