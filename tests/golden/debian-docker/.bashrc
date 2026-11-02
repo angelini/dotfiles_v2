@@ -29,6 +29,8 @@ print(d.datetime.fromtimestamp(int(sys.argv[1])).isoformat())
 PYEOF
 }
 
+[ -f "$HOME/repos/limrun/cluster/playbooks/lim-helpers.sh" ] && source "$HOME/repos/limrun/cluster/playbooks/lim-helpers.sh"
+
 # --- fzf_bash_history ---
 HISTFILE=~/.bash_history
 HISTSIZE=100000

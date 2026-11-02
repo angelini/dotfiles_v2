@@ -24,6 +24,8 @@ import sys, datetime as d
 print(d.datetime.fromtimestamp(int(sys.argv[1])).isoformat())
 PYEOF
 }
+
+[ -f "$HOME/repos/limrun/cluster/playbooks/lim-helpers.sh" ] && source "$HOME/repos/limrun/cluster/playbooks/lim-helpers.sh"
 """
 
 _BASHRC_MACOS = """\
