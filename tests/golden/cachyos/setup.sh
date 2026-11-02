@@ -295,6 +295,13 @@ if (
     esac
     download_bin_sha256 k0sctl "https://github.com/k0sproject/k0sctl/releases/download/v0.33.1/k0sctl-linux-${arch}" "$checksum" "v0.33.1" version
   }
+  _install_kubectl_linux
+  _install_helm_linux
+  _install_k9s_linux
+  _install_kubectx_linux
+  _install_kubens_linux
+  _install_kubie_linux
+  _install_k0sctl_linux
   _install_kind_linux() {
     local arch checksum
     arch="$(_kube_arch)"
@@ -304,13 +311,6 @@ if (
     esac
     download_bin_sha256 kind "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-${arch}" "$checksum" "v0.33.0" version
   }
-  _install_kubectl_linux
-  _install_helm_linux
-  _install_k9s_linux
-  _install_kubectx_linux
-  _install_kubens_linux
-  _install_kubie_linux
-  _install_k0sctl_linux
   _install_kind_linux
 ); then
   component_end "kubectl" 0
@@ -805,6 +805,92 @@ if (
   component_end "doppler" 0
 else
   _rc=$?; component_end "doppler" "$_rc"; exit "$_rc"
+fi
+
+# --- atlas ---
+component_begin "atlas"
+if (
+  set -e
+  _install_atlas() {
+    local arch checksum
+    case "$(detect_arch)" in
+      x86_64) arch=amd64; checksum=d88aae186a55e5893c318f3b11c838a3372adf4dac1e2fd3bc7d2b55944c5797 ;;
+      aarch64|arm64) arch=arm64; checksum=bb8a22a08ccd9a6cb93f0a16205b7bbeb067dd7fec1f60227c687d8de93d6088 ;;
+      *) error "unsupported arch for atlas: $(detect_arch)"; return 1 ;;
+    esac
+    download_bin_sha256 atlas "https://release.ariga.io/atlas/atlas-linux-${arch}-v0.36.0" "$checksum" "v0.36.0" version
+  }
+  _install_atlas
+); then
+  component_end "atlas" 0
+else
+  _rc=$?; component_end "atlas" "$_rc"; exit "$_rc"
+fi
+
+# --- stripe ---
+component_begin "stripe"
+if (
+  set -e
+  _install_stripe_linux() {
+    local arch checksum
+    case "$(detect_arch)" in
+      x86_64) arch=x86_64; checksum=1759a13a0c48f15e11979696df7b5958a73a8e6c1b92bea2a3ccb73ea97d5854 ;;
+      aarch64|arm64) arch=arm64; checksum=a676e88cf1dd87351f9d7f907446b9d79ca832ff3b9ba1c178687923e7d05001 ;;
+      *) error "unsupported arch for stripe: $(detect_arch)"; return 1 ;;
+    esac
+    download_tar_bin_sha256 stripe \
+      "https://github.com/stripe/stripe-cli/releases/download/v1.55.6/stripe_1.55.6_linux_${arch}.tar.gz" \
+      "$checksum" stripe "1.55.6" version
+  }
+  _install_stripe_linux
+); then
+  component_end "stripe" 0
+else
+  _rc=$?; component_end "stripe" "$_rc"; exit "$_rc"
+fi
+
+# --- crane ---
+component_begin "crane"
+if (
+  set -e
+  install_package crane
+); then
+  component_end "crane" 0
+else
+  _rc=$?; component_end "crane" "$_rc"; exit "$_rc"
+fi
+
+# --- sshpass ---
+component_begin "sshpass"
+if (
+  set -e
+  install_package sshpass
+); then
+  component_end "sshpass" 0
+else
+  _rc=$?; component_end "sshpass" "$_rc"; exit "$_rc"
+fi
+
+# --- ipmitool ---
+component_begin "ipmitool"
+if (
+  set -e
+  install_package ipmitool
+); then
+  component_end "ipmitool" 0
+else
+  _rc=$?; component_end "ipmitool" "$_rc"; exit "$_rc"
+fi
+
+# --- java ---
+component_begin "java"
+if (
+  set -e
+  install_package jdk17-openjdk
+); then
+  component_end "java" 0
+else
+  _rc=$?; component_end "java" "$_rc"; exit "$_rc"
 fi
 
 # --- fonts ---

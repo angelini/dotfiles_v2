@@ -140,3 +140,8 @@ if bin_exists aws_completer; then
   complete -C "$(command -v aws_completer)" aws
 fi
 
+# --- java ---
+JAVA_HOME="/usr/lib/jvm/temurin-17-jdk-$(dpkg --print-architecture)"
+export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
+

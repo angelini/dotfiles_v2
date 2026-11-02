@@ -12,10 +12,12 @@ from dotgen.component import Component
 from dotgen.components import agent_config as agent_config_module
 from dotgen.components import steps as steps_module
 from dotgen.components.agent_config import _agent_config_root, managed_settings, pi_models  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.atlas import Atlas
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
+from dotgen.components.crane import Crane
 from dotgen.components.docker import Docker
 from dotgen.components.doppler import Doppler
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
@@ -29,6 +31,7 @@ from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.herdr import Herdr
+from dotgen.components.java import Java
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.marksman import Marksman
 from dotgen.components.node_fnm import NodeFnm
@@ -44,11 +47,14 @@ from dotgen.components.pi_agent import (  # pyright: ignore[reportPrivateUsage]
 from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
+from dotgen.components.sshpass import Sshpass
 from dotgen.components.starship import Starship
 from dotgen.components.steps import Steps, _steps_root  # pyright: ignore[reportPrivateUsage]
+from dotgen.components.stripe import Stripe
 from dotgen.components.taplo import Taplo
 from dotgen.components.terraform import Terraform
 from dotgen.components.uv import Uv
+from dotgen.components.xcbeautify import Xcbeautify
 from dotgen.components.zed import Zed
 from dotgen.components.zig import Zig
 from dotgen.components.zoxide import Zoxide
@@ -739,6 +745,88 @@ def test_starship_emits_config_and_init() -> None:
         assert disabled in cfg
 
 
+@pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
+@pytest.mark.parametrize("arch", ["x86_64", "aarch64", "arm64"])
+def test_platform_tool_installers(tmp_path: Path, env_name: str, arch: str) -> None:
+    env = ENVIRONMENTS[env_name]
+    prelude = f"""\
+detect_arch() {{ printf '%s\\n' {shlex.quote(arch)}; }}
+install_package() {{ printf 'package %s\\n' "$1"; }}
+install_packages() {{ for package in "$@"; do install_package "$package"; done; }}
+download_bin_sha256() {{ printf 'binary %s %s %s %s %s\\n' "$@"; }}
+download_tar_bin_sha256() {{ printf 'archive %s %s %s %s %s %s\\n' "$@"; }}
+add_repo() {{ printf 'repo %s\\n' "$*"; }}
+update_pkg_index() {{ :; }}
+"""
+    components = (Atlas(), Stripe(), Crane(), Sshpass(), Java(), Xcbeautify())
+    setup = "".join(component.render(env).setup for component in components if component.applies_to(env))
+    result = _run_tool_setup(tmp_path, setup, prelude)
+    assert result.returncode == 0, result.stderr
+    asset_os = "darwin" if env.os is OS.MACOS else "linux"
+    asset_arch = "amd64" if arch == "x86_64" else "arm64"
+    assert f"binary atlas https://release.ariga.io/atlas/atlas-{asset_os}-{asset_arch}-v0.36.0 " in result.stdout
+    assert " v0.36.0 version\n" in result.stdout
+    assert "package sshpass\n" in result.stdout
+    if env.os is OS.MACOS:
+        assert "package stripe-cli\n" in result.stdout
+        assert "package xcbeautify\n" in result.stdout
+        assert "package openjdk@17\n" in result.stdout
+    else:
+        stripe_arch = "x86_64" if arch == "x86_64" else "arm64"
+        assert f"archive stripe https://github.com/stripe/stripe-cli/releases/download/v1.55.6/stripe_1.55.6_linux_{stripe_arch}.tar.gz " in result.stdout
+        assert "xcbeautify" not in result.stdout
+        if env.os is OS.DEBIAN:
+            assert "https://packages.adoptium.net/artifactory/deb trixie main" in result.stdout
+            assert "package temurin-17-jdk\n" in result.stdout
+        else:
+            assert "package jdk17-openjdk\n" in result.stdout
+    if env.role is EnvironmentRole.CONTAINER:
+        assert "crane" not in result.stdout
+    elif env.os is OS.DEBIAN:
+        crane_arch = "x86_64" if arch == "x86_64" else "arm64"
+        assert f"archive crane https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_{crane_arch}.tar.gz " in result.stdout
+    else:
+        assert "package crane\n" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("env_name", "java_home"),
+    [
+        ("macos", "/opt/testbrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"),
+        ("cachyos", "/usr/lib/jvm/java-17-openjdk"),
+        ("debian", "/usr/lib/jvm/temurin-17-jdk-amd64"),
+        ("debian-docker", "/usr/lib/jvm/temurin-17-jdk-amd64"),
+    ],
+)
+def test_java_shell_selects_java_17(tmp_path: Path, env_name: str, java_home: str) -> None:
+    prelude = """\
+brew() { printf '/opt/testbrew/opt/openjdk@17\\n'; }
+dpkg() { printf 'amd64\\n'; }
+"""
+    result = _run_tool_setup(
+        tmp_path,
+        Java().render(ENVIRONMENTS[env_name]).bashrc + 'printf "%s\\n%s\\n" "$JAVA_HOME" "${PATH%%:*}"\n',
+        prelude,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [java_home, f"{java_home}/bin"]
+
+
+def test_container_omits_image_tools_and_local_clusters() -> None:
+    env = ENVIRONMENTS["debian-docker"]
+    fragments = [component.render(env) for component in env.components if component.applies_to(env)]
+    setup = "".join(fragment.setup for fragment in fragments)
+    bashrc = "".join(fragment.bashrc for fragment in fragments)
+    assert "download_bin kubectl" in setup
+    assert "download_tar_bin helm" in setup
+    assert "kind-linux" not in setup
+    assert "_install_kind_linux" not in setup
+    assert "kind completion bash" not in bashrc
+    assert "crane" not in setup
+    assert "install_packages docker" not in setup
+    assert "orbstack" not in setup
+
+
 def test_kubectl_per_os_branching() -> None:
     macos = Kubectl().render(ENVIRONMENTS["macos"]).setup
     debian = Kubectl().render(ENVIRONMENTS["debian"]).setup
@@ -919,6 +1007,12 @@ def test_cachyos_core_profile_is_explicit_ordered_and_renderable() -> None:
         "gcloud",
         "aws",
         "doppler",
+        "atlas",
+        "stripe",
+        "crane",
+        "sshpass",
+        "ipmitool",
+        "java",
         "fonts",
         "ghostty",
         "zed",

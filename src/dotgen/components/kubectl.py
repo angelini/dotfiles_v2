@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from dotgen.environment import Environment
 from dotgen.fragment import Fragment
-from dotgen.types import OS
+from dotgen.types import OS, EnvironmentRole
 
 _KUBE_VERSION = "v1.35.8"
 _HELM_VERSION = "v3.21.4"
@@ -108,9 +108,11 @@ _install_k0sctl_linux() {
     + f'"https://github.com/k0sproject/k0sctl/releases/download/{_K0SCTL_VERSION}/k0sctl-linux-'
     + r'${arch}" "$checksum" '
     + f'"{_K0SCTL_VERSION}" version'
-    + r"""
-}
-_install_kind_linux() {
+    + "\n}\n"
+)
+
+_KIND_SETUP_LINUX = (
+    r"""_install_kind_linux() {
   local arch checksum
   arch="$(_kube_arch)"
   case "$arch" in
@@ -122,7 +124,7 @@ _install_kind_linux() {
     + f'"https://github.com/kubernetes-sigs/kind/releases/download/{_KIND_VERSION}/kind-linux-'
     + r'${arch}" "$checksum" '
     + f'"{_KIND_VERSION}" version'
-    + "\n}\n"
+    + "\n}\n_install_kind_linux\n"
 )
 
 _SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl\n"
@@ -136,7 +138,6 @@ _SETUP_LINUX = (
     + "_install_kubens_linux\n"
     + "_install_kubie_linux\n"
     + "_install_k0sctl_linux\n"
-    + "_install_kind_linux\n"
 )
 
 _SETUP_BY_OS: dict[OS, str] = {
@@ -156,6 +157,9 @@ fi
 if bin_exists kubie; then
   source <(kubie generate-completion)
 fi
+"""
+
+_KIND_BASHRC = """\
 if bin_exists kind; then
   source <(kind completion bash)
 fi
@@ -201,8 +205,10 @@ class Kubectl:
         return True
 
     def render(self, env: Environment) -> Fragment:
-        return Fragment(
-            setup=_SETUP_BY_OS[env.os],
-            bashrc=_BASHRC,
-            alias=_ALIASES,
-        )
+        setup = _SETUP_BY_OS[env.os]
+        bashrc = _BASHRC
+        if env.role is not EnvironmentRole.CONTAINER:
+            if env.os is not OS.MACOS:
+                setup += _KIND_SETUP_LINUX
+            bashrc += _KIND_BASHRC
+        return Fragment(setup=setup, bashrc=bashrc, alias=_ALIASES)

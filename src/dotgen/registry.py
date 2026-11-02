@@ -1,8 +1,10 @@
 from dotgen.component import Component
+from dotgen.components.atlas import Atlas
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
 from dotgen.components.core_utils import CoreUtils
+from dotgen.components.crane import Crane
 from dotgen.components.docker import Docker
 from dotgen.components.doppler import Doppler
 from dotgen.components.dotfiles_deploy import DotfilesDeploy
@@ -16,6 +18,8 @@ from dotgen.components.git_signing import GitSigning
 from dotgen.components.go_lang import GoLang
 from dotgen.components.helix import Helix
 from dotgen.components.herdr import Herdr
+from dotgen.components.ipmitool import Ipmitool
+from dotgen.components.java import Java
 from dotgen.components.kubectl import Kubectl
 from dotgen.components.marksman import Marksman
 from dotgen.components.node_fnm import NodeFnm
@@ -25,11 +29,14 @@ from dotgen.components.postgres import Postgres
 from dotgen.components.python_tools import PythonTools
 from dotgen.components.rust import Rust
 from dotgen.components.shellcheck import Shellcheck
+from dotgen.components.sshpass import Sshpass
 from dotgen.components.starship import Starship
 from dotgen.components.steps import Steps
+from dotgen.components.stripe import Stripe
 from dotgen.components.taplo import Taplo
 from dotgen.components.terraform import Terraform
 from dotgen.components.uv import Uv
+from dotgen.components.xcbeautify import Xcbeautify
 from dotgen.components.zed import Zed
 from dotgen.components.zed_host_bridge import ZedHostBridge
 from dotgen.components.zig import Zig
@@ -65,6 +72,12 @@ _CORE_CLI: tuple[Component, ...] = (
     Gcloud(),
     Aws(),
     Doppler(),
+    Atlas(),
+    Stripe(),
+    Crane(),
+    Sshpass(),
+    Ipmitool(),
+    Java(),
 )
 
 _SHARED: tuple[Component, ...] = _CORE_CLI + (Fonts(),)
@@ -74,6 +87,7 @@ _DEBIAN_FULL: tuple[Component, ...] = (Docker(),)
 _MACOS_GUI: tuple[Component, ...] = (Ghostty(), Zed(), OrbStack())
 
 _DOCKER_SKIP = {
+    "crane",
     "fonts",
     "git_signing",
     "aws",
@@ -114,7 +128,7 @@ ENVIRONMENTS: dict[str, Environment] = {
         OS.MACOS,
         PkgMgr.BREW,
         EnvironmentRole.WORKSTATION,
-        components=_SHARED + _MACOS_GUI + _LAST,
+        components=_SHARED + (Xcbeautify(),) + _MACOS_GUI + _LAST,
     ),
     "cachyos": Environment(
         "cachyos",

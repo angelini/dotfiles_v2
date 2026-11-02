@@ -668,6 +668,81 @@ else
   _rc=$?; component_end "doppler" "$_rc"; exit "$_rc"
 fi
 
+# --- atlas ---
+component_begin "atlas"
+if (
+  set -e
+  _install_atlas() {
+    local arch checksum
+    case "$(detect_arch)" in
+      x86_64) arch=amd64; checksum=c8cbc5437db05405e9cd710dfa10bc9d392bfb67aaa160614fdd89a97054bac4 ;;
+      aarch64|arm64) arch=arm64; checksum=98fee6838472a9d2f90f91453449dae9a5acfdc12c36afefae67625fbf3f10fd ;;
+      *) error "unsupported arch for atlas: $(detect_arch)"; return 1 ;;
+    esac
+    download_bin_sha256 atlas "https://release.ariga.io/atlas/atlas-darwin-${arch}-v0.36.0" "$checksum" "v0.36.0" version
+  }
+  _install_atlas
+); then
+  component_end "atlas" 0
+else
+  _rc=$?; component_end "atlas" "$_rc"; exit "$_rc"
+fi
+
+# --- stripe ---
+component_begin "stripe"
+if (
+  set -e
+  install_package stripe-cli
+); then
+  component_end "stripe" 0
+else
+  _rc=$?; component_end "stripe" "$_rc"; exit "$_rc"
+fi
+
+# --- crane ---
+component_begin "crane"
+if (
+  set -e
+  install_package crane
+); then
+  component_end "crane" 0
+else
+  _rc=$?; component_end "crane" "$_rc"; exit "$_rc"
+fi
+
+# --- sshpass ---
+component_begin "sshpass"
+if (
+  set -e
+  install_package sshpass
+); then
+  component_end "sshpass" 0
+else
+  _rc=$?; component_end "sshpass" "$_rc"; exit "$_rc"
+fi
+
+# --- ipmitool ---
+component_begin "ipmitool"
+if (
+  set -e
+  install_package ipmitool
+); then
+  component_end "ipmitool" 0
+else
+  _rc=$?; component_end "ipmitool" "$_rc"; exit "$_rc"
+fi
+
+# --- java ---
+component_begin "java"
+if (
+  set -e
+  install_package openjdk@17
+); then
+  component_end "java" 0
+else
+  _rc=$?; component_end "java" "$_rc"; exit "$_rc"
+fi
+
 # --- fonts ---
 component_begin "fonts"
 if (
@@ -682,6 +757,17 @@ if (
   component_end "fonts" 0
 else
   _rc=$?; component_end "fonts" "$_rc"; exit "$_rc"
+fi
+
+# --- xcbeautify ---
+component_begin "xcbeautify"
+if (
+  set -e
+  install_package xcbeautify
+); then
+  component_end "xcbeautify" 0
+else
+  _rc=$?; component_end "xcbeautify" "$_rc"; exit "$_rc"
 fi
 
 # --- ghostty ---

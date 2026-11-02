@@ -94,9 +94,6 @@ fi
 if bin_exists kubie; then
   source <(kubie generate-completion)
 fi
-if bin_exists kind; then
-  source <(kind completion bash)
-fi
 
 # --- uv ---
 [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
@@ -106,4 +103,9 @@ export PATH="$HOME/.local/share/fnm:$PATH"
 if bin_exists fnm; then
   eval "$(fnm env --use-on-cd --shell bash)"
 fi
+
+# --- java ---
+JAVA_HOME="/usr/lib/jvm/temurin-17-jdk-$(dpkg --print-architecture)"
+export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
 

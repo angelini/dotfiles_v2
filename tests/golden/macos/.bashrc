@@ -144,3 +144,8 @@ if bin_exists aws_completer; then
   complete -C "$(command -v aws_completer)" aws
 fi
 
+# --- java ---
+JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
+
