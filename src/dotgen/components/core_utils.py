@@ -68,6 +68,7 @@ _PACKAGES: dict[OS, tuple[str, ...]] = {
         "protobuf-compiler",
     ),
     OS.MACOS: (
+        "coreutils",
         "git",
         "git-delta",
         "just",

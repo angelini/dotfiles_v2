@@ -3,6 +3,7 @@ from dotgen.components.atlas import Atlas
 from dotgen.components.aws import Aws
 from dotgen.components.bash_base import BashBase
 from dotgen.components.claude_code import ClaudeCode
+from dotgen.components.codex import Codex
 from dotgen.components.core_utils import CoreUtils
 from dotgen.components.crane import Crane
 from dotgen.components.docker import Docker
@@ -65,6 +66,7 @@ _CORE_CLI: tuple[Component, ...] = (
     Terraform(),
     Zig(),
     NodeFnm(),
+    Codex(),
     Steps(),
     PiAgent(),
     Postgres(),
@@ -99,6 +101,7 @@ _DOCKER_SKIP = {
     "go_lang",
     "python_tools",
     "claude_code",
+    "codex",
     "postgres",
     "doppler",
     "herdr",

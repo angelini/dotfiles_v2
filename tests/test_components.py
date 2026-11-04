@@ -315,6 +315,11 @@ def test_core_utils_per_os_fd_token() -> None:
     assert " fd " in macos and "fd-find" not in macos
 
 
+def test_core_utils_install_gnu_coreutils_only_on_macos(env: Environment) -> None:
+    packages = shlex.split(CoreUtils().render(env).setup.splitlines()[0])
+    assert ("coreutils" in packages) is (env.os is OS.MACOS)
+
+
 def test_core_utils_include_process_monitors() -> None:
     for environment in ENVIRONMENTS.values():
         setup = CoreUtils().render(environment).setup
@@ -1000,6 +1005,7 @@ def test_cachyos_core_profile_is_explicit_ordered_and_renderable() -> None:
         "terraform",
         "zig",
         "node_fnm",
+        "codex",
         "steps",
         "pi_agent",
         "postgres",

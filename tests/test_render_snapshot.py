@@ -106,6 +106,21 @@ def test_cachyos_generated_workstation_has_no_macos_operations_or_paths(built_ro
     assert "cmd-" not in keymap
 
 
+@pytest.mark.parametrize("env_name", list(ENVIRONMENTS))
+def test_codex_installs_after_node_in_full_profiles(built_root: Path, env_name: str) -> None:
+    setup = (built_root / env_name / "setup.sh").read_text()
+    install = "install_npm_global @openai/codex\n"
+    if env_name == "debian-docker":
+        assert install not in setup
+    else:
+        assert setup.count(install) == 1
+        assert setup.index('component_end "node_fnm" 0') < setup.index(install)
+        register = 'codex mcp add serena -- "$HOME/.local/bin/serena" start-mcp-server --context codex --project-from-cwd\n'
+        assert setup.count(register) == 1
+        assert setup.index(install) < setup.index(register)
+        assert setup.index('component_end "claude_code" 0') < setup.index(register)
+
+
 def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
     pi_call = 'install_config_dir "$DIR/config/pi/agent" "$HOME/.pi/agent" "pi-agent" "settings.json"'
     pi_patch_call = 'install_json_patch "$DIR/config/managed-settings/pi.json" "$HOME/.pi/agent/settings.json" 0600'

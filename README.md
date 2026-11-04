@@ -47,6 +47,12 @@ test "$(uname -m)" = arm64
 
 A bare `pytest` executable is not required; `uv run pytest` uses the project development dependency.
 
+### Shared Bash secrets
+
+Interactive Bash sessions, including login terminals and interactive SSH sessions, source `${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env` and export all its values. Add shell-compatible assignments there (for example, `EBAY_APP_ID='...'`, `EXA_API_KEY='...'`, `CONTEXT7_API_KEY='...'`, and `GEMINI_API_KEY='...'`); no Bash configuration or key registry change is needed. Keep the file private (`chmod 600`) and trusted: it is sourced as shell code, not parsed as data. Every child command inherits these secrets.
+
+After deploying the updated Bash configuration, open a new terminal or run `source ~/.bashrc` to load edits in an existing interactive shell. Missing or unreadable secrets files are silently skipped. Non-interactive scripts inherit their parent's exported values but do not reload the file; `BASH_ENV` is not configured. The Pi sandbox still forwards only its explicitly allowed API keys, not arbitrary additions such as `EBAY_*`. The `send-secrets` command still transfers only component-declared keys; additional local keys need separate transfer when required on another host.
+
 ### Native Bash and fzf history
 
 Interactive Bash stores plaintext history in `~/.bash_history` with `HISTSIZE=100000`, `HISTFILESIZE=100000`, `HISTCONTROL=ignoreboth`, and `histappend`. Setup creates the file with mode `0600` or tightens an existing regular file without truncating it; unsafe symlink and non-regular paths stop deployment. `ignoreboth` omits commands beginning with a space and immediate duplicates, but it is not secret detection or redaction. Pi continues to hide `.bash_history`.

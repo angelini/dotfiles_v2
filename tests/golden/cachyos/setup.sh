@@ -590,6 +590,18 @@ else
   _rc=$?; component_end "node_fnm" "$_rc"; exit "$_rc"
 fi
 
+# --- codex ---
+component_begin "codex"
+if (
+  set -e
+  install_npm_global @openai/codex
+  codex mcp add serena -- "$HOME/.local/bin/serena" start-mcp-server --context codex --project-from-cwd
+); then
+  component_end "codex" 0
+else
+  _rc=$?; component_end "codex" "$_rc"; exit "$_rc"
+fi
+
 # --- steps ---
 component_begin "steps"
 if (

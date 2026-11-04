@@ -4,6 +4,17 @@ case $- in
   *) return ;;
 esac
 
+if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
+  case $- in
+    *a*) source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ;;
+    *)
+      set -a
+      source "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env"
+      set +a
+      ;;
+  esac
+fi
+
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 bin_exists() { command -v "$1" >/dev/null 2>&1; }
 [ -f "$HOME/.aliases" ] && source "$HOME/.aliases"
