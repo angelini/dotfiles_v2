@@ -3,7 +3,10 @@ name = "dotgen"
 version = "0.1.0"
 description = "Per-environment bash bundle generator for fresh-machine bootstrap"
 requires-python = ">=3.12"
-dependencies = ["tomli-w>=1.0"]
+dependencies = [
+    "tomli-w>=1.0",
+    "tomlkit==0.13.3",
+]
 
 [project.scripts]
 dotgen = "dotgen.cli:main"

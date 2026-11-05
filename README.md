@@ -427,3 +427,5 @@ just fmt                # ruff format
 ```
 
 `tests/test_shellcheck.py` runs `shellcheck` against every emitted bundle; skipped if shellcheck is not installed.
+
+Codex settings are authored as `settings/codex.managed.json` in the sibling `agent_config` repository. The Codex installer uses uv and pinned tomlkit to merge this patch into `${CODEX_HOME:-$HOME/.codex}/config.toml`, preserving unmanaged settings and comments. The managed defaults allow workspace writes and network access, with approval on request (`sandbox_mode = "workspace-write"`, `approval_policy = "on-request"`, `sandbox_workspace_write.network_access = true`). The merge writes atomically with mode `0600` and refuses symlink destinations or ancestors and malformed TOML.

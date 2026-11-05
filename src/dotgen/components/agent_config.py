@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Literal, NoReturn, cast
 
-ManagedSettingsName = Literal["claude", "pi"]
+ManagedSettingsName = Literal["claude", "pi", "codex"]
 
 
 def _agent_config_root() -> Path:
@@ -28,7 +28,7 @@ def _json_object(path: Path, description: str) -> dict[str, object]:
 
 
 def managed_settings(name: ManagedSettingsName) -> str:
-    if name not in ("claude", "pi"):
+    if name not in ("claude", "pi", "codex"):
         raise ValueError(f"unsupported managed settings name: {name}")
     path = _agent_config_root() / "settings" / f"{name}.managed.json"
     return json.dumps(_json_object(path, "managed settings"), indent=2, sort_keys=True) + "\n"

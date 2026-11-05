@@ -595,6 +595,7 @@ component_begin "codex"
 if (
   set -e
   install_npm_global @openai/codex
+  uv run --no-project --python 3.12 --with tomlkit==0.13.3 python "$DIR/config/codex/merge-settings.py" "$DIR/config/managed-settings/codex.json" "${CODEX_HOME:-$HOME/.codex}/config.toml"
   codex mcp add serena -- "$HOME/.local/bin/serena" start-mcp-server --context codex --project-from-cwd
 ); then
   component_end "codex" 0
