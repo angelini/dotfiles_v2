@@ -19,6 +19,8 @@ just clean              # rm -rf dist
 
 `just ci` runs the full chain: `lint typecheck test build-all shellcheck`.
 
+`just install <env>` refreshes package metadata and upgrades installed packages before installing components: `apt-get update` and `apt-get upgrade -y` on Debian (including debian-docker), `brew update` and plain `brew upgrade` on macOS, and `pacman -Syu --noconfirm` on CachyOS. Homebrew uses its default checks for self-updating casks; the installer does not enable `--greedy`.
+
 ### VM integration tests
 
 VM tests are opt-in and must run from an ordinary, unsandboxed macOS shell. The default `pi` function launches `pi-sandbox`; its macOS Seatbelt profile deliberately excludes the host virtualization state these tests control:

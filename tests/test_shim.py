@@ -775,6 +775,29 @@ def test_macos_remove_packages_and_service_mask_are_stubs() -> None:
     assert "debian only" in _function_body(macos, "service_mask")
 
 
+@pytest.mark.parametrize(
+    ("os", "expected"),
+    [
+        (OS.DEBIAN, "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"),
+        (OS.MACOS, "brew upgrade"),
+        (OS.CACHYOS, ""),
+    ],
+)
+@pytest.mark.parametrize("refresh_status", [0, 42])
+def test_upgrade_packages_refreshes_first_and_stops_on_failure(
+    tmp_path: Path, os: OS, expected: str, refresh_status: int
+) -> None:
+    script = tmp_path / "upgrade.sh"
+    script.write_text(
+        OSShim(os).render()
+        + f'\nupdate_pkg_index() {{ echo refresh; return {refresh_status}; }}\n'
+        + 'sudo() { echo "sudo $*"; }\nbrew() { echo "brew $*"; }\nupgrade_packages\n'
+    )
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+    assert result.returncode == (1 if refresh_status and os != OS.CACHYOS else refresh_status)
+    assert result.stdout.splitlines() == ["refresh"] + ([expected] if not refresh_status and expected else [])
+
+
 def test_macos_update_bootstraps_configured_gh_credential_helper(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()

@@ -161,7 +161,7 @@ def test_cachyos_failed_sudo_authentication_mutates_nothing(tmp_path: Path) -> N
 def test_deployment_preflight_order_precedes_auth_and_mutation(built_macos: Path) -> None:
     setup = (built_macos / "setup.sh").read_text()
     assert setup.index('if ! bin_exists sudo; then') < setup.index("deployment_preflight") < setup.index("if ! sudo -v; then")
-    assert setup.index("if ! sudo -v; then") < setup.index("bin_exists envsubst || install_package gettext") < setup.index("update_pkg_index")
+    assert setup.index("if ! sudo -v; then") < setup.index("bin_exists envsubst || install_package gettext") < setup.index("upgrade_packages")
 
 
 def test_just_install_passes_deploy() -> None:

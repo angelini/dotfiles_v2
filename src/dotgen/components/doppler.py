@@ -36,7 +36,7 @@ remove_packages doppler-cli-bin
 _SETUP_BY_OS: dict[OS, str] = {
     OS.CACHYOS: _SETUP_CACHYOS,
     OS.DEBIAN: _SETUP_DEBIAN,
-    OS.MACOS: "install_package gnupg\nif ! bin_exists doppler; then\n  install_package dopplerhq/cli/doppler\nfi\n",
+    OS.MACOS: "install_package gnupg\nif ! brew list --formula --versions doppler >/dev/null 2>&1; then\n  brew install --formula homebrew/core/doppler\nfi\n",
 }
 
 

@@ -1114,8 +1114,8 @@ def test_doppler_is_full_only_and_renders_per_os() -> None:
 
     macos = doppler.render(ENVIRONMENTS["macos"]).setup
     assert "install_package gnupg" in macos
-    assert "if ! bin_exists doppler" in macos
-    assert "install_package dopplerhq/cli/doppler" in macos
+    assert "brew list --formula --versions doppler" in macos
+    assert "brew install --formula homebrew/core/doppler" in macos
 
 
 def test_container_provider_is_explicit_and_ordered_before_final_deployers() -> None:

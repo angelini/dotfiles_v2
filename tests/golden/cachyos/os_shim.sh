@@ -109,6 +109,10 @@ update_pkg_index() {
   sudo pacman -Syu --noconfirm
 }
 
+upgrade_packages() {
+  update_pkg_index
+}
+
 service_enable() {
   sudo systemctl enable --now "$1"
 }

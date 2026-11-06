@@ -32,7 +32,7 @@ if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
   error "copy from: $DIR/config/dotgen/secrets.env.template"
   exit 2
 fi
-update_pkg_index
+upgrade_packages
 
 # --- core_utils ---
 component_begin "core_utils"

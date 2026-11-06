@@ -59,6 +59,11 @@ update_pkg_index() {
   brew update
 }
 
+upgrade_packages() {
+  update_pkg_index || return 1
+  brew upgrade
+}
+
 service_enable() {
   return 0
 }

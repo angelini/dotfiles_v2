@@ -32,7 +32,7 @@ if [ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/dotgen/secrets.env" ]; then
   error "copy from: $DIR/config/dotgen/secrets.env.template"
   exit 2
 fi
-update_pkg_index
+upgrade_packages
 
 # --- bash_base ---
 component_begin "bash_base"
@@ -672,8 +672,8 @@ component_begin "doppler"
 if (
   set -e
   install_package gnupg
-  if ! bin_exists doppler; then
-    install_package dopplerhq/cli/doppler
+  if ! brew list --formula --versions doppler >/dev/null 2>&1; then
+    brew install --formula homebrew/core/doppler
   fi
 ); then
   component_end "doppler" 0

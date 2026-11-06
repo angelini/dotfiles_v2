@@ -14,6 +14,7 @@ SHIM_FUNCTIONS: tuple[str, ...] = (
     "add_repo",
     "deployment_preflight",
     "update_pkg_index",
+    "upgrade_packages",
     "service_enable",
     "service_mask",
     "bin_version_matches",
@@ -886,6 +887,11 @@ update_pkg_index() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
 }
 
+upgrade_packages() {
+  update_pkg_index || return 1
+  sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+}
+
 service_enable() {
   sudo systemctl enable --now "$1"
 }
@@ -969,6 +975,11 @@ update_pkg_index() {
     HOMEBREW_NO_AUTO_UPDATE=1 brew install gh
   fi
   brew update
+}
+
+upgrade_packages() {
+  update_pkg_index || return 1
+  brew upgrade
 }
 
 service_enable() {
@@ -1093,6 +1104,10 @@ add_repo() {
 
 update_pkg_index() {
   sudo pacman -Syu --noconfirm
+}
+
+upgrade_packages() {
+  update_pkg_index
 }
 
 service_enable() {

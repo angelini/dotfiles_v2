@@ -161,6 +161,11 @@ update_pkg_index() {
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
 }
 
+upgrade_packages() {
+  update_pkg_index || return 1
+  sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+}
+
 service_enable() {
   sudo systemctl enable --now "$1"
 }
