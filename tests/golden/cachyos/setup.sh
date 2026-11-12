@@ -38,7 +38,7 @@ upgrade_packages
 component_begin "core_utils"
 if (
   set -e
-  install_packages git curl git-delta just jq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf shelly
+  install_packages git curl git-delta just jq fzf ripgrep rclone fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf shelly
   _install_yq() {
     local arch checksum
     case "$(detect_arch)" in

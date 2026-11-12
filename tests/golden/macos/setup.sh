@@ -59,7 +59,7 @@ fi
 component_begin "core_utils"
 if (
   set -e
-  install_packages coreutils git git-delta just jq fzf ripgrep fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf
+  install_packages coreutils git git-delta just jq fzf ripgrep rclone fd eza bat tree vim htop btop cloc gnupg bash-completion protobuf
   _install_yq() {
     local arch checksum
     case "$(detect_arch)" in
