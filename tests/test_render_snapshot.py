@@ -119,6 +119,9 @@ def test_codex_installs_after_node_in_full_profiles(built_root: Path, env_name: 
         assert setup.count(register) == 1
         assert setup.index(install) < setup.index(register)
         assert setup.index('component_end "claude_code" 0') < setup.index(register)
+        assert setup.count('install_config_dir "$DIR/config/codex/skills" "$HOME/.agents/skills" "codex-skills"') == 1
+        for skill in ("branch-and-pr", "work-recap"):
+            assert (built_root / env_name / "config" / "codex" / "skills" / skill / "SKILL.md").is_file()
 
 
 def test_agent_config_rendered_overlay_contract(built_root: Path) -> None:
@@ -301,13 +304,13 @@ def test_generated_bundle_migrates_legacy_pi_settings_ownership(tmp_path: Path, 
     settings = live / "settings.json"
     settings.write_text('{"defaultModel":"legacy","lastChangelogVersion":"0.82.1","packages":["local"],"unmanaged":"keep"}\n')
     (live / "AGENTS.md").write_text("legacy\n")
-    legacy_supacode = (
-        live / "extensions/supacode/index.ts",
-        live / "skills/supacode-cli/SKILL.md",
+    retired_paths = (
+        live / "extensions/retired/index.ts",
+        live / "skills/retired/SKILL.md",
     )
-    for path in legacy_supacode:
+    for path in retired_paths:
         path.parent.mkdir(parents=True)
-        path.write_text("legacy managed Supacode\n")
+        path.write_text("retired managed file\n")
     manifest = state / "dotgen" / "install-config-dir" / "pi-agent.manifest"
     manifest.parent.mkdir(parents=True)
     manifest.write_bytes(
@@ -317,8 +320,8 @@ def test_generated_bundle_migrates_legacy_pi_settings_ownership(tmp_path: Path, 
                 os.fsencode(str(live)),
                 b"settings.json",
                 b"AGENTS.md",
-                b"extensions/supacode/index.ts",
-                b"skills/supacode-cli/SKILL.md",
+                b"extensions/retired/index.ts",
+                b"skills/retired/SKILL.md",
             )
         )
         + b"\0"
@@ -349,9 +352,9 @@ install_json_patch {shlex.quote(str(bundle / "config" / "managed-settings" / "pi
     records = manifest.read_bytes().split(b"\0")[:-1]
     assert b"settings.json" not in records[2:]
     assert b"AGENTS.md" in records[2:]
-    assert not any(path.exists() for path in legacy_supacode)
-    assert b"extensions/supacode/index.ts" not in records[2:]
-    assert b"skills/supacode-cli/SKILL.md" not in records[2:]
+    assert not any(path.exists() for path in retired_paths)
+    assert b"extensions/retired/index.ts" not in records[2:]
+    assert b"skills/retired/SKILL.md" not in records[2:]
     settings_inode = settings.stat().st_ino
     settings_bytes = settings.read_bytes()
     manifest_bytes = manifest.read_bytes()

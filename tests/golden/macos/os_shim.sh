@@ -283,6 +283,7 @@ install_config_dir() {
     local inventory_dirs inventory_files inventory_other publish_tmp record preserve
     local -a dst_parts=() files=() dirs=() old_files=() replace_links=() components=() preserves=("${@:4}")
     local i j seen preserved
+    # Guard empty array expansions for Bash 3.2 with nounset enabled (macOS).
     trap 'rm -f -- "${inventory_dirs:-}" "${inventory_files:-}" "${inventory_other:-}" "${publish_tmp:-}"' EXIT
 
     if [[ ! "$identity" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || [ "$identity" = . ] || [ "$identity" = .. ]; then
@@ -293,11 +294,11 @@ install_config_dir() {
       dst="$PWD/$dst"
     fi
     IFS=/ read -r -a components <<< "$dst"
-    for part in "${components[@]}"; do
+    for part in ${components[@]+"${components[@]}"}; do
       case "$part" in ''|.) ;; ..) [ "${#dst_parts[@]}" -gt 0 ] && unset 'dst_parts[${#dst_parts[@]}-1]' ;; *) dst_parts+=("$part") ;; esac
     done
     normalized=
-    for part in "${dst_parts[@]}"; do
+    for part in ${dst_parts[@]+"${dst_parts[@]}"}; do
       normalized="$normalized/$part"
     done
     [ -n "$normalized" ] || normalized=/
@@ -321,13 +322,13 @@ install_config_dir() {
     fi
     while IFS= read -r -d '' record; do dirs+=("${record#./}"); done <"$inventory_dirs"
     while IFS= read -r -d '' record; do files+=("${record#./}"); done <"$inventory_files"
-    for rel in "${dirs[@]}" "${files[@]}"; do
+    for rel in ${dirs[@]+"${dirs[@]}"} ${files[@]+"${files[@]}"}; do
       if [ -z "$rel" ] || [[ "$rel" = /* ]]; then
         error "install_config_dir: invalid source path"
         return 1
       fi
       IFS=/ read -r -a components <<< "$rel"
-      for part in "${components[@]}"; do
+      for part in ${components[@]+"${components[@]}"}; do
         case "$part" in ''|.|..) error "install_config_dir: invalid source path: $rel"; return 1 ;; esac
       done
     done
@@ -336,16 +337,16 @@ install_config_dir() {
         [ "${files[i]}" != "${files[j]}" ] || { error "install_config_dir: duplicate source path: ${files[i]}"; return 1; }
       done
     done
-    for preserve in "${preserves[@]}"; do
+    for preserve in ${preserves[@]+"${preserves[@]}"}; do
       if [ -z "$preserve" ] || [[ "$preserve" = /* ]] || [[ "$preserve" = */ ]]; then
         error "install_config_dir: invalid preserved path: $preserve"
         return 1
       fi
       IFS=/ read -r -a components <<< "$preserve"
-      for part in "${components[@]}"; do
+      for part in ${components[@]+"${components[@]}"}; do
         case "$part" in ''|.|..) error "install_config_dir: invalid preserved path: $preserve"; return 1 ;; esac
       done
-      for rel in "${dirs[@]}" "${files[@]}"; do
+      for rel in ${dirs[@]+"${dirs[@]}"} ${files[@]+"${files[@]}"}; do
         [ "$preserve" != "$rel" ] || { error "install_config_dir: preserved path exists in source inventory: $preserve"; return 1; }
       done
     done
@@ -375,13 +376,13 @@ install_config_dir() {
         fi
       done
       exec 9<&-
-      for rel in "${old_files[@]}"; do
+      for rel in ${old_files[@]+"${old_files[@]}"}; do
         if [ -z "$rel" ] || [[ "$rel" = /* ]]; then
           error "install_config_dir: invalid manifest path"
           return 1
         fi
         IFS=/ read -r -a components <<< "$rel"
-        for part in "${components[@]}"; do case "$part" in ''|.|..) error "install_config_dir: invalid manifest path: $rel"; return 1;; esac; done
+        for part in ${components[@]+"${components[@]}"}; do case "$part" in ''|.|..) error "install_config_dir: invalid manifest path: $rel"; return 1;; esac; done
       done
       for ((i=0; i<${#old_files[@]}; i++)); do
         for ((j=i+1; j<${#old_files[@]}; j++)); do
@@ -391,19 +392,19 @@ install_config_dir() {
     fi
 
     target=/
-    for part in "${dst_parts[@]}"; do
+    for part in ${dst_parts[@]+"${dst_parts[@]}"}; do
       target="$target$part"
       [ -L "$target" ] && { error "install_config_dir: symlink destination ancestor: $target"; return 1; }
       target="$target/"
     done
     [ -L "$dst" ] && { error "install_config_dir: symlink destination: $dst"; return 1; }
     if [ -e "$dst" ] && [ ! -d "$dst" ]; then error "install_config_dir: $dst exists but is not a directory"; return 1; fi
-    for rel in "${dirs[@]}"; do
+    for rel in ${dirs[@]+"${dirs[@]}"}; do
       target="$dst/$rel"
       [ -L "$target" ] && { error "install_config_dir: symlink destination path: $target"; return 1; }
       [ ! -e "$target" ] || [ -d "$target" ] || { error "install_config_dir: $target exists but is not a directory"; return 1; }
     done
-    for rel in "${files[@]}"; do
+    for rel in ${files[@]+"${files[@]}"}; do
       target="$dst/$rel"
       if [ -L "$target" ]; then
         replace_links+=("$rel")
@@ -411,10 +412,10 @@ install_config_dir() {
       fi
       [ ! -e "$target" ] || [ -f "$target" ] || { error "install_config_dir: $target exists but is not a regular file"; return 1; }
     done
-    for rel in "${old_files[@]}"; do
-      preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
+    for rel in ${old_files[@]+"${old_files[@]}"}; do
+      preserved=0; for preserve in ${preserves[@]+"${preserves[@]}"}; do [ "$rel" != "$preserve" ] || preserved=1; done
       [ "$preserved" = 0 ] || continue
-      seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
+      seen=0; for record in ${files[@]+"${files[@]}"}; do [ "$rel" != "$record" ] || seen=1; done
       [ "$seen" = 0 ] || continue
       target="$dst/$rel"
       [ ! -e "$target" ] && [ ! -L "$target" ] && continue
@@ -423,22 +424,22 @@ install_config_dir() {
         return 1
       fi
     done
-    for rel in "${old_files[@]}"; do
-      preserved=0; for preserve in "${preserves[@]}"; do [ "$rel" != "$preserve" ] || preserved=1; done
+    for rel in ${old_files[@]+"${old_files[@]}"}; do
+      preserved=0; for preserve in ${preserves[@]+"${preserves[@]}"}; do [ "$rel" != "$preserve" ] || preserved=1; done
       [ "$preserved" = 0 ] || continue
-      seen=0; for record in "${files[@]}"; do [ "$rel" != "$record" ] || seen=1; done
+      seen=0; for record in ${files[@]+"${files[@]}"}; do [ "$rel" != "$record" ] || seen=1; done
       [ "$seen" = 0 ] && [ -f "$dst/$rel" ] && rm -f -- "$dst/$rel"
     done
     ensure_dir "$dst" || return 1
     if [ "${#replace_links[@]}" -gt 0 ]; then
-      for rel in "${replace_links[@]}"; do
+      for rel in ${replace_links[@]+"${replace_links[@]}"}; do
         rm -f -- "$dst/$rel" || return 1
       done
     fi
     cp -Rp "$src"/. "$dst"/ || return 1
     ensure_dir "$state" || return 1
     publish_tmp="$(mktemp "$state/$identity.manifest.XXXXXX")" || return 1
-    printf '%s\0' dotgen-install-config-dir-v1 "$dst" "${files[@]}" >"$publish_tmp" || return 1
+    printf '%s\0' dotgen-install-config-dir-v1 "$dst" ${files[@]+"${files[@]}"} >"$publish_tmp" || return 1
     mv -f -- "$publish_tmp" "$manifest" || return 1
     publish_tmp=""
   )

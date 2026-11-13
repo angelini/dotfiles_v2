@@ -18,6 +18,7 @@
 0755  5d71e521b49f52992c415ed526ae7c8d7e9100f05fca8cbf6a57d7e19a0cca17  pi/sandbox/pi-sandbox.sh
 0755  c3004a0ec76b0e8016e5a55f383bfab860cafd8139fd243bf194ef1cb703e490  zed-host-bridge/zed
 dir  claude
+dir  codex/skills
 dir  pi-angelini
 dir  pi/agent
 dir  steps

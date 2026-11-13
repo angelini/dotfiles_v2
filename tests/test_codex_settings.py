@@ -1,15 +1,66 @@
 import json
+import os
 import subprocess
 import sys
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from dotgen.components.codex import Codex
 from dotgen.registry import ENVIRONMENTS
+from dotgen.render import build_env
 
 SCRIPT = Path(__file__).parents[1] / "src/dotgen/resources/merge_codex_settings.py"
+
+
+@pytest.mark.parametrize("env_name", ["macos", "debian", "cachyos"])
+def test_codex_bundle_installs_and_updates_skills(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_name: str) -> None:
+    root = tmp_path.resolve()
+    source = root / "agent-config"
+    settings = source / "settings" / "codex.managed.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text("{}\n")
+    skill = source / "codex" / "skills" / "work-recap"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("shared recap\n")
+    helper = skill / "scripts" / "recap.sh"
+    helper.parent.mkdir()
+    helper.write_text("#!/bin/bash\nexit 0\n")
+    helper.chmod(0o755)
+    excluded_skill = source / "codex" / "skills" / "supacode-cli"
+    excluded_skill.mkdir()
+    (excluded_skill / "SKILL.md").write_text("must not deploy\n")
+    (source / "codex" / "auth.json").write_text("must not deploy\n")
+    monkeypatch.setenv("DOTGEN_AGENT_CONFIG_ROOT", str(source))
+    env = replace(ENVIRONMENTS[env_name], components=(Codex(),))
+    bundle = root / "bundle"
+    build_env(env, bundle)
+    assert not (bundle / "config" / "codex" / "auth.json").exists()
+    assert not (bundle / "config" / "codex" / "skills" / "supacode-cli").exists()
+
+    home = root / "home"
+    live = home / ".agents" / "skills"
+    local_skill = live / "local" / "SKILL.md"
+    local_skill.parent.mkdir(parents=True)
+    local_skill.write_text("keep local skill\n")
+    install = next(line for line in Codex().render(env).setup.splitlines() if line.startswith("install_config_dir "))
+    command = 'set -euo pipefail\nsource "$DIR/os_shim.sh"\n' + install
+    process_env = {**os.environ, "HOME": str(home), "DIR": str(bundle), "XDG_STATE_HOME": str(root / "state")}
+    for _ in range(2):
+        subprocess.run(["bash", "-c", command], env=process_env, check=True, capture_output=True, text=True)
+        assert (live / "work-recap" / "SKILL.md").read_text() == "shared recap\n"
+        assert (live / "work-recap" / "scripts" / "recap.sh").stat().st_mode & 0o111
+        assert local_skill.read_text() == "keep local skill\n"
+        assert not (live / "supacode-cli").exists()
+    (skill / "SKILL.md").write_text("updated recap\n")
+    helper.unlink()
+    build_env(env, bundle)
+    subprocess.run(["bash", "-c", command], env=process_env, check=True, capture_output=True, text=True)
+    assert (live / "work-recap" / "SKILL.md").read_text() == "updated recap\n"
+    assert not (live / "work-recap" / "scripts" / "recap.sh").exists()
+    assert local_skill.read_text() == "keep local skill\n"
 
 
 def test_codex_settings_merge_preserves_state_and_comments(tmp_path: Path) -> None:

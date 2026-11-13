@@ -46,6 +46,23 @@ if [ -d "/opt/homebrew/bin" ]; then
 fi
 [ -r "$HOME/.orbstack/shell/init.bash" ] && source "$HOME/.orbstack/shell/init.bash"
 
+# Focus the remote field, then run vncpaste to type the clipboard (or piped text).
+vncpaste() {
+  local text
+  if [ -t 0 ]; then
+    text=$(pbpaste) || return
+  else
+    text=$(cat) || return
+  fi
+  osascript - "$text" <<'APPLESCRIPT'
+on run argv
+  tell application "Screen Sharing" to activate
+  delay 1
+  tell application "System Events" to keystroke (item 1 of argv)
+end run
+APPLESCRIPT
+}
+
 # --- fzf_bash_history ---
 HISTFILE=~/.bash_history
 HISTSIZE=100000

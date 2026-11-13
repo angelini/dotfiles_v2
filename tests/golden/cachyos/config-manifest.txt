@@ -26,6 +26,7 @@
 0755  c082009a049f536f1373e91284c50db769ba5518ae65285e2c96dba4eca90e70  herdr/herd-remote
 0755  c9346e8234fb65bc846f9806afb5eab8bf641f26a27fa7c4881efa3961adbdd1  herdr/herd-local
 dir  claude
+dir  codex/skills
 dir  pi-angelini
 dir  pi/agent
 dir  steps
