@@ -33,6 +33,18 @@ case ";${PROMPT_COMMAND:-};" in
   *) PROMPT_COMMAND="set_win_title${PROMPT_COMMAND:+;${PROMPT_COMMAND}}" ;;
 esac
 
+checkpoint() {
+  local script="$HOME/.agents/skills/checkpoint/scripts/checkpoint.py"
+  if [ ! -r "$script" ]; then
+    script="$HOME/.claude/skills/checkpoint/scripts/checkpoint.py"
+  fi
+  if [ ! -r "$script" ]; then
+    printf '%s\n' "checkpoint: install the checkpoint skill for Codex or Claude Code" >&2
+    return 1
+  fi
+  uv run --no-project --script "$script" "$@"
+}
+
 epoch() {
   python3 - "$1" <<'PYEOF'
 import sys, datetime as d
