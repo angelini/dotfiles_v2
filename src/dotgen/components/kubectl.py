@@ -20,6 +20,12 @@ _K0SCTL_SHA256 = {
     "arm64": "3632072361f3e83dde9b34f83eea49673d3bfe84763cf361edc3aec7209231a6",
 }
 
+_TALOSCTL_VERSION = "v1.14.2"
+_TALOSCTL_SHA256 = {
+    "amd64": "c6c9552b0e5f767352c595fa1c0af4f186f697488646872955057d23990a66c4",
+    "arm64": "5b7119f9cc68c1e6dcd394564208a9ae417c5cc9e8e2585fa173082e53f5e6d7",
+}
+
 _LINUX_HELPERS = (
     r"""_kube_arch() {
   case "$(detect_arch)" in
@@ -127,7 +133,23 @@ _KIND_SETUP_LINUX = (
     + "\n}\n_install_kind_linux\n"
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl\n"
+_TALOSCTL_SETUP_LINUX = (
+    r"""_install_talosctl_linux() {
+  local arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) checksum="{_TALOSCTL_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) checksum="{_TALOSCTL_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_bin_sha256 talosctl """
+    + f'"https://github.com/siderolabs/talos/releases/download/{_TALOSCTL_VERSION}/talosctl-linux-'
+    + r'${arch}" "$checksum" '
+    + f'"{_TALOSCTL_VERSION}" version --client --short'
+    + "\n}\n_install_talosctl_linux\n"
+)
+
+_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl\n"
 
 _SETUP_LINUX = (
     _LINUX_HELPERS
@@ -138,6 +160,7 @@ _SETUP_LINUX = (
     + "_install_kubens_linux\n"
     + "_install_kubie_linux\n"
     + "_install_k0sctl_linux\n"
+    + _TALOSCTL_SETUP_LINUX
 )
 
 _SETUP_BY_OS: dict[OS, str] = {

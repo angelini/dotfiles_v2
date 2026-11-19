@@ -305,6 +305,16 @@ if (
   _install_kubens_linux
   _install_kubie_linux
   _install_k0sctl_linux
+  _install_talosctl_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="c6c9552b0e5f767352c595fa1c0af4f186f697488646872955057d23990a66c4" ;;
+      arm64) checksum="5b7119f9cc68c1e6dcd394564208a9ae417c5cc9e8e2585fa173082e53f5e6d7" ;;
+    esac
+    download_bin_sha256 talosctl "https://github.com/siderolabs/talos/releases/download/v1.14.2/talosctl-linux-${arch}" "$checksum" "v1.14.2" version --client --short
+  }
+  _install_talosctl_linux
   _install_kind_linux() {
     local arch checksum
     arch="$(_kube_arch)"
