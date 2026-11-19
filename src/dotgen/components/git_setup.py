@@ -48,6 +48,7 @@ node_modules/
 .pi/settings.json
 .pi-lens/
 .pi-subagents/
+.deploy-guard/
 **/.claude/settings.local.json
 """
 

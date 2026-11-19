@@ -78,7 +78,7 @@ def test_generated_cachyos_bundle_orders_components_and_converges_with_fake_host
     headers = [line.removeprefix("# --- ").removesuffix(" ---") for line in setup.splitlines() if line.startswith("# --- ")]
 
     assert headers == expected_names
-    assert setup.index("deployment_preflight") < setup.index("sudo -v") < setup.index("update_pkg_index")
+    assert setup.index("deployment_preflight") < setup.index("sudo -v") < setup.index("\nupgrade_packages\n")
     assert headers.index("node_fnm") < headers.index("steps") < headers.index("pi_agent")
     assert headers.index("zed") < headers.index("docker") < headers.index("zed_host_bridge")
     assert headers[-2:] == ["git_setup", "dotfiles_deploy"]
