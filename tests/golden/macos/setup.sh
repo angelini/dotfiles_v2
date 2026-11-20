@@ -235,7 +235,7 @@ fi
 component_begin "kubectl"
 if (
   set -e
-  install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl
+  install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl argocd
 ); then
   component_end "kubectl" 0
 else

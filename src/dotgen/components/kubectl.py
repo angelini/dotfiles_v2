@@ -5,6 +5,12 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS, EnvironmentRole
 
 _KUBE_VERSION = "v1.35.8"
+_ARGOCD_VERSION = "v3.6.2"
+_ARGOCD_BUILD = f"{_ARGOCD_VERSION}+8e8268e"
+_ARGOCD_SHA256 = {
+    "amd64": "80cc51ce8eb39d5601d54fd14225ed15a04ccf4baa3427f5c1e72a4e342aa0b2",
+    "arm64": "578e87773bfb0fe5047250f16f914d0362fbfce0b5b2b7ed7204776925dcdff9",
+}
 _HELM_VERSION = "v3.21.4"
 _K9S_VERSION = "v0.51.0"
 _KUBECTX_VERSION = "v0.11.0"
@@ -149,7 +155,23 @@ _TALOSCTL_SETUP_LINUX = (
     + "\n}\n_install_talosctl_linux\n"
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl\n"
+_ARGOCD_SETUP_LINUX = (
+    r"""_install_argocd_linux() {
+  local arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) checksum="{_ARGOCD_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) checksum="{_ARGOCD_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_bin_sha256 argocd """
+    + f'"https://github.com/argoproj/argo-cd/releases/download/{_ARGOCD_VERSION}/argocd-linux-'
+    + r'${arch}" "$checksum" '
+    + f'"{_ARGOCD_BUILD}" version --client --short'
+    + "\n}\n_install_argocd_linux\n"
+)
+
+_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl argocd\n"
 
 _SETUP_LINUX = (
     _LINUX_HELPERS
@@ -161,6 +183,7 @@ _SETUP_LINUX = (
     + "_install_kubie_linux\n"
     + "_install_k0sctl_linux\n"
     + _TALOSCTL_SETUP_LINUX
+    + _ARGOCD_SETUP_LINUX
 )
 
 _SETUP_BY_OS: dict[OS, str] = {

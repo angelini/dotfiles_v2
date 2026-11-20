@@ -315,6 +315,16 @@ if (
     download_bin_sha256 talosctl "https://github.com/siderolabs/talos/releases/download/v1.14.2/talosctl-linux-${arch}" "$checksum" "v1.14.2" version --client --short
   }
   _install_talosctl_linux
+  _install_argocd_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="80cc51ce8eb39d5601d54fd14225ed15a04ccf4baa3427f5c1e72a4e342aa0b2" ;;
+      arm64) checksum="578e87773bfb0fe5047250f16f914d0362fbfce0b5b2b7ed7204776925dcdff9" ;;
+    esac
+    download_bin_sha256 argocd "https://github.com/argoproj/argo-cd/releases/download/v3.6.2/argocd-linux-${arch}" "$checksum" "v3.6.2+8e8268e" version --client --short
+  }
+  _install_argocd_linux
   _install_kind_linux() {
     local arch checksum
     arch="$(_kube_arch)"
