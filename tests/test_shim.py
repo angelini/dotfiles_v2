@@ -8,6 +8,7 @@ import signal
 import subprocess
 import tarfile
 import time
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -1002,6 +1003,43 @@ download_tar_bin_sha256 doppler https://example.test/doppler.tar.gz {checksum} d
     target = home / "bin/doppler"
     assert subprocess.check_output([target, "--version"], text=True) == "v2.0.0\n"
     assert not list(target.parent.glob(".doppler.*"))
+
+
+def test_download_zip_bin_sha256_verifies_archive_and_installs_plugin(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    payload = '#!/bin/sh\n[ "$1" = --version ] || exit 7\nprintf "kubelogin version v1.36.4\\n"\n'
+    archive = tmp_path / "kubelogin.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        zipped.writestr("kubelogin", payload)
+    checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+    calls = tmp_path / "curl-calls"
+    script = tmp_path / "run.sh"
+    script.write_text(
+        f"""set -euo pipefail
+{OSShim(OS.CACHYOS).render()}
+export HOME={shlex.quote(str(home))}
+export ARCHIVE={shlex.quote(str(archive))}
+export CALLS={shlex.quote(str(calls))}
+curl() {{
+  printf x >> "$CALLS"
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = -o ]; then command cp "$ARCHIVE" "$2"; return 0; fi
+    shift
+  done
+  return 2
+}}
+download_zip_bin_sha256 kubectl-oidc_login https://example.test/kubelogin.zip {checksum} kubelogin v1.36.4 --version
+download_zip_bin_sha256 kubectl-oidc_login https://example.test/kubelogin.zip {checksum} kubelogin v1.36.4 --version
+"""
+    )
+
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text() == "x"
+    target = home / "bin/kubectl-oidc_login"
+    assert subprocess.check_output([target, "--version"], text=True) == "kubelogin version v1.36.4\n"
+    assert not list(target.parent.glob(".kubectl-oidc_login.*"))
 
 
 def test_download_tar_bin_reuses_matching_version(tmp_path: Path) -> None:

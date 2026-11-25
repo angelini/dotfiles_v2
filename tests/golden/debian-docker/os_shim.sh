@@ -792,6 +792,48 @@ download_tar_bin_sha256() (
   tmp=""
 )
 
+download_zip_bin_sha256() (
+  if [ "$#" -lt 5 ]; then
+    error "download_zip_bin_sha256: expected name, URL, SHA-256, archive path, and version"
+    exit 2
+  fi
+  local name="$1" url="$2" checksum="$3" inner="$4" expected="$5"
+  local installed archive="" tmp="" actual
+  shift 5
+  if [ "${#checksum}" -ne 64 ] || [[ "$checksum" = *[!0-9a-f]* ]]; then
+    error "download_zip_bin_sha256: invalid SHA-256 for $name"
+    exit 2
+  fi
+  installed="$HOME/bin/$name"
+  if [ -e "$installed" ] || [ -L "$installed" ]; then
+    if [ ! -f "$installed" ] || [ -L "$installed" ]; then
+      error "download_zip_bin_sha256: unsafe destination for $name: $installed"
+      exit 1
+    fi
+  fi
+  if [ -x "$installed" ] && bin_version_matches "$installed" "$expected" "$@"; then
+    exit 0
+  fi
+  ensure_dir "$HOME/bin"
+  archive="$(mktemp)"
+  tmp="$(mktemp "$HOME/bin/.$name.XXXXXX")"
+  trap 'rm -f -- "$archive" "$tmp"' EXIT
+  curl -fsSL "$url" -o "$archive"
+  actual="$(sha256_file "$archive")"
+  if [ "$actual" != "$checksum" ]; then
+    error "download_zip_bin_sha256: checksum mismatch for $name"
+    exit 1
+  fi
+  unzip -p "$archive" "$inner" > "$tmp"
+  chmod 0755 "$tmp"
+  if ! bin_version_matches "$tmp" "$expected" "$@"; then
+    error "download_zip_bin_sha256: version mismatch for $name"
+    exit 1
+  fi
+  mv -f -- "$tmp" "$installed"
+  tmp=""
+)
+
 download_script() {
   local name="$1" url="$2"
   ensure_dir "$HOME/bin"

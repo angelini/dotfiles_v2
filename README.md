@@ -419,6 +419,8 @@ ENVIRONMENTS["alpine"] = Environment(
 
 `Postgres` and the Terraform tooling are part of the full shared CLI profile, so normal Debian, macOS, and CachyOS deployments install PostgreSQL, Terraform, and Terragrunt by default. Debian installs Terraform from HashiCorp's APT repository and a checksum-pinned Terragrunt binary; macOS uses the documented Homebrew formulas; CachyOS uses the standard `terraform` package plus the same pinned Linux Terragrunt asset. The smaller `debian-docker` environment excludes these and other development toolchains through `_DOCKER_SKIP`.
 
+The Kubernetes component installs `kubectl-oidc_login` (the `kubelogin` plugin) and `talosctl-oidc` on all environments. macOS uses Homebrew; Debian and CachyOS use pinned, SHA-256-verified release assets. The Talos client is pinned to v0.1.2 because the newer v0.1.3 release has no downloadable binaries. Cluster access also requires the appropriate OIDC provider, cluster configuration, and user credentials; this repository only installs the local clients.
+
 ## Local dev loop
 
 ```bash

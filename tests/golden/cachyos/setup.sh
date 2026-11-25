@@ -235,6 +235,7 @@ fi
 component_begin "kubectl"
 if (
   set -e
+  install_package unzip
   _kube_arch() {
     case "$(detect_arch)" in
       x86_64) echo amd64 ;;
@@ -296,6 +297,16 @@ if (
     download_bin_sha256 k0sctl "https://github.com/k0sproject/k0sctl/releases/download/v0.33.1/k0sctl-linux-${arch}" "$checksum" "v0.33.1" version
   }
   _install_kubectl_linux
+  _install_kubelogin_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="9e8baeb4905d35a301304af2548324997add512fe94ab20e65993d167212bf85" ;;
+      arm64) checksum="669c2d3bcc6766351ad5a7b03971792b4e7a55117b335a12d9858d43a525d9dc" ;;
+    esac
+    download_zip_bin_sha256 kubectl-oidc_login "https://github.com/int128/kubelogin/releases/download/v1.36.4/kubelogin_linux_${arch}.zip" "$checksum" kubelogin "v1.36.4" --version
+  }
+  _install_kubelogin_linux
   _install_helm_linux
   _install_k9s_linux
   _install_kubectx_linux
@@ -312,6 +323,16 @@ if (
     download_bin_sha256 talosctl "https://github.com/siderolabs/talos/releases/download/v1.14.2/talosctl-linux-${arch}" "$checksum" "v1.14.2" version --client --short
   }
   _install_talosctl_linux
+  _install_talosctl_oidc_linux() {
+    local arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) checksum="776a34039accd196222bcfa5b1dcd428677f5faf4d48df74da3143a384e3130b" ;;
+      arm64) checksum="491c9af5e6e7b3adff1191da25d7fabcb78fd73012ba8b091112a7272ebf6540" ;;
+    esac
+    download_bin_sha256 talosctl-oidc "https://github.com/qjoly/talosctl-oidc/releases/download/v0.1.2/talosctl-oidc-linux-${arch}" "$checksum" "v0.1.2" version
+  }
+  _install_talosctl_oidc_linux
   _install_argocd_linux() {
     local arch checksum
     arch="$(_kube_arch)"

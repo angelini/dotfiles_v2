@@ -5,6 +5,16 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS, EnvironmentRole
 
 _KUBE_VERSION = "v1.35.8"
+_KUBELOGIN_VERSION = "v1.36.4"
+_KUBELOGIN_SHA256 = {
+    "amd64": "9e8baeb4905d35a301304af2548324997add512fe94ab20e65993d167212bf85",
+    "arm64": "669c2d3bcc6766351ad5a7b03971792b4e7a55117b335a12d9858d43a525d9dc",
+}
+_TALOSCTL_OIDC_VERSION = "v0.1.2"
+_TALOSCTL_OIDC_SHA256 = {
+    "amd64": "776a34039accd196222bcfa5b1dcd428677f5faf4d48df74da3143a384e3130b",
+    "arm64": "491c9af5e6e7b3adff1191da25d7fabcb78fd73012ba8b091112a7272ebf6540",
+}
 _ARGOCD_VERSION = "v3.6.2"
 _ARGOCD_BUILD = f"{_ARGOCD_VERSION}+8e8268e"
 _ARGOCD_SHA256 = {
@@ -155,6 +165,38 @@ _TALOSCTL_SETUP_LINUX = (
     + "\n}\n_install_talosctl_linux\n"
 )
 
+_KUBELOGIN_SETUP_LINUX = (
+    r"""_install_kubelogin_linux() {
+  local arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) checksum="{_KUBELOGIN_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) checksum="{_KUBELOGIN_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_zip_bin_sha256 kubectl-oidc_login """
+    + f'"https://github.com/int128/kubelogin/releases/download/{_KUBELOGIN_VERSION}/kubelogin_linux_'
+    + r'${arch}.zip" "$checksum" kubelogin '
+    + f'"{_KUBELOGIN_VERSION}" --version'
+    + "\n}\n_install_kubelogin_linux\n"
+)
+
+_TALOSCTL_OIDC_SETUP_LINUX = (
+    r"""_install_talosctl_oidc_linux() {
+  local arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) checksum="{_TALOSCTL_OIDC_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) checksum="{_TALOSCTL_OIDC_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_bin_sha256 talosctl-oidc """
+    + f'"https://github.com/qjoly/talosctl-oidc/releases/download/{_TALOSCTL_OIDC_VERSION}/talosctl-oidc-linux-'
+    + r'${arch}" "$checksum" '
+    + f'"{_TALOSCTL_OIDC_VERSION}" version'
+    + "\n}\n_install_talosctl_oidc_linux\n"
+)
+
 _ARGOCD_SETUP_LINUX = (
     r"""_install_argocd_linux() {
   local arch checksum
@@ -171,11 +213,13 @@ _ARGOCD_SETUP_LINUX = (
     + "\n}\n_install_argocd_linux\n"
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl argocd\n"
+_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl argocd kubelogin qjoly/tap/talosctl-oidc\n"
 
 _SETUP_LINUX = (
-    _LINUX_HELPERS
+    "install_package unzip\n"
+    + _LINUX_HELPERS
     + "_install_kubectl_linux\n"
+    + _KUBELOGIN_SETUP_LINUX
     + "_install_helm_linux\n"
     + "_install_k9s_linux\n"
     + "_install_kubectx_linux\n"
@@ -183,6 +227,7 @@ _SETUP_LINUX = (
     + "_install_kubie_linux\n"
     + "_install_k0sctl_linux\n"
     + _TALOSCTL_SETUP_LINUX
+    + _TALOSCTL_OIDC_SETUP_LINUX
     + _ARGOCD_SETUP_LINUX
 )
 
