@@ -26,6 +26,8 @@ if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" vers
   download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
 fi
 
+"$GO_DIR/bin/go" env -w GOTOOLCHAIN="go${GO_VERSION}+auto"
+
 GOPATH="${GOPATH:-$HOME/go}"
 
 if ! command -v gopls >/dev/null 2>&1 && [ ! -x "$GOPATH/bin/gopls" ]; then

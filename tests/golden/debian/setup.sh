@@ -384,6 +384,8 @@ if (
     exit 1
   fi
   "$uv_bin" tool install python-lsp-server
+  "$uv_bin" tool install ruff
+  "$uv_bin" tool install pyflakes
 ); then
   component_end "python_tools" 0
 else
@@ -778,6 +780,8 @@ if (
     OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
     download_tar "$GO_DIR" "https://go.dev/dl/go${GO_VERSION}.${OS_NAME}-${GO_ARCH}.tar.gz" 1
   fi
+
+  "$GO_DIR/bin/go" env -w GOTOOLCHAIN="go${GO_VERSION}+auto"
 
   GOPATH="${GOPATH:-$HOME/go}"
 

@@ -936,6 +936,8 @@ def test_python_tools_per_os_build_deps() -> None:
         assert 'uv_bin="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"' in setup
         assert '[ ! -x "$uv_bin" ]' in setup
         assert '"$uv_bin" tool install python-lsp-server' in setup
+        assert '"$uv_bin" tool install ruff' in setup
+        assert '"$uv_bin" tool install pyflakes' in setup
 
 
 def test_go_lang_has_no_macos_package_dependency() -> None:

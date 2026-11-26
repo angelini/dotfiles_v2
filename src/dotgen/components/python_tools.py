@@ -18,6 +18,8 @@ if [ ! -x "$uv_bin" ]; then
   exit 1
 fi
 "$uv_bin" tool install python-lsp-server
+"$uv_bin" tool install ruff
+"$uv_bin" tool install pyflakes
 """
 
 
