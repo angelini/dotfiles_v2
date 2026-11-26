@@ -176,12 +176,12 @@ if (
   _install_kubectl_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client
+    download_bin kubectl "https://dl.k8s.io/release/v1.35.11/bin/linux/${arch}/kubectl" "v1.35.11" version --client
   }
   _install_helm_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template '{{.Version}}'
+    download_tar_bin helm "https://get.helm.sh/helm-v4.3.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v4.3.2" version --template '{{.Version}}'
   }
   _install_k9s_linux() {
     local arch
@@ -253,10 +253,10 @@ if (
     local arch checksum
     arch="$(_kube_arch)"
     case "$arch" in
-      amd64) checksum="80cc51ce8eb39d5601d54fd14225ed15a04ccf4baa3427f5c1e72a4e342aa0b2" ;;
-      arm64) checksum="578e87773bfb0fe5047250f16f914d0362fbfce0b5b2b7ed7204776925dcdff9" ;;
+      amd64) checksum="3750cd7ed2a2ef05c640344b86f29aa99c9783e847c8f326c81e3900ad39412b" ;;
+      arm64) checksum="04a7b681d6c5eec193159705c5556114f8cba98abada4c17c3991124065e1964" ;;
     esac
-    download_bin_sha256 argocd "https://github.com/argoproj/argo-cd/releases/download/v3.6.2/argocd-linux-${arch}" "$checksum" "v3.6.2+8e8268e" version --client --short
+    download_bin_sha256 argocd "https://github.com/argoproj/argo-cd/releases/download/v3.6.3/argocd-linux-${arch}" "$checksum" "v3.6.3+b4accc4" version --client --short
   }
   _install_argocd_linux
 ); then

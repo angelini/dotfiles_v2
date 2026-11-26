@@ -1,4 +1,6 @@
 # os_shim.sh — macos
+export HOMEBREW_NO_ASK=1
+
 detect_os() {
   echo macos
 }

@@ -96,13 +96,11 @@ def _run_cachyos_preflight(
     (fake_bin / "dirname").symlink_to("/usr/bin/dirname")
     mutation_log = tmp_path / "mutations"
     if with_sudo:
-        (fake_bin / "sudo").write_text(f"#!/bin/sh\nprintf 'sudo %s\\n' \"$*\" >> {mutation_log}.auth\n[ \"$1\" != -v ] || exit {0 if sudo_ok else 1}\n")
+        (fake_bin / "sudo").write_text(f'#!/bin/sh\nprintf \'sudo %s\\n\' "$*" >> {mutation_log}.auth\n[ "$1" != -v ] || exit {0 if sudo_ok else 1}\n')
         (fake_bin / "sudo").chmod(0o755)
     if with_pacman:
         version_status = 0 if pacman_ok else 99
-        (fake_bin / "pacman").write_text(
-            f"#!/bin/sh\n[ \"$1\" = --version ] && {{ echo 'Pacman v7'; exit {version_status}; }}\nprintf 'pacman %s\\n' \"$*\" >> {mutation_log}\nexit 99\n"
-        )
+        (fake_bin / "pacman").write_text(f"#!/bin/sh\n[ \"$1\" = --version ] && {{ echo 'Pacman v7'; exit {version_status}; }}\nprintf 'pacman %s\\n' \"$*\" >> {mutation_log}\nexit 99\n")
         (fake_bin / "pacman").chmod(0o755)
 
     result = _run(bundle / "setup.sh", "deploy", env={"PATH": str(fake_bin), "HOME": str(tmp_path / "home")})
@@ -112,10 +110,10 @@ def _run_cachyos_preflight(
 @pytest.mark.parametrize(
     "os_release",
     [
-        'ID=arch\nID_LIKE=arch\n',
-        'ID=cachyos\nID_LIKE=linux\n',
-        'ID=cachyos\nBROKEN\nID_LIKE=arch\n',
-        'ID=cachyos\nID=cachyos\nID_LIKE=arch\n',
+        "ID=arch\nID_LIKE=arch\n",
+        "ID=cachyos\nID_LIKE=linux\n",
+        "ID=cachyos\nBROKEN\nID_LIKE=arch\n",
+        "ID=cachyos\nID=cachyos\nID_LIKE=arch\n",
         None,
     ],
     ids=["wrong-os", "wrong-family", "malformed", "duplicate-id", "missing-file"],
@@ -160,7 +158,7 @@ def test_cachyos_failed_sudo_authentication_mutates_nothing(tmp_path: Path) -> N
 
 def test_deployment_preflight_order_precedes_auth_and_mutation(built_macos: Path) -> None:
     setup = (built_macos / "setup.sh").read_text()
-    assert setup.index('if ! bin_exists sudo; then') < setup.index("deployment_preflight") < setup.index("if ! sudo -v; then")
+    assert setup.index("if ! bin_exists sudo; then") < setup.index("deployment_preflight") < setup.index("if ! sudo -v; then")
     assert setup.index("if ! sudo -v; then") < setup.index("bin_exists envsubst || install_package gettext") < setup.index("upgrade_packages")
 
 

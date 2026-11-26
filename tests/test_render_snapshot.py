@@ -65,9 +65,9 @@ def test_cachyos_generated_workstation_has_no_macos_operations_or_paths(built_ro
     assert "install_aur_package" not in setup
     assert "install_aur_package" not in shim
     assert "sudo pacman -S --needed --noconfirm" in shim
-    assert "google-cloud-cli_587.0.0.orig_${asset_arch}.tar.gz" in setup
+    assert "google-cloud-cli_594.0.1.orig_${asset_arch}.tar.gz" in setup
     assert "doppler_3.77.0_linux_${doppler_arch}.tar.gz" in setup
-    assert "docker-v29.8.2/contrib/dockerd-rootless.sh" in setup
+    assert "docker-v29.10.1/contrib/dockerd-rootless.sh" in setup
     assert "docker/docker.service" in setup
     for forbidden in (
         "add_repo apt",

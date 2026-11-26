@@ -134,11 +134,7 @@ _SETUP_BY_OS: dict[OS, str] = {
         'install_config "$DIR/config/zed/settings.json" "${XDG_CONFIG_HOME:-$HOME/.config}/zed/settings.json"\n'
         'install_config "$DIR/config/zed/keymap.json" "${XDG_CONFIG_HOME:-$HOME/.config}/zed/keymap.json"\n'
     ),
-    OS.MACOS: (
-        "install_cask zed\n"
-        'install_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\n'
-        'install_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'
-    ),
+    OS.MACOS: ('install_cask zed\ninstall_config "$DIR/config/zed/settings.json" "$HOME/.config/zed/settings.json"\ninstall_config "$DIR/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"\n'),
 }
 
 

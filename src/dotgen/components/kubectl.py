@@ -4,7 +4,7 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS, EnvironmentRole
 
-_KUBE_VERSION = "v1.35.8"
+_KUBE_VERSION = "v1.35.11"
 _KUBELOGIN_VERSION = "v1.36.4"
 _KUBELOGIN_SHA256 = {
     "amd64": "9e8baeb4905d35a301304af2548324997add512fe94ab20e65993d167212bf85",
@@ -15,13 +15,13 @@ _TALOSCTL_OIDC_SHA256 = {
     "amd64": "776a34039accd196222bcfa5b1dcd428677f5faf4d48df74da3143a384e3130b",
     "arm64": "491c9af5e6e7b3adff1191da25d7fabcb78fd73012ba8b091112a7272ebf6540",
 }
-_ARGOCD_VERSION = "v3.6.2"
-_ARGOCD_BUILD = f"{_ARGOCD_VERSION}+8e8268e"
+_ARGOCD_VERSION = "v3.6.3"
+_ARGOCD_BUILD = f"{_ARGOCD_VERSION}+b4accc4"
 _ARGOCD_SHA256 = {
-    "amd64": "80cc51ce8eb39d5601d54fd14225ed15a04ccf4baa3427f5c1e72a4e342aa0b2",
-    "arm64": "578e87773bfb0fe5047250f16f914d0362fbfce0b5b2b7ed7204776925dcdff9",
+    "amd64": "3750cd7ed2a2ef05c640344b86f29aa99c9783e847c8f326c81e3900ad39412b",
+    "arm64": "04a7b681d6c5eec193159705c5556114f8cba98abada4c17c3991124065e1964",
 }
-_HELM_VERSION = "v3.21.4"
+_HELM_VERSION = "v4.3.2"
 _K9S_VERSION = "v0.51.0"
 _KUBECTX_VERSION = "v0.11.0"
 _KUBIE_VERSION = "v0.28.0"

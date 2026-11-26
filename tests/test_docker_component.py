@@ -276,11 +276,7 @@ class DockerHarness:
         )
         script = root / "run.sh"
         script.write_text(prelude + "\nsource " + str(root / "setup.sh") + "\n")
-        inherited_env = {
-            key: value
-            for key, value in os.environ.items()
-            if key not in {"XDG_RUNTIME_DIR", "DOCKER_HOST", "DOCKER_CONTEXT", "XDG_CONFIG_HOME", "DOCKER_CONFIG"}
-        }
+        inherited_env = {key: value for key, value in os.environ.items() if key not in {"XDG_RUNTIME_DIR", "DOCKER_HOST", "DOCKER_CONTEXT", "XDG_CONFIG_HOME", "DOCKER_CONFIG"}}
         env = inherited_env | {
             "PATH": f"{fake}:{os.environ['PATH']}",
             "STATE": str(state),

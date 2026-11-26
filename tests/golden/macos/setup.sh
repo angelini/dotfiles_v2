@@ -429,8 +429,8 @@ if (
   _install_zig() (
     local arch checksum zig_dir parent stage archive actual
     case "$(detect_arch)" in
-      x86_64) arch=x86_64; checksum=0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7 ;;
-      aarch64|arm64) arch=aarch64; checksum=b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489 ;;
+      x86_64) arch=x86_64; checksum=9af07b20319fbd0c92ee46ad23e81d6a782b1aaea2cfb8dcbff35f1d2c7ddbb7 ;;
+      aarch64|arm64) arch=aarch64; checksum=75f1bc7a1e9852f17ec9a0c1895f767c4ec56d46bc8a834920eece1d0359dd8d ;;
       *) error "unsupported arch for Zig: $(detect_arch)"; exit 1 ;;
     esac
     zig_dir="$HOME/.local/share/zig"
@@ -440,7 +440,7 @@ if (
         exit 1
       fi
     fi
-    if [ -x "$zig_dir/zig" ] && [ "$("$zig_dir/zig" version)" = "0.16.0" ]; then
+    if [ -x "$zig_dir/zig" ] && [ "$("$zig_dir/zig" version)" = "0.17.1" ]; then
       exit 0
     fi
     parent="$HOME/.local/share"
@@ -448,14 +448,14 @@ if (
     stage="$(mktemp -d "$parent/.zig.XXXXXX")"
     archive="$(mktemp "$parent/.zig-archive.XXXXXX")"
     trap 'rm -rf -- "$stage"; rm -f -- "$archive"' EXIT
-    curl -fsSL "https://ziglang.org/download/0.16.0/zig-${arch}-macos-0.16.0.tar.xz" -o "$archive"
+    curl -fsSL "https://ziglang.org/download/0.17.1/zig-${arch}-macos-0.17.1.tar.xz" -o "$archive"
     actual="$(sha256_file "$archive")"
     if [ "$actual" != "$checksum" ]; then
       error "checksum mismatch for Zig"
       exit 1
     fi
     tar -xJf "$archive" -C "$stage" --strip-components=1
-    if [ ! -x "$stage/zig" ] || [ "$("$stage/zig" version)" != "0.16.0" ]; then
+    if [ ! -x "$stage/zig" ] || [ "$("$stage/zig" version)" != "0.17.1" ]; then
       error "version mismatch for Zig"
       exit 1
     fi
@@ -504,7 +504,7 @@ if (
   set -e
   install_npm_global @openai/codex
   install_config_dir "$DIR/config/codex/skills" "$HOME/.agents/skills" "codex-skills"
-  uv run --no-project --python 3.12 --with tomlkit==0.13.3 python "$DIR/config/codex/merge-settings.py" "$DIR/config/managed-settings/codex.json" "${CODEX_HOME:-$HOME/.codex}/config.toml"
+  uv run --no-project --python 3.12 --with tomlkit==0.15.3 python "$DIR/config/codex/merge-settings.py" "$DIR/config/managed-settings/codex.json" "${CODEX_HOME:-$HOME/.codex}/config.toml"
   codex mcp add serena -- "$HOME/.local/bin/serena" start-mcp-server --context codex --project-from-cwd
 ); then
   component_end "codex" 0
@@ -618,7 +618,7 @@ fi
 component_begin "go_lang"
 if (
   set -e
-  GO_VERSION="1.25.5"
+  GO_VERSION="1.27.3"
   GO_DIR="$HOME/.local/share/go"
   if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
     log "installing go $GO_VERSION..."

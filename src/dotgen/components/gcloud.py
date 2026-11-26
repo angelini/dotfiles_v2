@@ -5,11 +5,11 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS
 
 _SETUP_MACOS = "install_cask google-cloud-sdk\n"
-_GCLOUD_VERSION = "587.0.0"
+_GCLOUD_VERSION = "594.0.1"
 _GCLOUD_RELEASE_BASE = "https://dl.google.com/dl/cloudsdk/release/downloads/for_packagers/linux"
 _GCLOUD_SHA256 = {
-    "amd64": "6b566621ce59a900d520a30d505b9cef1c2bdd72826103175727ac6db1702101",
-    "arm64": "c7808b357c1781ed1f0fa0876316ebb901aa86727fb17e2ede229de8b94d95b0",
+    "amd64": "45360f50daf7eaa6f0b0fa4aad10a13f5268e1bdf18424fa58475e09967d7481",
+    "arm64": "ebab67039b62ecc7ba8b5e21102a6ec293acf935e3e5b6730adbc4f755947629",
 }
 
 _SETUP_DEBIAN = """add_repo apt google-cloud-sdk \\

@@ -4,22 +4,22 @@ from dotgen.environment import Environment
 from dotgen.fragment import Fragment
 from dotgen.types import OS
 
-_VERSION = "0.16.0"
+_VERSION = "0.17.1"
 _ASSET_OS: dict[OS, str] = {
     OS.CACHYOS: "linux",
     OS.DEBIAN: "linux",
     OS.MACOS: "macos",
 }
 _SHA256_LINUX = {
-    "x86_64": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
-    "aarch64": "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17",
+    "x86_64": "3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a",
+    "aarch64": "a1546d5646eb184437918d6635ca6b762a0e889eac09cef720ee7a1ed3fe7795",
 }
 _SHA256: dict[OS, dict[str, str]] = {
     OS.CACHYOS: _SHA256_LINUX,
     OS.DEBIAN: _SHA256_LINUX,
     OS.MACOS: {
-        "x86_64": "0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7",
-        "aarch64": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
+        "x86_64": "9af07b20319fbd0c92ee46ad23e81d6a782b1aaea2cfb8dcbff35f1d2c7ddbb7",
+        "aarch64": "75f1bc7a1e9852f17ec9a0c1895f767c4ec56d46bc8a834920eece1d0359dd8d",
     },
 }
 

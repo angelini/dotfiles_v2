@@ -402,9 +402,7 @@ class ZedHostBridge:
     name: str = "zed_host_bridge"
 
     def applies_to(self, env: Environment) -> bool:
-        return (env.role is EnvironmentRole.SERVER and env.os is OS.DEBIAN) or (
-            env.role is EnvironmentRole.WORKSTATION and env.os in {OS.MACOS, OS.CACHYOS}
-        )
+        return (env.role is EnvironmentRole.SERVER and env.os is OS.DEBIAN) or (env.role is EnvironmentRole.WORKSTATION and env.os in {OS.MACOS, OS.CACHYOS})
 
     def render(self, env: Environment) -> Fragment:
         if not self.applies_to(env):

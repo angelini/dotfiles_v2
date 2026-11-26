@@ -961,6 +961,8 @@ service_mask() {
 
 _SHIM_MACOS = (
     r"""
+export HOMEBREW_NO_ASK=1
+
 detect_os() {
   echo macos
 }

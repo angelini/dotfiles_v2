@@ -70,11 +70,7 @@ def test_generated_cachyos_bundle_orders_components_and_converges_with_fake_host
     production = tmp_path / "production"
     build_env(ENVIRONMENTS["cachyos"], production, artifact_builder=FakeArtifactBuilder())
     setup = (production / "setup.sh").read_text()
-    expected_names = [
-        component.name
-        for component in ENVIRONMENTS["cachyos"].components
-        if component.applies_to(ENVIRONMENTS["cachyos"]) and component.render(ENVIRONMENTS["cachyos"]).setup
-    ]
+    expected_names = [component.name for component in ENVIRONMENTS["cachyos"].components if component.applies_to(ENVIRONMENTS["cachyos"]) and component.render(ENVIRONMENTS["cachyos"]).setup]
     headers = [line.removeprefix("# --- ").removesuffix(" ---") for line in setup.splitlines() if line.startswith("# --- ")]
 
     assert headers == expected_names
@@ -106,7 +102,7 @@ def test_generated_cachyos_bundle_orders_components_and_converges_with_fake_host
     state = tmp_path / "installed"
     log = tmp_path / "commands.log"
 
-    _write_executable(fake_bin / "id", "#!/bin/sh\n[ \"${1-}\" = -u ] && { echo 1000; exit 0; }\nexec /usr/bin/id \"$@\"\n")
+    _write_executable(fake_bin / "id", '#!/bin/sh\n[ "${1-}" = -u ] && { echo 1000; exit 0; }\nexec /usr/bin/id "$@"\n')
     _write_executable(
         fake_bin / "sudo",
         """#!/bin/sh

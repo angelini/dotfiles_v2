@@ -72,9 +72,7 @@ def standard_secrets_path(environ: Mapping[str, str] | None = None) -> Path:
     return Path(home) / ".config" / "dotgen" / "secrets.env"
 
 
-def select_environment_values(
-    required: Collection[str], environ: Mapping[str, str] | None = None
-) -> dict[str, str]:
+def select_environment_values(required: Collection[str], environ: Mapping[str, str] | None = None) -> dict[str, str]:
     source = os.environ if environ is None else environ
     missing = sorted(key for key in required if key not in source)
     if missing:
@@ -169,7 +167,7 @@ def send_payload(target: str, payload: bytes, *, secret_keys: Collection[str] = 
 
 def _parse_assignment(line: str, line_number: int) -> tuple[str, str]:
     match = _KEY_RE.match(line)
-    if match is None or line[match.end() : match.end() + 2] != '=\"':
+    if match is None or line[match.end() : match.end() + 2] != '="':
         raise SecretsTransferError(f"malformed assignment on line {line_number}")
 
     key = match.group()

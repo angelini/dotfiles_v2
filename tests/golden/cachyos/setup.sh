@@ -260,12 +260,12 @@ if (
   _install_kubectl_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client
+    download_bin kubectl "https://dl.k8s.io/release/v1.35.11/bin/linux/${arch}/kubectl" "v1.35.11" version --client
   }
   _install_helm_linux() {
     local arch
     arch="$(_kube_arch)"
-    download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template '{{.Version}}'
+    download_tar_bin helm "https://get.helm.sh/helm-v4.3.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v4.3.2" version --template '{{.Version}}'
   }
   _install_k9s_linux() {
     local arch
@@ -337,10 +337,10 @@ if (
     local arch checksum
     arch="$(_kube_arch)"
     case "$arch" in
-      amd64) checksum="80cc51ce8eb39d5601d54fd14225ed15a04ccf4baa3427f5c1e72a4e342aa0b2" ;;
-      arm64) checksum="578e87773bfb0fe5047250f16f914d0362fbfce0b5b2b7ed7204776925dcdff9" ;;
+      amd64) checksum="3750cd7ed2a2ef05c640344b86f29aa99c9783e847c8f326c81e3900ad39412b" ;;
+      arm64) checksum="04a7b681d6c5eec193159705c5556114f8cba98abada4c17c3991124065e1964" ;;
     esac
-    download_bin_sha256 argocd "https://github.com/argoproj/argo-cd/releases/download/v3.6.2/argocd-linux-${arch}" "$checksum" "v3.6.2+8e8268e" version --client --short
+    download_bin_sha256 argocd "https://github.com/argoproj/argo-cd/releases/download/v3.6.3/argocd-linux-${arch}" "$checksum" "v3.6.3+b4accc4" version --client --short
   }
   _install_argocd_linux
   _install_kind_linux() {
@@ -562,8 +562,8 @@ if (
   _install_zig() (
     local arch checksum zig_dir parent stage archive actual
     case "$(detect_arch)" in
-      x86_64) arch=x86_64; checksum=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 ;;
-      aarch64|arm64) arch=aarch64; checksum=ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17 ;;
+      x86_64) arch=x86_64; checksum=3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a ;;
+      aarch64|arm64) arch=aarch64; checksum=a1546d5646eb184437918d6635ca6b762a0e889eac09cef720ee7a1ed3fe7795 ;;
       *) error "unsupported arch for Zig: $(detect_arch)"; exit 1 ;;
     esac
     zig_dir="$HOME/.local/share/zig"
@@ -573,7 +573,7 @@ if (
         exit 1
       fi
     fi
-    if [ -x "$zig_dir/zig" ] && [ "$("$zig_dir/zig" version)" = "0.16.0" ]; then
+    if [ -x "$zig_dir/zig" ] && [ "$("$zig_dir/zig" version)" = "0.17.1" ]; then
       exit 0
     fi
     parent="$HOME/.local/share"
@@ -581,14 +581,14 @@ if (
     stage="$(mktemp -d "$parent/.zig.XXXXXX")"
     archive="$(mktemp "$parent/.zig-archive.XXXXXX")"
     trap 'rm -rf -- "$stage"; rm -f -- "$archive"' EXIT
-    curl -fsSL "https://ziglang.org/download/0.16.0/zig-${arch}-linux-0.16.0.tar.xz" -o "$archive"
+    curl -fsSL "https://ziglang.org/download/0.17.1/zig-${arch}-linux-0.17.1.tar.xz" -o "$archive"
     actual="$(sha256_file "$archive")"
     if [ "$actual" != "$checksum" ]; then
       error "checksum mismatch for Zig"
       exit 1
     fi
     tar -xJf "$archive" -C "$stage" --strip-components=1
-    if [ ! -x "$stage/zig" ] || [ "$("$stage/zig" version)" != "0.16.0" ]; then
+    if [ ! -x "$stage/zig" ] || [ "$("$stage/zig" version)" != "0.17.1" ]; then
       error "version mismatch for Zig"
       exit 1
     fi
@@ -637,7 +637,7 @@ if (
   set -e
   install_npm_global @openai/codex
   install_config_dir "$DIR/config/codex/skills" "$HOME/.agents/skills" "codex-skills"
-  uv run --no-project --python 3.12 --with tomlkit==0.13.3 python "$DIR/config/codex/merge-settings.py" "$DIR/config/managed-settings/codex.json" "${CODEX_HOME:-$HOME/.codex}/config.toml"
+  uv run --no-project --python 3.12 --with tomlkit==0.15.3 python "$DIR/config/codex/merge-settings.py" "$DIR/config/managed-settings/codex.json" "${CODEX_HOME:-$HOME/.codex}/config.toml"
   codex mcp add serena -- "$HOME/.local/bin/serena" start-mcp-server --context codex --project-from-cwd
 ); then
   component_end "codex" 0
@@ -752,7 +752,7 @@ component_begin "go_lang"
 if (
   set -e
   install_packages curl git make bison gcc glibc
-  GO_VERSION="1.25.5"
+  GO_VERSION="1.27.3"
   GO_DIR="$HOME/.local/share/go"
   if [ ! -d "$GO_DIR" ] || [ ! -x "$GO_DIR/bin/go" ] || [ "$("$GO_DIR/bin/go" version | awk '{print $3}')" != "go$GO_VERSION" ]; then
     log "installing go $GO_VERSION..."
@@ -786,8 +786,8 @@ if (
   _install_gcloud_cachyos() (
     local asset_arch checksum root marker parent archive="" stage="" extracted actual
     case "$(detect_arch)" in
-      x86_64) asset_arch=amd64; checksum=6b566621ce59a900d520a30d505b9cef1c2bdd72826103175727ac6db1702101 ;;
-      aarch64|arm64) asset_arch=aarch64; checksum=c7808b357c1781ed1f0fa0876316ebb901aa86727fb17e2ede229de8b94d95b0 ;;
+      x86_64) asset_arch=amd64; checksum=45360f50daf7eaa6f0b0fa4aad10a13f5268e1bdf18424fa58475e09967d7481 ;;
+      aarch64|arm64) asset_arch=aarch64; checksum=ebab67039b62ecc7ba8b5e21102a6ec293acf935e3e5b6730adbc4f755947629 ;;
       *) error "unsupported arch for Google Cloud CLI: $(detect_arch)"; exit 1 ;;
     esac
     root="$HOME/.local/share/google-cloud-sdk"
@@ -799,14 +799,14 @@ if (
         exit 1
       fi
     fi
-    if [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(cat "$marker")" = "$checksum" ] &&     bin_version_matches "$root/bin/gcloud" "587.0.0" version; then
+    if [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(cat "$marker")" = "$checksum" ] &&     bin_version_matches "$root/bin/gcloud" "594.0.1" version; then
       exit 0
     fi
     ensure_dir "$parent"
     archive="$(mktemp)"
     stage="$(mktemp -d "$parent/.google-cloud-sdk.XXXXXX")"
     trap 'rm -f -- "$archive"; [ -z "$stage" ] || rm -rf -- "$stage"' EXIT
-    curl -fsSL     "https://dl.google.com/dl/cloudsdk/release/downloads/for_packagers/linux/google-cloud-cli_587.0.0.orig_${asset_arch}.tar.gz"     -o "$archive"
+    curl -fsSL     "https://dl.google.com/dl/cloudsdk/release/downloads/for_packagers/linux/google-cloud-cli_594.0.1.orig_${asset_arch}.tar.gz"     -o "$archive"
     actual="$(sha256_file "$archive")"
     if [ "$actual" != "$checksum" ]; then
       error "Google Cloud CLI archive checksum mismatch"
@@ -814,7 +814,7 @@ if (
     fi
     tar -xzf "$archive" -C "$stage"
     extracted="$stage/google-cloud-sdk"
-    if ! bin_version_matches "$extracted/bin/gcloud" "587.0.0" version; then
+    if ! bin_version_matches "$extracted/bin/gcloud" "594.0.1" version; then
       error "Google Cloud CLI archive version mismatch"
       exit 1
     fi
@@ -1139,7 +1139,7 @@ if (
     install_packages docker docker-compose docker-buildx rootlesskit slirp4netns fuse-overlayfs shadow iptables || return 1
     remove_packages docker-rootless-extras || return 1
     download_script_sha256 dockerd-rootless.sh \
-      "https://raw.githubusercontent.com/moby/moby/docker-v29.8.2/contrib/dockerd-rootless.sh" \
+      "https://raw.githubusercontent.com/moby/moby/docker-v29.10.1/contrib/dockerd-rootless.sh" \
       "200203633806081a401e60aefdf68a8fa73fc7dc80aa854c52a69d47710a3488" || return 1
     if [ -L "$service_unit" ] || { [ -e "$service_unit" ] && [ ! -f "$service_unit" ]; }; then
       _docker_fail "rootless Docker user service destination is unsafe"; return 1

@@ -7,7 +7,7 @@ from dotgen.types import OS, EnvironmentRole
 
 _KEY_URL = "https://download.docker.com/linux/debian/gpg"
 _ROOTLESS_CONTEXT_META = "$HOME/.docker/contexts/meta/12b961af5feb3e9d39f93b2cefb9a1a944f18d02cca0cac2f04f5a982240605f/meta.json"
-_ROOTLESS_VERSION = "29.8.2"
+_ROOTLESS_VERSION = "29.10.1"
 _ROOTLESS_SCRIPT_URL = f"https://raw.githubusercontent.com/moby/moby/docker-v{_ROOTLESS_VERSION}/contrib/dockerd-rootless.sh"
 _ROOTLESS_SCRIPT_SHA256 = "200203633806081a401e60aefdf68a8fa73fc7dc80aa854c52a69d47710a3488"
 _RESOURCE_ROOT = Path(__file__).resolve().parents[1] / "resources" / "docker"
@@ -388,9 +388,7 @@ _setup_rootless_docker_cachyos() {
 
 _setup_rootless_docker_cachyos
 """
-_CACHYOS_SETUP = _CACHYOS_SETUP_TEMPLATE.replace("__ROOTLESS_SCRIPT_URL__", _ROOTLESS_SCRIPT_URL).replace(
-    "__ROOTLESS_SCRIPT_SHA256__", _ROOTLESS_SCRIPT_SHA256
-)
+_CACHYOS_SETUP = _CACHYOS_SETUP_TEMPLATE.replace("__ROOTLESS_SCRIPT_URL__", _ROOTLESS_SCRIPT_URL).replace("__ROOTLESS_SCRIPT_SHA256__", _ROOTLESS_SCRIPT_SHA256)
 
 
 def _setup_for(env: Environment) -> str:

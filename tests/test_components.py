@@ -171,8 +171,8 @@ def test_terraform_tools_install_for_normal_environments() -> None:
 def test_zig_installs_for_normal_environments() -> None:
     debian = Zig().render(ENVIRONMENTS["debian"])
     macos = Zig().render(ENVIRONMENTS["macos"])
-    assert "zig-${arch}-linux-0.16.0.tar.xz" in debian.setup
-    assert "zig-${arch}-macos-0.16.0.tar.xz" in macos.setup
+    assert "zig-${arch}-linux-0.17.1.tar.xz" in debian.setup
+    assert "zig-${arch}-macos-0.17.1.tar.xz" in macos.setup
     assert "sha256_file" in debian.setup
     assert "sha256_file" in macos.setup
     assert 'export PATH="$HOME/.local/share/zig:$PATH"' in debian.bashrc
@@ -219,7 +219,7 @@ curl() {{ touch {shlex.quote(str(marker))}; return 99; }}
 def test_zig_setup_reuses_matching_installation_without_downloading(tmp_path: Path) -> None:
     binary = tmp_path / "home" / ".local" / "share" / "zig" / "zig"
     binary.parent.mkdir(parents=True)
-    binary.write_text("#!/usr/bin/env bash\nprintf '0.16.0\\n'\n")
+    binary.write_text("#!/usr/bin/env bash\nprintf '0.17.1\\n'\n")
     binary.chmod(0o755)
     marker = tmp_path / "downloaded"
     prelude = f"""\
@@ -847,8 +847,8 @@ def test_kubectl_per_os_branching() -> None:
     assert "install_package unzip" in debian
     assert "_install_kubelogin_linux" in debian
     assert "_install_talosctl_oidc_linux" in debian
-    assert 'download_bin kubectl "https://dl.k8s.io/release/v1.35.8/bin/linux/${arch}/kubectl" "v1.35.8" version --client' in debian
-    assert 'download_tar_bin helm "https://get.helm.sh/helm-v3.21.4-linux-${arch}.tar.gz" "linux-${arch}/helm" "v3.21.4" version --template \'{{.Version}}\'' in debian
+    assert 'download_bin kubectl "https://dl.k8s.io/release/v1.35.11/bin/linux/${arch}/kubectl" "v1.35.11" version --client' in debian
+    assert 'download_tar_bin helm "https://get.helm.sh/helm-v4.3.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v4.3.2" version --template \'{{.Version}}\'' in debian
     assert 'download_tar_bin k9s "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_${arch}.tar.gz" "k9s" "v0.51.0" version --short' in debian
     assert "releases/latest" not in debian
     assert 'download_tar_bin kubectx "https://github.com/ahmetb/kubectx/releases/download/v0.11.0/kubectx_v0.11.0_linux_${arch}.tar.gz" "kubectx" "v0.11.0" --version' in debian
@@ -942,7 +942,7 @@ def test_go_lang_has_no_macos_package_dependency() -> None:
     assert GoLang().applies_to(ENVIRONMENTS["debian"])
     assert GoLang().applies_to(ENVIRONMENTS["macos"])
     macos = GoLang().render(ENVIRONMENTS["macos"]).setup
-    assert 'GO_VERSION="1.25.5"' in macos
+    assert 'GO_VERSION="1.27.3"' in macos
     assert "mercurial" not in macos
     assert "install_packages" not in macos
 
@@ -1055,9 +1055,9 @@ def test_cachyos_component_sources_and_linux_assets() -> None:
     assert "fd-find" not in core_setup
     assert Gh().render(cachyos).setup.startswith("install_package github-cli\n")
     gcloud = Gcloud().render(cachyos)
-    assert "google-cloud-cli_587.0.0.orig_${asset_arch}.tar.gz" in gcloud.setup
+    assert "google-cloud-cli_594.0.1.orig_${asset_arch}.tar.gz" in gcloud.setup
     assert "asset_arch=aarch64" in gcloud.setup
-    assert "6b566621ce59a900d520a30d505b9cef1c2bdd72826103175727ac6db1702101" in gcloud.setup
+    assert "45360f50daf7eaa6f0b0fa4aad10a13f5268e1bdf18424fa58475e09967d7481" in gcloud.setup
     assert ".dotgen-archive-sha256" in gcloud.setup
     assert "remove_packages google-cloud-cli" in gcloud.setup
     assert "$HOME/.local/share/google-cloud-sdk/path.bash.inc" in gcloud.bashrc
@@ -1699,7 +1699,7 @@ def test_pi_agent_sandbox_configs() -> None:
     assert 'resolv_conf_dir="${resolv_conf%/*}"' in script.content
     assert '--dir "$resolv_conf_dir"' in script.content
     assert '--ro-bind "$resolv_conf" "$resolv_conf"' in script.content
-    assert script.content.index('--ro-bind /etc /etc') < script.content.index('--ro-bind "$resolv_conf" "$resolv_conf"')
+    assert script.content.index("--ro-bind /etc /etc") < script.content.index('--ro-bind "$resolv_conf" "$resolv_conf"')
     assert 'chmod 0700 "$cache_parent"' in script.content
     assert 'chmod 0700 "$cache"' in script.content
     clipboard_bind = '--ro-bind "$herdr_clipboard_images" "$herdr_clipboard_images"'
