@@ -5,6 +5,11 @@ from dotgen.fragment import Fragment
 from dotgen.types import OS, EnvironmentRole
 
 _KUBE_VERSION = "v1.35.11"
+_CNPG_VERSION = "1.30.2"
+_CNPG_SHA256 = {
+    "amd64": "a926584a2506f2beff624af03d22eb742d6227e259e364e603ea2f88a791a507",
+    "arm64": "2882241ec1e2ba8ed32a7a3735de278adb34349b570729b8bb867eedc1f57e64",
+}
 _KUBELOGIN_VERSION = "v1.36.4"
 _KUBELOGIN_SHA256 = {
     "amd64": "9e8baeb4905d35a301304af2548324997add512fe94ab20e65993d167212bf85",
@@ -181,6 +186,22 @@ _KUBELOGIN_SETUP_LINUX = (
     + "\n}\n_install_kubelogin_linux\n"
 )
 
+_CNPG_SETUP_LINUX = (
+    r"""_install_cnpg_linux() {
+  local arch asset_arch checksum
+  arch="$(_kube_arch)"
+  case "$arch" in
+"""
+    + f'    amd64) asset_arch=x86_64; checksum="{_CNPG_SHA256["amd64"]}" ;;\n'
+    + f'    arm64) asset_arch=arm64; checksum="{_CNPG_SHA256["arm64"]}" ;;\n'
+    + r"""  esac
+  download_tar_bin_sha256 kubectl-cnpg """
+    + f'"https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v{_CNPG_VERSION}/kubectl-cnpg_{_CNPG_VERSION}_linux_'
+    + r'${asset_arch}.tar.gz" "$checksum" kubectl-cnpg '
+    + f'"{{Version:{_CNPG_VERSION}" version'
+    + "\n}\n_install_cnpg_linux\n"
+)
+
 _TALOSCTL_OIDC_SETUP_LINUX = (
     r"""_install_talosctl_oidc_linux() {
   local arch checksum
@@ -213,12 +234,13 @@ _ARGOCD_SETUP_LINUX = (
     + "\n}\n_install_argocd_linux\n"
 )
 
-_SETUP_MACOS = "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl argocd kubelogin qjoly/tap/talosctl-oidc\n"
+_SETUP_MACOS = "install_packages kubectl kubectl-cnpg helm k9s kubectx kubie kind k0sproject/tap/k0sctl talosctl argocd kubelogin qjoly/tap/talosctl-oidc\n"
 
 _SETUP_LINUX = (
     "install_package unzip\n"
     + _LINUX_HELPERS
     + "_install_kubectl_linux\n"
+    + _CNPG_SETUP_LINUX
     + _KUBELOGIN_SETUP_LINUX
     + "_install_helm_linux\n"
     + "_install_k9s_linux\n"

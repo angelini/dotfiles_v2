@@ -538,6 +538,12 @@ def _write_linux_setup_harness(tmp_path: Path) -> tuple[Path, Path, dict[str, st
         "esac\n"
     )
     (fake_bin / "journalctl").write_text("#!/usr/bin/env bash\nprintf 'journalctl %s\\n' \"$*\" >> \"$COMMAND_LOG\"\nprintf '%s\\n' 'journal diagnostics' >&2\n")
+    (fake_bin / "stat").write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, stat, sys\n"
+        "assert sys.argv[1:3] == ['-c', '%a']\n"
+        "print(format(stat.S_IMODE(os.stat(sys.argv[3]).st_mode), 'o'))\n"
+    )
     for executable in fake_bin.iterdir():
         executable.chmod(0o755)
 
@@ -562,8 +568,14 @@ def _write_linux_setup_harness(tmp_path: Path) -> tuple[Path, Path, dict[str, st
     return script, home, env
 
 
-def test_linux_setup_is_idempotent_and_defers_or_activates_safely(tmp_path: Path) -> None:
-    script, home, env = _write_linux_setup_harness(tmp_path)
+@pytest.fixture
+def short_tmp_path() -> Generator[Path, None, None]:
+    with tempfile.TemporaryDirectory(prefix="dotgen-zed-", dir="/tmp") as directory:
+        yield Path(directory)
+
+
+def test_linux_setup_is_idempotent_and_defers_or_activates_safely(short_tmp_path: Path) -> None:
+    script, home, env = _write_linux_setup_harness(short_tmp_path)
     for _ in range(2):
         result = subprocess.run(["bash", str(script)], env=env, check=False, capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
@@ -590,15 +602,15 @@ def test_linux_setup_is_idempotent_and_defers_or_activates_safely(tmp_path: Path
     bridge_socket = home / ".cache/dotgen/zed-host-bridge.sock"
     assert bridge_socket.is_socket()
     assert bridge_socket.stat().st_mode & 0o777 == 0o600
-    commands = (tmp_path / "commands.log").read_text()
+    commands = (short_tmp_path / "commands.log").read_text()
     assert "systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS" in commands
     assert "UNRELATED_SECRET" not in commands
     assert "systemctl --user restart dev.dotgen.zed-host-bridge.service" in commands
 
 
 @pytest.mark.parametrize("collision", ["file", "directory", "symlink", "bad-mode-socket"])
-def test_linux_setup_rejects_unsafe_socket_collisions(tmp_path: Path, collision: str) -> None:
-    script, home, env = _write_linux_setup_harness(tmp_path)
+def test_linux_setup_rejects_unsafe_socket_collisions(short_tmp_path: Path, collision: str) -> None:
+    script, home, env = _write_linux_setup_harness(short_tmp_path)
     socket_path = home / ".cache/dotgen/zed-host-bridge.sock"
     socket_path.parent.mkdir(parents=True)
     if collision == "file":
@@ -606,7 +618,7 @@ def test_linux_setup_rejects_unsafe_socket_collisions(tmp_path: Path, collision:
     elif collision == "directory":
         socket_path.mkdir()
     elif collision == "symlink":
-        socket_path.symlink_to(tmp_path / "target")
+        socket_path.symlink_to(short_tmp_path / "target")
     else:
         with socket.socket(socket.AF_UNIX) as server:
             server.bind(str(socket_path))
@@ -618,8 +630,8 @@ def test_linux_setup_rejects_unsafe_socket_collisions(tmp_path: Path, collision:
     assert socket_path.exists() or socket_path.is_symlink()
 
 
-def test_linux_setup_prints_systemd_and_journal_diagnostics(tmp_path: Path) -> None:
-    script, _, env = _write_linux_setup_harness(tmp_path)
+def test_linux_setup_prints_systemd_and_journal_diagnostics(short_tmp_path: Path) -> None:
+    script, _, env = _write_linux_setup_harness(short_tmp_path)
     result = subprocess.run(
         ["bash", str(script)],
         env={**env, "FAIL_DAEMON_RELOAD": "1"},
@@ -629,6 +641,6 @@ def test_linux_setup_prints_systemd_and_journal_diagnostics(tmp_path: Path) -> N
     )
     assert result.returncode != 0
     assert "failed to reload the systemd user manager" in result.stderr
-    commands = (tmp_path / "commands.log").read_text()
+    commands = (short_tmp_path / "commands.log").read_text()
     assert "systemctl --user status dev.dotgen.zed-host-bridge.service --no-pager" in commands
     assert "journalctl --user-unit=dev.dotgen.zed-host-bridge.service -n 50 --no-pager" in commands

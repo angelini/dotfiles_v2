@@ -835,10 +835,13 @@ def test_container_omits_image_tools_and_local_clusters() -> None:
 def test_kubectl_per_os_branching() -> None:
     macos = Kubectl().render(ENVIRONMENTS["macos"]).setup
     debian = Kubectl().render(ENVIRONMENTS["debian"]).setup
-    assert "install_packages kubectl helm k9s kubectx" in macos
+    cachyos = Kubectl().render(ENVIRONMENTS["cachyos"]).setup
+    assert "install_packages kubectl kubectl-cnpg helm" in macos
     assert "_install_helm_linux" not in macos
     assert "add_repo" not in debian
     assert "_install_kubectl_linux" in debian
+    assert "_install_cnpg_linux" in debian
+    assert "_install_cnpg_linux" in cachyos
     assert "_install_helm_linux" in debian
     assert "_install_k9s_linux" in debian
     assert "_install_kubectx_linux" in debian
@@ -848,6 +851,12 @@ def test_kubectl_per_os_branching() -> None:
     assert "_install_kubelogin_linux" in debian
     assert "_install_talosctl_oidc_linux" in debian
     assert 'download_bin kubectl "https://dl.k8s.io/release/v1.35.11/bin/linux/${arch}/kubectl" "v1.35.11" version --client' in debian
+    assert (
+        'download_tar_bin_sha256 kubectl-cnpg "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.2/'
+        'kubectl-cnpg_1.30.2_linux_${asset_arch}.tar.gz" "$checksum" kubectl-cnpg "{Version:1.30.2" version'
+    ) in debian
+    assert "a926584a2506f2beff624af03d22eb742d6227e259e364e603ea2f88a791a507" in debian
+    assert "2882241ec1e2ba8ed32a7a3735de278adb34349b570729b8bb867eedc1f57e64" in debian
     assert 'download_tar_bin helm "https://get.helm.sh/helm-v4.3.2-linux-${arch}.tar.gz" "linux-${arch}/helm" "v4.3.2" version --template \'{{.Version}}\'' in debian
     assert 'download_tar_bin k9s "https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_${arch}.tar.gz" "k9s" "v0.51.0" version --short' in debian
     assert "releases/latest" not in debian
@@ -858,7 +867,7 @@ def test_kubectl_per_os_branching() -> None:
     assert "bd5cd9125c93d8d30c33f7b2f3693fed0d74140a248d433dad74f2b7015295b5" in debian
     assert "3632072361f3e83dde9b34f83eea49673d3bfe84763cf361edc3aec7209231a6" in debian
     assert 'download_bin_sha256 kind "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-${arch}" "$checksum" "v0.33.0" version' in debian
-    assert "install_packages kubectl helm k9s kubectx kubie kind k0sproject/tap/k0sctl" in macos
+    assert "install_packages kubectl kubectl-cnpg helm k9s kubectx kubie kind k0sproject/tap/k0sctl" in macos
     assert "argocd kubelogin qjoly/tap/talosctl-oidc" in macos
     assert 'download_zip_bin_sha256 kubectl-oidc_login "https://github.com/int128/kubelogin/releases/download/v1.36.4/kubelogin_linux_${arch}.zip" "$checksum" kubelogin "v1.36.4" --version' in debian
     assert 'download_bin_sha256 talosctl-oidc "https://github.com/qjoly/talosctl-oidc/releases/download/v0.1.2/talosctl-oidc-linux-${arch}" "$checksum" "v0.1.2" version' in debian

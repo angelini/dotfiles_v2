@@ -300,6 +300,16 @@ if (
     download_bin_sha256 k0sctl "https://github.com/k0sproject/k0sctl/releases/download/v0.33.1/k0sctl-linux-${arch}" "$checksum" "v0.33.1" version
   }
   _install_kubectl_linux
+  _install_cnpg_linux() {
+    local arch asset_arch checksum
+    arch="$(_kube_arch)"
+    case "$arch" in
+      amd64) asset_arch=x86_64; checksum="a926584a2506f2beff624af03d22eb742d6227e259e364e603ea2f88a791a507" ;;
+      arm64) asset_arch=arm64; checksum="2882241ec1e2ba8ed32a7a3735de278adb34349b570729b8bb867eedc1f57e64" ;;
+    esac
+    download_tar_bin_sha256 kubectl-cnpg "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.2/kubectl-cnpg_1.30.2_linux_${asset_arch}.tar.gz" "$checksum" kubectl-cnpg "{Version:1.30.2" version
+  }
+  _install_cnpg_linux
   _install_kubelogin_linux() {
     local arch checksum
     arch="$(_kube_arch)"

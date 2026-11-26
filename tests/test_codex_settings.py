@@ -67,6 +67,7 @@ def test_codex_settings_merge_preserves_state_and_comments(tmp_path: Path) -> No
     fragment = Codex().render(ENVIRONMENTS["macos"])
     patch = tmp_path / "patch.json"
     patch.write_text(next(c.content for c in fragment.configs if c.dest == "managed-settings/codex.json"))
+    managed = json.loads(patch.read_text())
     destination = tmp_path / "config.toml"
     destination.write_text(
         '# My model\nmodel = "custom"\nsandbox_mode = "danger-full-access"\n'
@@ -81,7 +82,10 @@ def test_codex_settings_merge_preserves_state_and_comments(tmp_path: Path) -> No
             "model": "custom",
             "sandbox_mode": "workspace-write",
             "approval_policy": "on-request",
-            "sandbox_workspace_write": {"network_access": True, "writable_roots": ["/example/cache"]},
+            "sandbox_workspace_write": {
+                "network_access": managed["sandbox_workspace_write"]["network_access"],
+                "writable_roots": managed["sandbox_workspace_write"]["writable_roots"],
+            },
             "mcp_servers": {"local": {"command": "local-server"}},
         }
         assert destination.stat().st_mode & 0o777 == 0o600

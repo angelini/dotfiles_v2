@@ -138,10 +138,18 @@ def test_fzf_options_and_standard_bindings_are_idempotent(tmp_path: Path) -> Non
         r'''source "$DOTGEN_BASHRC"
 source "$DOTGEN_BASHRC"
 printf 'OPTS=%s\n' "$FZF_CTRL_R_OPTS"
-bind -m emacs-standard -X | grep -F '"\C-r"'
-bind -m vi-command -X | grep -F '"\C-r"'
-bind -m vi-insert -X | grep -F '"\C-r"'
-bind -m emacs-standard -X | grep -F '"\C-t"'
+printf 'BASH_MAJOR=%s\n' "${BASH_VERSINFO[0]}"
+if (( BASH_VERSINFO[0] < 4 )); then
+  bind -m emacs-standard -s | grep -F '"\C-r"'
+  bind -m vi-command -s | grep -F '"\C-r"'
+  bind -m vi-insert -s | grep -F '"\C-r"'
+  bind -m emacs-standard -s | grep -F '"\C-t"'
+else
+  bind -m emacs-standard -X | grep -F '"\C-r"'
+  bind -m vi-command -X | grep -F '"\C-r"'
+  bind -m vi-insert -X | grep -F '"\C-r"'
+  bind -m emacs-standard -X | grep -F '"\C-t"'
+fi
 bind -m emacs-standard -s | grep -F '"\ec"'
 declare -f __fzf_history__ | grep -F -- "--bind=ctrl-r:toggle-sort"''',
         fzf_opts="--height 40% --border",
@@ -151,8 +159,9 @@ declare -f __fzf_history__ | grep -F -- "--bind=ctrl-r:toggle-sort"''',
     opts = next(line.removeprefix("OPTS=") for line in result.stdout.splitlines() if line.startswith("OPTS="))
     assert opts == "--height 40% --border --no-sort"
     assert opts.split().count("--no-sort") == 1
-    assert result.stdout.count("__fzf_history__") == 3
-    assert "fzf-file-widget" in result.stdout
+    bash_major = int(next(line.removeprefix("BASH_MAJOR=") for line in result.stdout.splitlines() if line.startswith("BASH_MAJOR=")))
+    assert result.stdout.count("__fzf_history__") == (1 if bash_major < 4 else 3)
+    assert ("__fzf_select__" if bash_major < 4 else "fzf-file-widget") in result.stdout
     assert "__fzf_cd__" in result.stdout
     assert "--bind=ctrl-r:toggle-sort" in result.stdout
 
@@ -193,7 +202,8 @@ root.with_suffix(".input").write_bytes(data)
 root.with_suffix(".args").write_text("\n".join(sys.argv[1:]))
 root.with_suffix(".opts").write_text(os.environ.get("FZF_DEFAULT_OPTS", ""))
 items=[item for item in data.split(b"\0") if item]
-sys.stdout.buffer.write(items[0] + b"\n")' "$@"
+selected=next(item for item in items if b"\techo duplicate" in item)
+sys.stdout.buffer.write(selected + b"\n")' "$@"
 """
     )
     wrapper.chmod(0o755)
